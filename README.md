@@ -20,7 +20,7 @@ O sistema tem como objetivo automatizar e gerenciar o fluxo de controle de estoq
 | **[Nome 2]** |Facilitador Ágil & Dev Lead | Facilitar o fluxo do quadro Kanban, gerenciar repositório e garantir o fluxo dev. |
 | **[Nome 3]** | Desenvolvedor(a) / Architect | Modelagem do sistema, arquitetura e desenvolvimento da aplicação. |
 | **Caio França** | Desenvolvedor(a) / Requisitos | Mapeamento de causa-raiz, análise de stakeholders e documentação. |
-| **[Nome 5]** | Desenvolvedor(a) / QA | Apoio na especificação de testes, validação de regras de negócio e dev. |
+| **Theo Bessa** | Desenvolvedor(a) / QA | Apoio na especificação de testes, validação de regras de negócio e dev. |
 
 ---
 
