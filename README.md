@@ -16,7 +16,7 @@ O sistema tem como objetivo automatizar e gerenciar o fluxo de controle de estoq
 
 | Integrante | Função / Papéis | Responsabilidades Principais |
 | :--- | :--- | :--- |
-| **[Nome 1]** | Product Owner (PO) | Levantar requisitos, estruturar o Product Backlog e User Stories. |
+| **Randell Lima** | Product Owner (PO) | Levantar requisitos, estruturar o Product Backlog e User Stories. |
 | **[Nome 2]** |Facilitador Ágil & Dev Lead | Facilitar o fluxo do quadro Kanban, gerenciar repositório e garantir o fluxo dev. |
 | **[Nome 3]** | Desenvolvedor(a) / Architect | Modelagem do sistema, arquitetura e desenvolvimento da aplicação. |
 | **Caio França** | Desenvolvedor(a) / Requisitos | Mapeamento de causa-raiz, análise de stakeholders e documentação. |
