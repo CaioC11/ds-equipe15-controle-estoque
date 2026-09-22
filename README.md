@@ -103,6 +103,10 @@ A mensagem de commit deve sempre seguir a estrutura `tipo: descrição sucinta`:
 
 ---
 
+## 🔗 Link do protótipo
+
+https://www.figma.com/make/iyrfGuPAa2LeLPKsqoCPxD/Inventory-Management-System?fullscreen=1&t=ItGKDJwkApNyGiXR-1&code-node-id=0-6
+
 ## 🚀 Como Executar o Projeto Localmente
 
 ```bash
