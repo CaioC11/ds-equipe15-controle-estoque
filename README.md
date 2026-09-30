@@ -7,8 +7,8 @@ Repositório oficial da **Equipe 15** para o projeto da disciplina de Engenharia
 ## 📌 Sobre o Projeto
 O sistema tem como objetivo automatizar e gerenciar o fluxo de controle de estoque e a concessão de empréstimos de materiais do CIn.
 
-* **Status Atual:** Sprint 1 — MVP Conceitual + Modelo de Gestão.
-* **Data da Entrega:** 03/09/2026.
+* **Status Atual:** Sprint 2 — MVP Funcional.
+* **Data da Entrega:** 06/10/2026.
 
 ---
 
@@ -106,6 +106,29 @@ A mensagem de commit deve sempre seguir a estrutura `tipo: descrição sucinta`:
 ## 🔗 Link do protótipo
 
 https://www.figma.com/make/iyrfGuPAa2LeLPKsqoCPxD/Inventory-Management-System?fullscreen=1&t=ItGKDJwkApNyGiXR-1&code-node-id=0-6
+
+## 📦 Escopo da Sprint 2
+
+**Dentro da sprint (Essencial/MVP do cliente):**
+- Múltiplos estoques (RF01) e controle de acesso por grupo (RF02)
+- Categorias de produto e tombamento patrimonial (RF03)
+- Entrada, saída e saldo por estoque (RF04)
+- Empréstimo e devolução (RF05)
+- Termo de Responsabilidade (RF06), com aceite eletrônico do responsável
+- Alerta de estoque baixo (RF07)
+
+**Fora da sprint (Extras, planejados para a Sprint 3 se sobrar tempo):**
+- Leitura de código de barras/QR para tombamento e movimentação
+- Relatório de itens emprestados em atraso
+- Assinatura eletrônica integrada do termo (gov.br); no MVP o termo é gerado em PDF e aceito eletronicamente com o login institucional
+- Previsão de reposição
+- Histórico completo de um item (de qual estoque veio, quem já pegou emprestado)
+- Perfis de usuário avançados
+
+**Fluxo da demo:** login → criar estoque → cadastrar item com tombamento → emprestar → gerar termo → devolver.
+
+**Decisão de stack:** backend NestJS + Prisma + PostgreSQL (confirmado pelo CInCoders em 29/09/2026; ver ADR-001).
+```
 
 ## 🚀 Como Executar o Projeto Localmente
 
