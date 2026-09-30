@@ -1,0 +1,75 @@
+---
+title: team
+summary: Tela de gerenciamento restrita ao ADMIN — sem <Can>, porque a rota inteira já exige a role, e com dados mockados em memória.
+---
+
+# team
+
+`src/modules/team/` demonstra o segundo padrão de acesso do boilerplate: uma tela de **gerenciamento**, restrita a um único perfil pela rota, em vez de gateada botão a botão. Também é o único módulo do boilerplate sem backend real — veja a seção sobre dados mockados abaixo antes de usá-lo como base.
+
+## 📂 Estrutura
+
+Mesma anatomia de `todos`: `team.page.tsx` (tela) + `useTeam.ts` (cache do servidor, sobre `useAsync`) + `team.service.ts` (HTTP/mock) + `MemberModal.tsx` (formulário RHF + zod) + `TeamBadges.tsx` (`RoleBadge` / `StatusBadge`).
+
+## Entidade
+
+```typescript
+type MemberRole = 'admin' | 'editor' | 'viewer';
+type MemberStatus = 'active' | 'inactive';
+
+interface Member {
+  id: string;
+  name: string;
+  email: string;
+  role: MemberRole;
+  status: MemberStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+`MemberRole` espelha as roles do realm do Keycloak (`src/utils/enums.ts`) só como valor de negócio — não é a role de autenticação em si, essa é atribuída no Keycloak pelo backend.
+
+## Rota e acesso: sem `<Can>`
+
+Montada em `src/routes.tsx` com `permittedRoles={[Roles.ADMIN]}` — quem não é ADMIN nem chega nesta página (é redirecionado para `/forbidden` pelo `RequireAuth` da cinnamon). O link some do menu para quem não é ADMIN porque `Links.TEAM` está em `ADMIN_ONLY_LINKS` (`src/utils/enums.ts`), filtrado em `PageCin`.
+
+Como a página inteira já exige ADMIN, **nenhum botão usa `<Can>`** — diferente de [`todos`](/docs/examples/todos), que é aberta a qualquer usuário e gateia ação por ação. Compare os dois antes de decidir qual padrão usar no seu módulo: veja [Autenticação & Autorização](/docs/architecture/authentication#rbac-em-dois-níveis).
+
+## Dados mockados — não persiste
+
+A tela exibe um aviso visível de "Dados mockados". `team.service.ts` implementa isso da seguinte forma:
+
+- **`getAll()`** tenta `GET /members` primeiro; se o backend não responder (`catch` silencioso), cai para um array de membros mockado em memória, com um pequeno delay artificial para simular latência de rede.
+- **`create()`, `update()`, `remove()`** **nunca tentam rede** — operam direto sobre o array mockado. Convidar, editar, ativar/desativar ou remover um membro funciona na UI, mas não persiste em lugar nenhum: um F5 volta ao estado inicial mockado.
+
+```typescript
+// team.service.ts
+async getAll(): Promise<Member[]> {
+  try {
+    const response = await fetchApi(`${API_URL}/members`);
+    if (response.ok) {
+      return ((await response.json()) as PaginatedResponse<Member>).items;
+    }
+  } catch {
+    console.info('[TeamService] Backend não disponível, utilizando mock de desenvolvimento.');
+  }
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  return [...this.mockMembers];
+}
+```
+
+<Callout type="warn" title="Não copie o fallback mockado para um módulo com backend real">
+Esse padrão existe só porque o endpoint `/members` ainda não tem uma implementação real no backend de referência. Ao criar seu próprio módulo de gerenciamento a partir de `team`, troque `team.service.ts` por um service que sempre fala com o backend (como `todo.service.ts`) — não herde o fallback silencioso, ele esconde falhas reais de rede em produção.
+</Callout>
+
+## Ações
+
+- **Convidar** (`handleOpenInviteModal` → `MemberModal`) — cria um membro novo com status `active`.
+- **Editar** — reaproveita o mesmo `MemberModal`, com `memberToEdit` preenchido.
+- **Ativar/Desativar** (`handleToggleStatus`) — não passa pelo modal, é um botão direto na linha que alterna `status` via `update()`.
+- **Remover** — como em `todos`, passa por `ConfirmDialog` antes de chamar `remove()`.
+
+## Diferença de tabela
+
+`team.page.tsx` renderiza uma tabela HTML simples (`<table>` com Tailwind), não os componentes `Table*` da cinnamon usados em `todos.page.tsx`. Ao copiar este módulo como base, prefira os componentes `Table*` da cinnamon (ver [`todos`](/docs/examples/todos#estados-da-tabela-loading-erro-e-vazio)) para manter a consistência visual com o resto da aplicação — a tabela simples aqui é só para mostrar que a página não depende deles.

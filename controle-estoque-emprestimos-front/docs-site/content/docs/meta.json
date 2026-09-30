@@ -1,0 +1,22 @@
+{
+  "title": "CInCoders React Boilerplate",
+  "pages": [
+    "index",
+    "---Setup & Inicialização---",
+    "setup/quick-start",
+    "setup/keycloak-local",
+    "---Arquitetura---",
+    "architecture/overview",
+    "architecture/authentication",
+    "architecture/state-management",
+    "architecture/error-handling",
+    "---Guias---",
+    "guides/module-scaffolding",
+    "---Exemplos---",
+    "examples/overview",
+    "examples/todos",
+    "examples/team",
+    "---Contribuindo---",
+    "contributing/documentation-guide"
+  ]
+}

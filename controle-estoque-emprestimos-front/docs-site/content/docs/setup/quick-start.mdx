@@ -1,0 +1,85 @@
+---
+title: Setup Rápido
+summary: Como gerar um novo projeto a partir do boilerplate e inicializar o ambiente de desenvolvimento.
+---
+
+# Setup Rápido
+
+Este repositório não é executado diretamente. Você roda o `setup.sh` para gerar um novo projeto a partir dele — o projeto gerado recebe o seu próprio README (`README.project.md` vira `README.md`) e perde os arquivos que só fazem sentido dentro do boilerplate (`setup.sh`, `.git`, `.codegraph`).
+
+## ✅ Requisitos
+
+Antes de rodar o gerador, tenha instalado:
+
+- **[Node.js 24 LTS](https://nodejs.org/)** — mesma versão usada pelo boilerplate (`.nvmrc`). Use `nvm install 24 && nvm use 24` se tiver o nvm.
+- **[Docker + Docker Compose](https://docs.docker.com/get-docker/)** — necessário para rodar o backend localmente (Keycloak e banco de dados), que este frontend consome.
+- `bash`, `git`, `curl`, `perl`, `tar` e coreutils (`sed`, `awk`, `find`) no `PATH` — já presentes em qualquer Linux/macOS.
+
+### 🪟 Windows
+
+O `setup.sh` depende de utilitários POSIX e **não roda** no CMD ou PowerShell nativos. Instale o **[Git Bash](https://gitforwindows.org/)** e rode todos os comandos desta página a partir dele (o Git for Windows já traz `bash`, `curl`, `perl`, `tar` e os coreutils necessários).
+
+## 🧩 Gerando Frontend + Backend de Uma Vez
+
+Se o objetivo é começar um projeto CIn novo do zero, com frontend e backend juntos, use o repositório [`platform/boilerplate`](https://gitlab.cin.ufpe.br/cincoders/platform/boilerplate) em vez de gerar cada um separadamente. Ele clona este boilerplate e o <BackendLink>`nestjs-boilerplate`</BackendLink> numa única execução, pergunta os dados compartilhados (nome, descrição, remote) uma única vez e cria `<nome>-back` e `<nome>-front` lado a lado, já com nome técnico e realm do Keycloak alinhados entre os dois.
+
+```bash
+curl -fsSL https://gitlab.cin.ufpe.br/cincoders/platform/boilerplate/-/raw/main/setup.sh | bash
+```
+
+Use essa opção quando precisar do par frontend + backend. Para gerar **apenas o frontend**, siga a seção abaixo.
+
+## 🚀 Gerando um Novo Projeto (Somente Frontend)
+
+Rode isto de dentro da pasta onde você quer o novo projeto:
+
+```bash
+curl -fsSL https://gitlab.cin.ufpe.br/cincoders/platform/cincoders-reactjs-boilerplate/-/raw/main/setup.sh | bash
+```
+
+O script baixa o boilerplate sozinho (num diretório temporário) e faz o resto.
+
+### Perguntas do Assistente Interativo
+
+| Pergunta | Formato | Aplicação no projeto |
+|---|---|---|
+| **Nome do projeto** | Texto livre (ex: `Loja do Zé`) | Usado só para sugerir o nome técnico e os textos padrão |
+| **Nome técnico** | `kebab-case`, sugerido a partir do nome (ex: `loja-do-ze`) | Vira `controle-estoque-emprestimos` — pastas, pacote npm, client do Keycloak, URL base |
+| **Diretório de destino** | Caminho, padrão `./<nome-técnico>-front` | Precisa não existir ou estar vazio |
+| **Título** | Texto livre, padrão o nome do projeto | Aba do navegador, sidebar e tela de login (`Controle de Estoque e Empréstimos`) |
+| **Descrição** | Texto livre, padrão `Painel administrativo do <nome>` | `package.json` e README gerado (`Sistema de controle de estoque e empréstimos`) |
+| **URL do repositório Git** | Opcional | `git remote add origin` |
+
+Em seguida ele copia os arquivos (excluindo `.git`, `.codegraph`, `node_modules`, `setup.sh`, entre outros), substitui os três placeholders acima em todo o projeto, promove `README.project.md` a `README.md`, cria o `.env` a partir do `.env.example`, roda `git init` + `npm install` e faz o commit inicial. O checkout original do boilerplate permanece intacto.
+
+## 🛠️ Rodando o Projeto Gerado
+
+```bash
+cd <nome-técnico>-front
+npm run dev        # http://localhost:5173
+```
+
+A aplicação espera um backend rodando em `VITE_API_URL` (veja [`.env.example`](https://gitlab.cin.ufpe.br/cincoders/platform/cincoders-reactjs-boilerplate/-/blob/main/.env.example)) e um Keycloak local — veja [Keycloak Local](/docs/setup/keycloak-local).
+
+### Comandos Disponíveis no `package.json`
+
+| Comando | Descrição |
+|---|---|
+| `npm run dev` | Inicia o Vite em modo de desenvolvimento com hot-reload |
+| `npm run build` | `tsc -b && vite build` — type-check seguido do build de produção |
+| `npm run preview` | Serve o build de produção localmente |
+| `npm run lint` | Executa o ESLint |
+| `npm test` | Executa os testes com Vitest (`vitest run`) |
+| `npm run test:watch` | Executa os testes em modo watch |
+| `npm run release:prepare` | Calcula o próximo release candidate (usado pela pipeline de CI) |
+| `npm run release:promote` | Promove um release candidate para versão estável (usado pela pipeline de CI) |
+
+## 📁 Variáveis de Ambiente
+
+Veja [`.env.example`](https://gitlab.cin.ufpe.br/cincoders/platform/cincoders-reactjs-boilerplate/-/blob/main/.env.example):
+
+- **`VITE_API_URL`** — URL base da API backend (dev: `http://localhost:3000/controle-estoque-emprestimos/api/v1`).
+- **`VITE_KEYCLOAK_JSON`** — configuração do client Keycloak, no formato do `keycloak.json` exportado pelo painel admin (`realm`, `auth-server-url`, `resource`, `public-client`).
+- **`VITE_BASE_URL`** — base path público da aplicação (`/controle-estoque-emprestimos` por padrão), lido de `import.meta.env.BASE_URL` em runtime.
+
+`src/config/env.ts` valida essas variáveis no boot (`getRequiredEnv`) e lança um erro imediato se alguma estiver ausente — falha rápida em vez de um erro silencioso mais tarde.

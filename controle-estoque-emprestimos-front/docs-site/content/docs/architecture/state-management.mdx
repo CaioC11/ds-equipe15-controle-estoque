@@ -1,0 +1,63 @@
+---
+title: Gerenciamento de Estado
+summary: As quatro categorias de estado da aplicação e a ferramenta certa para cada uma. O erro nº1 de quem está começando é tratar resposta de API como estado de componente.
+---
+
+# Gerenciamento de Estado
+
+Nem todo "estado" é a mesma coisa. Antes de criar um `useState`, decida em qual destas quatro categorias o dado se encaixa — a ferramenta muda em cada caso.
+
+## 1. Estado de componente
+
+Dado que só interessa a um componente e não precisa sobreviver a um F5: um modal aberto/fechado, qual linha está em edição, o passo atual de um wizard.
+
+- **Ferramenta**: `useState` (ou `useReducer` quando uma ação muda vários pedaços de estado de uma vez).
+- **No boilerplate**: `isModalOpen` e `todoToEdit` em `todos.page.tsx`.
+
+Mantenha esse estado o mais perto possível de quem usa. Se dois componentes distantes precisam do mesmo valor, suba-o para o ancestral comum mais próximo — não para um estado global.
+
+## 2. Estado de cache do servidor
+
+Dados que **vêm do backend**: a lista de tarefas, o detalhe de um registro, um resultado de busca. Isto **não é** estado da sua aplicação — é uma cópia local de algo cuja fonte da verdade é o servidor.
+
+- **Ferramenta**: o hook `useAsync` (`src/hooks/useAsync.ts`), consumido por um hook por entidade (`useTodos`, `useTeam`). Ele cuida do trio `data` / `isLoading` / `error`, de `reload()`, e de descartar respostas obsoletas.
+- **Padrão no boilerplate**: `service` (HTTP, via `fetchApi`) → `use<Entidade>` (sobre `useAsync`) → página.
+
+<Callout type="error" title="Não copie resposta de API para useState + useEffect">
+```tsx
+// ERRADO: você reimplementa loading/erro/race na mão, e o dado fica
+// "congelado" — desatualiza em relação ao servidor sem você perceber.
+const [todos, setTodos] = useState([]);
+useEffect(() => { todoService.getAll().then(setTodos); }, []);
+
+// CERTO:
+const { todos, isLoading, error, reload } = useTodos();
+```
+Se você escreveu `useEffect` com um `fetch`/`service` dentro só para popular um `useState`, pare: esse é exatamente o caso do `useAsync`.
+</Callout>
+
+Projetos maiores trocam `useAsync` por TanStack Query / SWR, que adicionam cache compartilhado e revalidação entre componentes. O `useAsync` é a versão mínima do mesmo conceito, suficiente para as telas de CRUD deste boilerplate.
+
+## 3. Estado de formulário
+
+Os campos de um formulário enquanto o usuário digita, mais os erros de validação.
+
+- **Ferramenta**: `react-hook-form` + `zod`. O schema `zod` descreve os campos e as regras num lugar só; o `zodResolver` liga schema e formulário.
+- **No boilerplate**: `todoFormSchema` em `TodoModal.tsx`, `memberFormSchema` em `team.types.ts` (usado por `MemberModal.tsx`). Mantenha o schema em sincronia com o DTO de criação equivalente no backend.
+- **Reset ao trocar de registro**: não use `useEffect` para "recarregar" o formulário quando a prop muda. Passe `key={registro?.id ?? 'new'}` no componente do formulário (ver `todos.page.tsx`, que também usa um contador (`newTodoKey`) para forçar remount ao abrir o modal de criação duas vezes seguidas) — o React remonta o formulário do zero, que é a forma recomendada pelo próprio React de resetar estado quando uma prop muda ([You Might Not Need an Effect](https://react.dev/learn/you-might-not-need-an-effect)).
+
+## 4. Estado de URL
+
+Filtros, aba selecionada, página da paginação, termo de busca. Sempre que fizer sentido **compartilhar por link** ou o valor **deva sobreviver a um F5**, ele pertence à query string, não a um `useState`.
+
+- **Ferramenta**: `useSearchParams` do `react-router-dom`.
+- **No boilerplate**: a tela `/todos` hoje filtra por busca e status com `useState` local (`searchTerm`, `statusFilter`) em vez de query string — funciona porque a lista inteira já vem carregada e o filtro é só client-side. Se um filtro precisar ser compartilhável por link ou sobreviver a um F5 (por exemplo, um filtro que também é enviado ao backend como parâmetro de busca), migre para `useSearchParams` em vez de crescer o `useState`.
+
+## Resumo
+
+| Categoria | Exemplo | Ferramenta |
+|---|---|---|
+| Componente | modal aberto, linha em edição | `useState` / `useReducer` |
+| Cache do servidor | lista de tarefas, detalhe | `useAsync` → `use<Entidade>` |
+| Formulário | campos digitados, erros | `react-hook-form` + `zod` |
+| URL | busca, filtros, aba, paginação — quando precisam ser compartilháveis ou sobreviver a F5 | `useSearchParams` |
