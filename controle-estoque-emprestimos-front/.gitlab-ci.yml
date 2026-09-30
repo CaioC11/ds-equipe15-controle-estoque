@@ -1,0 +1,8 @@
+include:
+  - project: 'cincoders/platform/ci-templates'
+    ref: 'v1.0.1'
+    file:
+      - '/release.gitlab-ci.yml'
+      - '/node-service.gitlab-ci.yml'
+  - template: Jobs/SAST.gitlab-ci.yml
+  - template: Jobs/Secret-Detection.gitlab-ci.yml

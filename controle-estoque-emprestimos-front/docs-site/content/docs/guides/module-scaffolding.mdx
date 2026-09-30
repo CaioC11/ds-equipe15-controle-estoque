@@ -1,0 +1,181 @@
+---
+title: Criação de Novos Módulos
+summary: Passo a passo para adicionar um novo domínio ao frontend, copiando a anatomia de todos/ — service, hook, types e página.
+---
+
+# Criação de Novos Módulos
+
+Este guia apresenta o fluxo padrão para adicionar uma nova tela de domínio ao boilerplate, usando o módulo [`todos`](/docs/examples/todos) como ponto de partida — ele é o gabarito mais simples que já demonstra o padrão completo.
+
+## 📋 Checklist de Implementação
+
+- [ ] 1. Copiar `src/modules/todos/` para `src/modules/<entidade>/` e renomear os arquivos
+- [ ] 2. Ajustar `<entidade>.types.ts`: interface da entidade, DTOs e schema `zod` do formulário
+- [ ] 3. Ajustar `<entidade>.service.ts`: endpoint e método HTTP de cada operação
+- [ ] 4. Ajustar `use<Entidade>.ts`: nomes dos campos retornados
+- [ ] 5. Ajustar `<Entidade>Modal.tsx`: campos do formulário
+- [ ] 6. Ajustar `<entidade>.page.tsx`: colunas da tabela, textos, filtros
+- [ ] 7. Registrar a rota em `src/routes.tsx` e o link em `src/utils/sidebar.ts`
+- [ ] 8. Decidir o RBAC: rota aberta com `<Can>` por ação, ou rota restrita por `permittedRoles`
+
+## Passo 1: Copiar a Estrutura
+
+```bash
+cp -r src/modules/todos src/modules/product
+cd src/modules/product
+mv todos.page.tsx product.page.tsx
+mv todo.service.ts product.service.ts
+mv todo.types.ts product.types.ts
+mv useTodos.ts useProduct.ts
+mv TodoModal.tsx ProductModal.tsx
+mv TodoBadges.tsx ProductBadges.tsx   # se a entidade tiver campos com badge (status, prioridade)
+```
+
+## Passo 2: Types e Schema do Formulário
+
+`<entidade>.types.ts` concentra a interface da entidade, os DTOs de criação/atualização e (se o formulário usar campos com opções fixas) as constantes de labels — no padrão de `todo.types.ts`:
+
+```typescript
+// src/modules/product/product.types.ts
+export const PRODUCT_CATEGORIES = ['HARDWARE', 'SOFTWARE', 'ACCESSORY'] as const;
+export type ProductCategory = (typeof PRODUCT_CATEGORIES)[number];
+
+export const PRODUCT_CATEGORY_LABELS: Record<ProductCategory, string> = {
+  HARDWARE: 'Hardware',
+  SOFTWARE: 'Software',
+  ACCESSORY: 'Acessório',
+};
+
+export interface Product {
+  id: string;
+  name: string;
+  price: number;
+  category: ProductCategory;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateProductDto {
+  name: string;
+  price: number;
+  category?: ProductCategory;
+  isActive?: boolean;
+}
+
+export type UpdateProductDto = Partial<CreateProductDto>;
+```
+
+Se o formulário precisar de validação além do que os `types` acima cobrem, declare o schema `zod` no módulo do formulário (`ProductModal.tsx`), como `todoFormSchema` faz em `TodoModal.tsx` — **mantenha os dois em sincronia com o DTO de criação equivalente no backend**, já que não há geração automática de tipos entre os dois repositórios.
+
+## Passo 3: Service (comunicação HTTP)
+
+Uma classe `<Entidade>Service` com um método por operação, usando `fetchApi` (cuida de token/refresh, veja [Autenticação](/docs/architecture/authentication)) e `getApiErrorMessage` para extrair a mensagem de erro real do backend (veja [Tratamento de Erros](/docs/architecture/error-handling)):
+
+```typescript
+// src/modules/product/product.service.ts
+import { API_URL, fetchApi, getApiErrorMessage } from '../../services/api';
+import type { CreateProductDto, Product, UpdateProductDto } from './product.types';
+
+interface ApiEnvelope<T> {
+  statusCode: number;
+  timestamp: string;
+  path: string;
+  data: T;
+}
+
+export class ProductService {
+  async getAll(): Promise<Product[]> {
+    const response = await fetchApi(`${API_URL}/products`);
+    if (!response.ok) {
+      throw new Error(await getApiErrorMessage(response, 'Erro ao buscar produtos'));
+    }
+    const envelope = (await response.json()) as ApiEnvelope<{ items: Product[] }>;
+    return envelope.data.items;
+  }
+
+  async create(dto: CreateProductDto): Promise<Product> {
+    const response = await fetchApi(`${API_URL}/products`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(dto),
+    });
+    if (!response.ok) {
+      throw new Error(await getApiErrorMessage(response, 'Erro ao criar produto'));
+    }
+    return ((await response.json()) as ApiEnvelope<Product>).data;
+  }
+
+  // update() e remove() seguem o mesmo padrão de todo.service.ts
+}
+
+export const productService = new ProductService();
+```
+
+## Passo 4: Hook (estado de cache do servidor)
+
+Um hook `use<Entidade>` por tela de listagem, construído sobre `useAsync` — a página nunca chama o service diretamente. Veja [Gerenciamento de Estado](/docs/architecture/state-management) para o porquê:
+
+```typescript
+// src/modules/product/useProduct.ts
+import { useAsync } from '../../hooks/useAsync';
+import { productService } from './product.service';
+import type { CreateProductDto, Product } from './product.types';
+
+export function useProduct() {
+  const { data: products = [], isLoading, error, reload } = useAsync(() => productService.getAll(), []);
+
+  const create = async (dto: CreateProductDto) => {
+    await productService.create(dto);
+    reload();
+  };
+
+  // update() e remove() seguem o mesmo padrão de useTodos.ts
+
+  return { products, isLoading, error, reload, create };
+}
+```
+
+## Passo 5: Formulário (`<Entidade>Modal.tsx`)
+
+`react-hook-form` + `zodResolver`, inicializado a partir do registro em edição via `defaultValues` — sem `useEffect` para resetar o formulário. Quem renderiza o modal passa `key={registroEmEdicao?.id ?? 'new'}` para forçar o remount ao trocar de registro (ver Passo 6 e [Gerenciamento de Estado](/docs/architecture/state-management#3-estado-de-formulário)).
+
+## Passo 6: Página
+
+A página só orquestra: estado de UI local (modal aberto, registro em edição), permissões, e o render da tabela/lista usando os componentes da cinnamon (`Table`, `TableSkeletonRows`, `TableMessageRow`) para os estados de loading/erro/vazio — no padrão de `todos.page.tsx`. Decida o RBAC no Passo 8 antes de escrever os botões de ação.
+
+## Passo 7: Rota e Sidebar
+
+```typescript
+// src/routes.tsx
+import ProductPage from './modules/product/product.page';
+// ...
+<Route path={Links.PRODUCTS} element={<ProductPage />} />
+```
+
+```typescript
+// src/utils/enums.ts
+export enum Links {
+  // ...
+  PRODUCTS = '/products',
+}
+```
+
+```typescript
+// src/utils/sidebar.ts
+{
+  id: 'products',
+  title: 'Produtos',
+  href: Links.PRODUCTS,
+  IconComponent: Package, // lucide-react
+}
+```
+
+## Passo 8: RBAC
+
+Duas formas, escolha uma por módulo — veja [Autenticação & Autorização](/docs/architecture/authentication#rbac-em-dois-níveis):
+
+- **Tela aberta a qualquer usuário autenticado**, com ações de escrita gateadas por `<Can roles={WRITE_ROLES}>` — o padrão de `todos`. Use `permittedRoles={ALL_ROLES}` na rota.
+- **Tela restrita a um perfil específico** — o padrão de `team`. Use `permittedRoles={[Roles.ADMIN]}` na rota e adicione o link a `ADMIN_ONLY_LINKS` para sumir do menu de quem não tem a role.
+
+Em ambos os casos, o gate no frontend é só UX — o backend precisa validar a mesma role de novo em cada endpoint.

@@ -1,0 +1,94 @@
+---
+title: todos
+summary: O gabarito de referência — CRUD completo contra um backend real, com RBAC por ação via <Can> e filtro client-side.
+---
+
+# todos
+
+`src/modules/todos/` é a implementação canônica do padrão de módulo do boilerplate: página + hook + service + types + modal, consumindo um backend real. Se você só puder ler um exemplo antes de criar o seu próprio módulo, leia este.
+
+## 📂 Estrutura
+
+| Arquivo | Papel |
+|---|---|
+| `todos.page.tsx` | A tela. Só orquestra: estado de UI, permissões, render. |
+| `useTodos.ts` | Estado de cache do servidor + mutações, sobre `useAsync`. |
+| `todo.service.ts` | Chamadas HTTP ao backend (`/tasks`), via `fetchApi`. |
+| `todo.types.ts` | Types, DTOs e as constantes de status/prioridade. |
+| `TodoModal.tsx` | Formulário de criação/edição (react-hook-form + zod). |
+| `TodoBadges.tsx` | `StatusBadge` / `PriorityBadge` — mapeiam o valor da entidade para uma cor/label. |
+
+## Entidade
+
+```typescript
+interface Todo {
+  id: string;
+  title: string;
+  description: string | null;
+  status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+  priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+  dueDate: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+## Rota e acesso
+
+Montada em `src/routes.tsx` com `permittedRoles={ALL_ROLES}` — qualquer usuário autenticado acessa a tela. Dentro dela, os botões de **Nova Tarefa**, **Editar** e **Excluir** ficam dentro de `<Can roles={WRITE_ROLES}>`, então só `ADMIN` os vê; um usuário com só `Roles.USERS` vê a lista em modo leitura. Veja [Autenticação & Autorização](/docs/architecture/authentication) para o mecanismo completo.
+
+## Leitura: service → hook → página
+
+```typescript
+// todo.service.ts — só monta a requisição e desembrulha o envelope
+async getAll(): Promise<Todo[]> {
+  const response = await fetchApi(`${API_URL}/tasks`);
+  if (!response.ok) throw new Error(await getApiErrorMessage(response, 'Erro ao buscar tarefas'));
+  const envelope = (await response.json()) as ApiEnvelope<PaginatedResponse<Todo>>;
+  return envelope.data.items;
+}
+```
+
+```typescript
+// useTodos.ts — useAsync cuida de isLoading/error/reload
+export function useTodos() {
+  const { data: todos = [], isLoading, error, reload } = useAsync(() => todoService.getAll(), []);
+  const create = async (dto: CreateTodoDto) => { await todoService.create(dto); reload(); };
+  // update, remove seguem o mesmo padrão: chama o service, depois reload()
+  return { todos, isLoading, error, reload, create, update, remove };
+}
+```
+
+A página nunca importa `todoService` diretamente — só `useTodos()`. Veja [Gerenciamento de Estado](/docs/architecture/state-management#2-estado-de-cache-do-servidor) para o porquê desse nível extra.
+
+## Filtro: client-side, sobre a lista já carregada
+
+`todos.page.tsx` filtra por busca (`searchTerm`) e status (`statusFilter`) com `useMemo` sobre o array retornado por `useTodos()` — não são novos parâmetros na chamada HTTP, e hoje vivem em `useState` local, não na URL. Veja a nota em [Gerenciamento de Estado](/docs/architecture/state-management#4-estado-de-url) sobre quando migrar esse filtro para `useSearchParams`.
+
+## Formulário: reset sem `useEffect`
+
+`TodoModal` inicializa `defaultValues` do `useForm` a partir da prop `todoToEdit`. Quem renderiza o modal (`todos.page.tsx`) usa:
+
+```tsx
+<TodoModal
+  key={todoToEdit?.id ?? `new-${newTodoKey}`}
+  isOpen={isModalOpen}
+  onClose={() => setIsModalOpen(false)}
+  onSubmit={handleSaveTodo}
+  todoToEdit={todoToEdit}
+/>
+```
+
+Trocar de tarefa (ou abrir para criar) muda a `key`, o que remonta o formulário do zero — reseta o estado interno sem precisar de `useEffect`. `newTodoKey` é um contador incrementado a cada clique em "Nova Tarefa", necessário porque `todoToEdit?.id` sozinho não muda entre duas aberturas seguidas para criação (ambas têm `todoToEdit === null`).
+
+## Exclusão: confirmação antes da mutação
+
+Clicar em excluir não chama `remove()` direto — abre um `ConfirmDialog` (`isDeleteDialogOpen`); só o `onConfirm` do diálogo dispara `handleConfirmDeleteTodo`, que chama `remove(todoToDelete)` e mostra o `toast` de sucesso/erro.
+
+## Estados da tabela: loading, erro e vazio
+
+A `Table` da cinnamon fica sempre montada — loading, erro e "sem resultados" são linhas dentro do `TableBody`, não telas separadas:
+
+- **Loading**: `TableSkeletonRows`.
+- **Erro**: `ErrorScreen` (cinnamon) + botão de retry (`reload`) + link de suporte via `buildSupportMailto`. Veja [Tratamento de Erros](/docs/architecture/error-handling#2-erro-de-chamada-http--o-error-do-useasync).
+- **Vazio**: mensagem diferente se é "sem resultados para o filtro" ou "ainda não há nenhuma tarefa", com o botão de criar quando fizer sentido.

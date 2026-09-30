@@ -1,0 +1,83 @@
+---
+title: Autenticação & Autorização
+summary: Sessão Keycloak via react-oidc-context, o ciclo de vida do token em services/api.ts, e o RBAC em dois níveis (rota + <Can>).
+---
+
+# Autenticação & Autorização
+
+Login é feito por redirect para o Keycloak (fluxo de autorização OIDC, via [`react-oidc-context`](https://github.com/authts/react-oidc-context)). O frontend nunca vê usuário/senha — só recebe tokens de volta.
+
+## 🔑 Sessão (`react-oidc-context`)
+
+`AuthProvider` é configurado em `src/utils/auth.ts`, a partir de `VITE_KEYCLOAK_JSON` (veja [Keycloak Local](/docs/setup/keycloak-local)):
+
+```typescript
+// src/utils/auth.ts
+export const authProviderProps: AuthProviderProps = {
+  authority: `${keycloakBaseUrl}/realms/${env.keycloakRealm}`,
+  client_id: env.keycloakClientId,       // client público "<projeto>-front"
+  redirect_uri: window.location.origin + env.baseUrl,
+  accessTokenExpiringNotificationTimeInSeconds: 30,
+  automaticSilentRenew: true,
+  checkSessionIntervalInSeconds: 2,
+  monitorSession: true,
+};
+```
+
+`automaticSilentRenew` + `monitorSession` mantêm o token renovado em segundo plano enquanto a aba estiver aberta. `LoginPage` (`src/pages/login/`) só chama `auth.signinRedirect()` — a troca do código de autorização por tokens é responsabilidade da biblioteca.
+
+## 🔄 Ciclo de vida do token (`RouteMap`, `src/routes.tsx`)
+
+`RouteMap` é o único lugar que liga a sessão do `react-oidc-context` ao cliente HTTP (`src/services/api.ts`):
+
+1. **No load da página**, valida a sessão restaurada com `auth.signinSilent()` — se falhar, limpa o estado local (`removeUser` + `clearStaleState`) em vez de deixar a aplicação num estado de auth inconsistente.
+2. **Publica o token atual** via `setAuthToken(auth.user.access_token)` sempre que `auth.user` muda.
+3. **Publica uma função de refresh** (`setRefreshTokenFn`) que `services/api.ts` chama quando precisa renovar — RouteMap não sabe quando isso acontece, só oferece o mecanismo.
+4. **Escuta expiração/revogação** (`addAccessTokenExpired`, `addSilentRenewError`, `addUserSignedOut`) e limpa o estado do auth quando qualquer uma dispara.
+5. **Publica uma função de logout** (`setLogoutFn`) — acionada pelo `fetchApi` quando uma chamada segue negada mesmo após tentar renovar o token, ou seja, a sessão morreu do lado do servidor.
+
+## 📡 Token na requisição (`src/services/api.ts`)
+
+`fetchApi()` é o único ponto que anexa o `Authorization: Bearer <token>` — nenhum `service` de módulo lida com token diretamente:
+
+- **Renovação proativa**: antes de cada chamada, `ensureFreshToken()` lê o `exp` do JWT localmente (sem validar assinatura — quem valida é o backend) e dispara `refreshTokenFn()` se o token já expirou ou expira nos próximos 5s. Sem essa checagem, a primeira requisição depois de abrir/recarregar a aplicação sempre falhava com 401, porque o access token do Keycloak vive poucos minutos.
+- **Retry reativo em 401**: rede de segurança para token revogado no servidor ou relógio do cliente adiantado. Se o retry com token novo também falhar (ou não houver `refreshTokenFn`), chama `logoutFn()`.
+- **Refresh compartilhado**: várias chamadas em paralelo (comum no load de uma tela) compartilham a mesma promise de refresh em voo (`inFlightRefresh`) em vez de cada uma disparar seu próprio `signinSilent`.
+
+## RBAC em dois níveis
+
+| Onde | Como | Exemplo |
+|---|---|---|
+| Página inteira | `permittedRoles` na rota (`src/routes.tsx`) | `/team` exige `[Roles.ADMIN]` |
+| Botão / ação dentro da tela | `<Can roles={[...]}>` (`src/components/auth/Can.tsx`) | Botões de criar/editar/excluir em `/todos` |
+
+As roles vêm do enum `Roles` (`src/utils/enums.ts`), que espelha as roles do realm no Keycloak:
+
+```typescript
+export enum Roles {
+  USERS = 'sys_controle-estoque-emprestimos-users',
+  ADMIN = 'sys_controle-estoque-emprestimos-admin',
+}
+
+export const ALL_ROLES: Roles[] = [Roles.USERS, Roles.ADMIN];
+export const WRITE_ROLES: Roles[] = [Roles.ADMIN];
+```
+
+`useAuthorization()` (`src/hooks/useAuthorization.ts`) decodifica o `realm_access.roles` do access token (com fallback para o profile do id token) e expõe `hasRole(...)`, `isAdmin` e `isReadOnly`. `<Can>` é uma casca fina sobre isso:
+
+```tsx
+<Can roles={WRITE_ROLES}>
+  <button onClick={handleOpenCreateModal}>Nova Tarefa</button>
+</Can>
+
+// mode="disable": renderiza o filho com disabled, em vez de escondê-lo
+<Can roles={[Roles.ADMIN]} mode="disable">
+  <Button>Excluir</Button>
+</Can>
+```
+
+`ADMIN_ONLY_LINKS` (`src/utils/enums.ts`) faz o mesmo gate no nível do menu: `PageCin` filtra os itens da sidebar cujo `href` está nessa lista para quem não é `isAdmin`, evitando mostrar um link que levaria a `/forbidden`.
+
+<Callout type="warn" title="Isto é só UX — a autoridade final é o backend">
+`permittedRoles`, `<Can>` e `ADMIN_ONLY_LINKS` só controlam o que aparece na tela. Nenhum deles impede uma chamada HTTP direta a um endpoint que o usuário não deveria acessar — quem barra isso é o backend, validando a mesma role de novo em cada endpoint. Não trate esconder um botão como controle de acesso real ao decidir o que proteger aqui.
+</Callout>

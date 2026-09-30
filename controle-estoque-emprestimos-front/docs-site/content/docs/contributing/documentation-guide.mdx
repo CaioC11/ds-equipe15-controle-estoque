@@ -1,0 +1,70 @@
+---
+title: Guia de Documentação
+summary: Regras para escrever e atualizar páginas neste site — idioma, tipos de página, frontmatter, e quando um módulo de exemplo ganha página própria.
+---
+
+# Guia de Documentação
+
+Este site serve dois leitores: devs entrando no boilerplate ou consultando algo pontual, e agentes de IA que leem estes arquivos do disco em vez de explorar `src/` do zero. Toda regra abaixo existe para manter os dois leitores rápidos e não desinformados.
+
+## Idioma
+
+Escreva em português — identificadores de código citados, prosa, títulos. Mesma convenção do restante do repositório (comentários de código, commits). Exceção: nomes técnicos, comandos e trechos de código permanecem no idioma original (inglês) quando é isso que aparece no editor.
+
+## Documente o que é, não o que deveria ser
+
+Se um mecanismo existe no código mas ainda não é usado como o nome sugere — o fallback mockado de `team.service.ts`, um filtro que ainda vive em `useState` em vez de `useSearchParams` — diga isso explicitamente, com um `<Callout>` apontando a lacuna. Não descreva comportamento planejado ou ideal como se fosse o atual. Um agente que confia numa página descrevendo paginação que não existe vai escrever uma chamada que ignora silenciosamente seus próprios parâmetros.
+
+Exemplos já registrados neste site — reverifique se ainda são válidos antes de citá-los, já que o objetivo deles é mudar:
+
+- O fallback mockado de `team.service.ts` para `/members` (ver [`examples/team`](/docs/examples/team#dados-mockados--não-persiste)).
+- O filtro de `/todos` em `useState` local em vez de `useSearchParams` (ver [`architecture/state-management`](/docs/architecture/state-management#4-estado-de-url)).
+
+## Tipos de página
+
+| Tipo | Propósito | Fica em |
+|---|---|---|
+| Conceito | Explica como um mecanismo funciona | `architecture/` |
+| Guia | Passo a passo de uma tarefa | `guides/` |
+| Exemplo | Estudo de caso de um módulo de gabarito | `examples/` |
+| Setup | Como gerar e rodar o projeto | `setup/` |
+| Meta | Regras da própria documentação | `contributing/` |
+
+## Frontmatter obrigatório
+
+Toda página abre com:
+
+```yaml
+---
+title: Título legível
+summary: Uma frase — o que o leitor ganha lendo esta página, sem precisar abri-la.
+---
+```
+
+`summary` é o que torna uma página barata de rotear sem abrir — numa listagem de diretório ou numa tabela do `AGENTS.md`.
+
+## Quando um exemplo ganha página própria
+
+`todos` e `team` ganham página dedicada em `examples/` porque **são** os gabaritos de referência do boilerplate — a página inteira existe para ser copiada. Isso não é o critério padrão de "módulo com lógica não-trivial" de um site de produto: aqui só existem dois módulos de exemplo, propositalmente simples, e ambos merecem leitura completa antes de servir de base para um módulo novo.
+
+Se este boilerplate crescer com mais telas de exemplo no futuro, reavalie o critério: um terceiro exemplo só ganha página própria se demonstrar um padrão que `todos` e `team` ainda não cobrem (por exemplo, paginação real, upload de arquivo, um formulário multi-etapa) — não pela quantidade de campos ou linhas de código.
+
+## Prefira tabelas a prosa
+
+Estrutura repetida (arquivos de um módulo, variáveis de ambiente, comandos do `package.json`) vai em tabela. Prosa é para o que não dá para tabular: ordem de validação, por que uma decisão foi tomada, uma pegadinha. Misturar os dois — uma linha de tabela que precisa de três frases de exceção para fazer sentido — é sinal de que o fato pertence a uma seção de prosa, não à tabela.
+
+## Não duplique o design system
+
+Props e variantes de componentes da `@cincoders/cinnamon` (`Table`, `ErrorScreen`, `SimpleSelect`, ...) não são documentadas aqui — a cinnamon tem sua própria documentação. Esta doc cobre como o boilerplate **usa** a cinnamon (qual variante, em qual padrão), não o que cada prop faz.
+
+## Estilo
+
+Períodos em vez de travessões. Sem enchimento ("nesta seção vamos explorar..."). Declare o fato, depois o motivo se não for óbvio. Emojis são aceitáveis em títulos de seção nível 2 (`##`), seguindo o tom das demais páginas — não use em título nível 1 nem dentro de prosa corrida.
+
+## Atualizando este site quando o código muda
+
+Não há uma tabela de sincronização automática no `AGENTS.md` deste repositório hoje. Ao mudar um arquivo citado numa página (um hook, um service, um padrão de módulo), atualize a página correspondente no mesmo commit — não deixe para depois.
+
+## Templates
+
+Pontos de partida para novas páginas: [`templates/example-page.md`](https://gitlab.cin.ufpe.br/cincoders/platform/cincoders-reactjs-boilerplate/-/blob/main/docs-site/content/docs/contributing/templates/example-page.md), [`templates/guide.md`](https://gitlab.cin.ufpe.br/cincoders/platform/cincoders-reactjs-boilerplate/-/blob/main/docs-site/content/docs/contributing/templates/guide.md).

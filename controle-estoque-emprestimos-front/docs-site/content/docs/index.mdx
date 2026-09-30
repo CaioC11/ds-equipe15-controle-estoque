@@ -1,0 +1,40 @@
+---
+title: CInCoders ReactJS StarterKit
+summary: Documentação técnica e arquitetural do boilerplate React 18 + Vite com autenticação Keycloak, RBAC e o padrão de módulos da CInCoders.
+---
+
+# CInCoders ReactJS StarterKit
+
+Bem-vindo à documentação oficial do **CInCoders ReactJS StarterKit** mantido pelo **CInCoders**.
+
+Este projeto fornece uma base estruturada e modular para a criação de aplicações frontend em React com TypeScript, já integrada ao Keycloak (OIDC) e ao padrão de módulos usado nos projetos CIn — seguindo as mesmas práticas de engenharia do <BackendLink>boilerplate de backend NestJS</BackendLink>.
+
+## ⚡ Stack Tecnológica
+
+| Componente | Ferramenta / Versão | Finalidade |
+|---|---|---|
+| **Runtime** | Node.js 24 LTS | Ambiente de execução JavaScript/TypeScript |
+| **Build tool** | [Vite 7](https://vite.dev/) | Dev server e bundler |
+| **Framework** | [React 18](https://react.dev/) + [react-router-dom 7](https://reactrouter.com/) | UI declarativa e roteamento client-side |
+| **Design system** | [`@cincoders/cinnamon`](https://www.npmjs.com/package/@cincoders/cinnamon) | Layout (navbar, sidebar), tabelas, toasts e telas de erro padronizadas da CIn |
+| **Autenticação** | [Keycloak](https://www.keycloak.org/) + [react-oidc-context](https://github.com/authts/react-oidc-context) | Login via OIDC, sessão e refresh de token |
+| **Formulários** | [react-hook-form](https://react-hook-form.com/) + [Zod 4](https://zod.dev/) | Validação de formulário com schema único |
+| **Estilo** | [Tailwind CSS 4](https://tailwindcss.com/) + [radix-ui](https://www.radix-ui.com/) / [base-ui](https://base-ui.com/) | Utility-first CSS e primitivos de UI acessíveis |
+| **Testes** | [Vitest 3](https://vitest.dev/) + [Testing Library](https://testing-library.com/) | Testes unitários e de componente |
+| **Qualidade & Lint** | [ESLint 9](https://eslint.org/) (`typescript-eslint`) | Lint de código |
+| **Release** | [`@cincoders/release-tooling`](https://www.npmjs.com/package/@cincoders/release-tooling) | Versionamento e changelog automáticos na pipeline de CI |
+
+## 📖 Nunca trabalhou com frontend web? Comece aqui
+
+Se você ainda não tem experiência com React, roteamento client-side ou autenticação OIDC, **não pule direto para o setup**. Este boilerplate assume que você já sabe o que é um componente, um hook e uma requisição HTTP — se esses termos ainda são novos, comece pela [documentação oficial do React](https://react.dev/learn) antes de seguir.
+
+## 🧭 Tópicos Principais
+
+- **[Setup Rápido](/docs/setup/quick-start)**: Como gerar um novo projeto e rodar o ambiente de desenvolvimento
+- **[Keycloak Local](/docs/setup/keycloak-local)**: Configuração do realm e do client OIDC em desenvolvimento
+- **[Visão Geral da Arquitetura](/docs/architecture/overview)**: Estrutura de pastas, fluxo de dados e composição da aplicação
+- **[Autenticação & Autorização](/docs/architecture/authentication)**: Sessão Keycloak, refresh de token e RBAC em dois níveis
+- **[Gerenciamento de Estado](/docs/architecture/state-management)**: As quatro categorias de estado e a ferramenta certa para cada uma
+- **[Tratamento de Erros](/docs/architecture/error-handling)**: `ErrorBoundary`, erros de API e o padrão de mensagens da cinnamon
+- **[Criação de Módulos](/docs/guides/module-scaffolding)**: Guia passo a passo para adicionar um novo domínio
+- **[Módulos de Exemplo](/docs/examples/overview)**: `todos` e `team` — os gabaritos que acompanham o boilerplate, para copiar e depois remover

@@ -1,0 +1,98 @@
+---
+title: Visão Geral da Arquitetura
+summary: Estrutura de pastas, composição da aplicação em app/provider.tsx e o fluxo de uma tela do zero até a chamada HTTP.
+---
+
+# Visão Geral da Arquitetura
+
+React 18 + Vite, com roteamento client-side via `react-router-dom` e o design system [`@cincoders/cinnamon`](https://www.npmjs.com/package/@cincoders/cinnamon) para layout (navbar, sidebar) e componentes de UI padronizados da CIn.
+
+---
+
+## 🏛️ Princípios Arquiteturais
+
+1. **Fluxo numa direção só**: `compartilhado → módulo → app`. Um módulo (`src/modules/*`) nunca importa de outro; a composição acontece em `src/app/` e `src/routes.tsx`.
+2. **Um hook por entidade sobre `useAsync`**: nenhuma tela busca dados com `useState` + `useEffect` direto — veja [Gerenciamento de Estado](/docs/architecture/state-management).
+3. **RBAC em dois níveis**: página inteira via `permittedRoles` na rota, ação individual via `<Can>` — veja [Autenticação & Autorização](/docs/architecture/authentication).
+4. **Erro de renderização isolado por rota**: um `ErrorBoundary` por rota se recupera sozinho ao navegar, em vez de travar a aplicação inteira — veja [Tratamento de Erros](/docs/architecture/error-handling).
+5. **Configuração validada no boot**: `src/config/env.ts` lança um erro imediato se uma variável de ambiente obrigatória estiver ausente (*fail fast*).
+
+---
+
+## 📁 Estrutura de Diretórios
+
+```
+src/
+├── app/
+│   └── provider.tsx      # Único lugar onde providers globais são montados
+├── modules/               # Um diretório por domínio: página, hook, service e types juntos
+│   ├── todos/             # Módulo de exemplo — aberto a qualquer usuário, ações com <Can>
+│   └── team/               # Módulo de gerenciamento — rota restrita ao ADMIN, dados mockados
+├── pages/                 # Telas fora de um módulo de domínio (ex: login)
+├── components/
+│   ├── auth/Can.tsx       # Gate declarativo de UI por role
+│   ├── PageCin/           # Layout autenticado (navbar + sidebar da cinnamon)
+│   ├── ErrorBoundary.tsx  # Error boundary padrão, montado em dois níveis
+│   └── ConfirmDialog.tsx  # Diálogo de confirmação (base-ui AlertDialog)
+├── services/
+│   └── api.ts             # Cliente HTTP único (fetch): token, refresh e retry em 401
+├── hooks/
+│   ├── useAsync.ts         # Hook base para dados assíncronos (data/isLoading/error/reload)
+│   └── useAuthorization.ts # Lê as roles do token para gatear UI
+├── lib/                   # Utils genéricos
+├── config/env.ts          # Leitura + validação das variáveis de ambiente
+└── utils/
+    ├── auth.ts             # AuthProviderProps do react-oidc-context
+    ├── enums.ts             # Links, Roles, ALL_ROLES, WRITE_ROLES
+    └── sidebar.ts           # Conteúdo da sidebar (SidebarData da cinnamon)
+```
+
+---
+
+## 🚀 Composição da Aplicação (`src/app/provider.tsx`)
+
+`App.tsx` é só `<AppProvider><RouteMap /></AppProvider>`. Todo provider global (auth, toasts, e futuramente tema ou data-fetching) é montado em `AppProvider` — não em `App.tsx` nem em `main.tsx` — de fora para dentro:
+
+```tsx
+// src/app/provider.tsx
+export function AppProvider({ children }: { children: ReactNode }) {
+  return (
+    <ErrorBoundary label="app">
+      <AuthProvider {...authProviderProps}>
+        {children}
+        <ToastContainer toastProps={{ position: 'top-right' }} />
+      </AuthProvider>
+    </ErrorBoundary>
+  );
+}
+```
+
+1. **`ErrorBoundary`** — captura qualquer erro de renderização abaixo, incluindo dentro das rotas.
+2. **`AuthProvider`** (`react-oidc-context`) — sessão OIDC/Keycloak, consumida via `useAuth()`. Configurado em `src/utils/auth.ts` a partir de `VITE_KEYCLOAK_JSON` — veja [Autenticação & Autorização](/docs/architecture/authentication).
+3. **`ToastContainer`** — destino dos `toast(...)` da cinnamon; fica fora das rotas para sobreviver à navegação.
+
+## 🧭 Roteamento (`src/routes.tsx`)
+
+`RouteMap` monta o `BrowserRouter` e três grupos de rota:
+
+- **`/`** — tela de login se não autenticado, redireciona para `/todos` se autenticado.
+- **Rotas protegidas abertas** (`permittedRoles={ALL_ROLES}`) — `/todos` e o catch-all 404 (`ErrorScreen` da cinnamon).
+- **Rotas restritas** (`permittedRoles={[Roles.ADMIN]}`) — `/team`.
+
+Cada grupo de rotas protegidas é envolvido por `<PageCin>` (layout autenticado) e por `RouteErrorBoundary`, que isola falhas de renderização por página e se recupera sozinho ao navegar (`resetKey={pathname}`).
+
+`RouteMap` também é onde o ciclo de vida do token vive: valida a sessão no load (`signinSilent`), publica o token atual e a função de refresh para `services/api.ts` via `setAuthToken`/`setRefreshTokenFn`, e reage a expiração/revogação de sessão limpando o estado do auth. Veja [Autenticação & Autorização](/docs/architecture/authentication) para o fluxo completo.
+
+## 🖼️ Layout (`src/components/PageCin`)
+
+`PageCin` envolve a cinnamon `PageWithAuth`: aplica o `permittedRoles` da rota (o `RequireAuth` da cinnamon redireciona para `/forbidden` se a role não bate), filtra os itens administrativos da sidebar (`ADMIN_ONLY_LINKS`) e adapta o `Link` do react-router para a interface `LinkComponent` da cinnamon, mantendo a navegação da sidebar client-side.
+
+## 📡 Comunicação com o Backend (`src/services/api.ts`)
+
+Cliente HTTP único baseado em `fetch` — sem axios. `fetchApi()` centraliza:
+
+- Anexar o `Authorization: Bearer <token>` em toda requisição.
+- Renovar o token **proativamente** antes de uma chamada, lendo o `exp` do JWT — evita o 401 na primeira requisição após abrir/recarregar a aplicação, quando o access token já costuma estar expirado.
+- Retry reativo em 401 (rede de segurança para token revogado/relógio adiantado), com deslogamento se a renovação falhar.
+
+Cada módulo de domínio tem seu próprio `<entidade>.service.ts` construído sobre `fetchApi` — veja [Módulos de Exemplo](/docs/examples/overview) para o padrão completo (service → hook → página).

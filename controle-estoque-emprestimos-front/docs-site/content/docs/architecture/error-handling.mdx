@@ -1,0 +1,100 @@
+---
+title: Tratamento de Erros
+summary: ErrorBoundary para erro de renderização, o erro do useAsync para chamadas de API, e como getApiErrorMessage extrai a mensagem real do backend.
+---
+
+# Tratamento de Erros
+
+Três mecanismos, para três tipos de falha diferentes — não são intercambiáveis.
+
+## 1. Erro de renderização — `ErrorBoundary`
+
+`src/components/ErrorBoundary.tsx` captura qualquer erro lançado durante a renderização de uma subárvore e mostra uma tela de erro (`DefaultErrorFallback`) no lugar de uma página em branco.
+
+É um class component porque o React só oferece captura de erro de render via `componentDidCatch` / `getDerivedStateFromError` — **não existe hook equivalente**. Duas limitações importantes:
+
+- **Não captura erro de evento** (`onClick`, etc.) — só erros lançados durante o render.
+- **Não captura erro assíncrono** (uma promise rejeitada dentro de um `useEffect`, por exemplo) — para chamadas de API, trate o `error` que `useAsync` já expõe (ver seção 2).
+
+Montado em dois níveis:
+
+```tsx
+// src/app/provider.tsx — captura tudo
+<ErrorBoundary label="app">
+  <App />
+</ErrorBoundary>
+
+// src/routes.tsx — isola falhas de uma rota
+<ErrorBoundary label={`rota ${pathname}`} resetKey={pathname}>
+  <Outlet />
+</ErrorBoundary>
+```
+
+`resetKey` é o que evita a aplicação inteira ficar travada na tela de erro: quando o valor passado muda (aqui, o `pathname`), o boundary se recupera sozinho. Sem isso, um erro numa página continuaria sendo mostrado mesmo depois do usuário navegar para outra rota.
+
+Para envolver uma subárvore arriscada com uma UI de erro própria (em vez do fallback padrão), passe `fallback`:
+
+```tsx
+<ErrorBoundary label="widget-x" fallback={({ error, reset }) => <MinhaTela error={error} onRetry={reset} />}>
+  <WidgetArriscado />
+</ErrorBoundary>
+```
+
+## 2. Erro de chamada HTTP — o `error` do `useAsync`
+
+Toda leitura de dados do servidor passa por `useAsync` (veja [Gerenciamento de Estado](/docs/architecture/state-management)), que expõe `error: Error | null` junto com `data` e `isLoading`. A página decide o que fazer com ele — tipicamente renderizar `ErrorScreen` da cinnamon dentro da própria tabela/lista, com um botão de retry que chama `reload()`:
+
+```tsx
+// todos.page.tsx
+{error ? (
+  <TableMessageRow colSpan={5}>
+    <ErrorScreen errorType={httpErrors.SERVER_ERROR} />
+    <button onClick={reload}>Tentar novamente</button>
+    <a href={buildSupportMailto(error, SUPPORT_EMAIL, 'projeto-base')}>Contatar suporte</a>
+  </TableMessageRow>
+) : ( /* ... */ )}
+```
+
+`buildSupportMailto` (cinnamon) monta um `mailto:` com os detalhes técnicos do erro no corpo — a tela mostra só a mensagem amigável, os detalhes técnicos vão para o e-mail de suporte, nunca para a UI.
+
+## 3. Erro de mutação — `try/catch` + `toast`
+
+Criar, atualizar e remover (fora do fluxo de leitura do `useAsync`) são chamados diretamente pela página, com `try/catch` em volta e `toast.error`/`toast.success` da cinnamon para feedback:
+
+```tsx
+// todos.page.tsx
+const handleSaveTodo = async (dto: CreateTodoDto) => {
+  try {
+    if (todoToEdit) {
+      await update(todoToEdit.id, dto);
+      toast.success('Tarefa atualizada com sucesso!');
+    } else {
+      await create(dto);
+      toast.success('Nova tarefa criada com sucesso!');
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Falha ao salvar tarefa.';
+    toast.error(message);
+    throw err; // Repassa para o modal não fechar em caso de erro
+  }
+};
+```
+
+O `throw err` ao final é o que impede o modal de fechar quando a mutação falha — `TodoModal`/`MemberModal` só chamam `onClose()` depois que `onSubmit` resolve sem lançar.
+
+## Extraindo a mensagem real do erro (`getApiErrorMessage`)
+
+`src/services/api.ts` expõe `getApiErrorMessage(response, fallback)`, usada por todo `<entidade>.service.ts` quando `response.ok` é `false`:
+
+```typescript
+if (!response.ok) {
+  const message = await getApiErrorMessage(response, 'Erro ao criar tarefa');
+  throw new Error(message);
+}
+```
+
+Ela tenta, nesta ordem: ler `message`/`error` do corpo JSON (formato de erro do NestJS — `message` pode ser string ou array, nesse caso os itens são unidos com `, `), cair para o corpo como texto puro, e por último usar o `fallback` passado. É por isso que o `catch` de cada mutação vê a mensagem de validação real do backend (`"O título é obrigatório"`), não um `"Failed to fetch"` genérico.
+
+## `ConfirmDialog` não é tratamento de erro
+
+`src/components/ConfirmDialog.tsx` (base-ui `AlertDialog`) é usado antes de excluir/remover um registro — é confirmação de intenção do usuário, não parte do fluxo de erro. Não confunda com os três mecanismos acima: ele roda antes da chamada de mutação, não depois de uma falha.

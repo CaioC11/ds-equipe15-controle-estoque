@@ -1,0 +1,27 @@
+---
+title: Visão Geral dos Exemplos
+summary: todos e team são módulos de gabarito, não funcionalidades do produto — remova-os depois de copiar o padrão para o seu domínio.
+---
+
+# Visão Geral dos Exemplos
+
+`src/modules/todos/` e `src/modules/team/` são os dois módulos que acompanham o boilerplate. Nenhum dos dois é uma funcionalidade real do seu projeto — são gabaritos para copiar (veja [Criação de Novos Módulos](/docs/guides/module-scaffolding)) e **remover depois que seus próprios módulos de domínio existirem**. Deixá-los no projeto final gera confusão sobre o que é exemplo e o que é produto.
+
+Os dois têm a mesma anatomia — página + hook + service + types (+ modal de formulário) — mas cada um demonstra um lado diferente do padrão de acesso do boilerplate:
+
+| | [`todos`](/docs/examples/todos) | [`team`](/docs/examples/team) |
+|---|---|---|
+| Rota | `/todos`, aberta a qualquer usuário autenticado | `/team`, restrita a `Roles.ADMIN` |
+| Controle de acesso | `<Can roles={WRITE_ROLES}>` em cada botão de escrita | Nenhum `<Can>` — a rota inteira já exige ADMIN |
+| Dados | Backend real (`/tasks`), erro tratado com `ErrorScreen` + retry | **Mockados em memória** em `team.service.ts` — convidar/editar/remover não persiste em lugar nenhum |
+| Confirmação de exclusão | `ConfirmDialog` antes de remover | `ConfirmDialog` antes de remover |
+| Tabela | Componentes `Table*` da cinnamon (`variant="card"`, com export) | Tabela HTML simples, sem os componentes da cinnamon |
+
+## Por que `team` é mockado
+
+`team.service.ts` tenta o endpoint real (`GET /members`) só na leitura, com fallback silencioso para os dados mockados se o backend não responder — assim a tela nunca fica vazia enquanto o backend de membros ainda não existe. As mutações (`create`, `update`, `remove`) **nunca tentam rede**: operam direto sobre o array em memória, para nunca surgir um erro ao demonstrar convidar, editar ou remover um membro. Ao construir seu próprio módulo com base em `team`, não copie esse fallback — ele existe só porque este é um exemplo sem backend próprio ainda.
+
+## O que copiar de cada um
+
+- Comece por [`todos`](/docs/examples/todos) se seu módulo for uma tela aberta a qualquer usuário, com ações de escrita restritas por role.
+- Comece por [`team`](/docs/examples/team) se seu módulo for uma tela de gerenciamento restrita a um perfil específico — mas troque o `team.service.ts` mockado por um service real desde o início, a não ser que o backend correspondente genuinamente ainda não exista.

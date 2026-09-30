@@ -1,0 +1,53 @@
+---
+title: Keycloak Local
+summary: Este boilerplate não sobe seu próprio Keycloak — ele consome o realm exposto pelo backend. Como apontar VITE_KEYCLOAK_JSON para ele.
+---
+
+# Keycloak Local
+
+Este repositório **não** inclui `docker-compose.yml` nem um `realm.json` próprios. O Keycloak local — realm, roles, usuários de teste — é subido e importado pelo <BackendLink>`nestjs-boilerplate`</BackendLink>; o frontend só se autentica contra ele. Se você gerou os dois boilerplates juntos via [`platform/boilerplate`](https://gitlab.cin.ufpe.br/cincoders/platform/boilerplate), o realm e os clients já vêm com o mesmo nome técnico configurado dos dois lados.
+
+Para subir o Keycloak local, siga a seção de setup do backend (`docker compose up -d` no projeto `-back`). O restante desta página cobre só a configuração do lado frontend.
+
+## 🔑 `VITE_KEYCLOAK_JSON`
+
+`src/config/env.ts` espera essa variável como uma **string JSON**, no mesmo formato do `keycloak.json` exportável pelo painel admin do Keycloak (aba *Installation* → *Keycloak OIDC JSON*):
+
+```json
+{
+  "realm": "Local",
+  "auth-server-url": "http://localhost:8080/auth/",
+  "ssl-required": "external",
+  "resource": "controle-estoque-emprestimos-front",
+  "public-client": true,
+  "confidential-port": 0
+}
+```
+
+O `.env.example` já traz esse valor pronto para o realm local do backend — o nome do realm é sempre `Local`, independente do nome técnico do projeto:
+
+```ini
+VITE_KEYCLOAK_JSON={"realm":"Local","auth-server-url":"http://localhost:8080/auth/","ssl-required":"external","resource":"controle-estoque-emprestimos-front","public-client":true,"confidential-port":0}
+```
+
+`src/utils/auth.ts` lê esse JSON e monta as `AuthProviderProps` do `react-oidc-context`:
+
+- **`authority`** — `<auth-server-url>/realms/<realm>`.
+- **`client_id`** — o campo `resource` (o client `<nome-do-projeto>-front`, público, sem secret).
+- **`redirect_uri`** / **`post_logout_redirect_uri`** — a origem atual + `VITE_BASE_URL`.
+
+O client `<nome-do-projeto>-front` é **público** (`public-client: true`) — diferente do client `-back`, que é confidencial. Um SPA não pode guardar segredo de forma segura no browser, então o fluxo de autorização (`signinRedirect`) não usa `client_secret`.
+
+## 👥 Usuários de Teste
+
+Os mesmos usuários seedados no realm do backend servem para testar o frontend — veja a <BackendLink path="/docs/setup/keycloak-local">documentação de Keycloak Local do backend</BackendLink> para a lista atual de usuário/senha e quais roles (`sys_<projeto>-admin`, `sys_<projeto>-users`) cada um tem. As roles do realm são o que `src/utils/enums.ts` (`Roles`) e `useAuthorization` leem para decidir o que o usuário pode ver — veja [Autenticação & Autorização](/docs/architecture/authentication).
+
+## 🧪 Testando login localmente
+
+Com o backend e o Keycloak locais no ar (`docker compose up -d` no projeto `-back`) e o frontend rodando (`npm run dev`):
+
+1. Acesse `http://localhost:5173` — a rota `/` mostra a tela de login quando não há sessão.
+2. Clique em **Entrar**: `auth.signinRedirect()` leva ao formulário de login do Keycloak.
+3. Após autenticar, o Keycloak redireciona de volta para `redirect_uri` com o código de autorização; `react-oidc-context` troca por tokens e a aplicação navega para `/todos`.
+
+Se o console mostrar `Missing required environment variable: VITE_KEYCLOAK_JSON` ou um JSON inválido, confira se o `.env` local tem a variável definida numa única linha, sem quebras — `JSON.parse` numa variável de ambiente multi-linha falha silenciosamente na leitura do arquivo, não no build.
