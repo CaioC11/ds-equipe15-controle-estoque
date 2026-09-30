@@ -43,3 +43,74 @@ model Task {
   @@index([priorityId])
   @@map("tasks")
 }
+enum StatusItem {
+  DISPONIVEL
+  EMPRESTADO
+  MANUTENCAO
+  BAIXADO
+}
+
+enum StatusEmprestimo {
+  SOLICITADO
+  ATIVO
+  DEVOLVIDO
+  ATRASADO
+  CANCELADO
+}
+
+enum TipoMovimentacao {
+  ENTRADA
+  SAIDA
+  DEVOLUCAO
+  TRANSFERENCIA
+  MANUTENCAO
+}
+
+model Estoque {
+  id          String   @id @default(uuid())
+  nome        String
+  descricao   String?
+  localizacao String?
+  itens       Item[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Item {
+  id            String         @id @default(uuid())
+  tombamento    String         @unique
+  nome          String
+  descricao     String?
+  categoria     String
+  status        StatusItem     @default(DISPONIVEL)
+  estoqueId     String
+  estoque       Estoque        @relation(fields: [estoqueId], references: [id])
+  emprestimos   Emprestimo[]
+  movimentacoes Movimentacao[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model Emprestimo {
+  id                    String           @id @default(uuid())
+  itemId                String
+  item                  Item             @relation(fields: [itemId], references: [id])
+  usuarioSolicitanteId  String
+  dataEmprestimo        DateTime         @default(now())
+  dataPrevistaDevolucao DateTime
+  dataDevolucaoEfetiva  DateTime?
+  status                StatusEmprestimo @default(ATIVO)
+  observacoes           String?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+}
+
+model Movimentacao {
+  id               String           @id @default(uuid())
+  itemId           String
+  item             Item             @relation(fields: [itemId], references: [id])
+  tipo             TipoMovimentacao
+  usuarioId        String
+  dataMovimentacao DateTime         @default(now())
+  observacao       String?
+}
