@@ -1,6 +1,6 @@
 # P02 — Controle de Estoque + Empréstimos
 
-Repositório oficial da **Equipe 15** para o projeto da disciplina de Engenharia de Software (2026.2).
+Repositório oficial da **Equipe 15** para o projeto da disciplina de Desenvolvimento de Software (2026.2).
 
 ---
 
