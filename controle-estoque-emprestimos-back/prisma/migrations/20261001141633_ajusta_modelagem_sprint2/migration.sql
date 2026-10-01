@@ -1,3 +1,11 @@
+/*
+  Warnings:
+
+  - You are about to drop the `task_priorities` table. If the table is not empty, all the data it contains will be lost.
+  - You are about to drop the `task_statuses` table. If the table is not empty, all the data it contains will be lost.
+  - You are about to drop the `tasks` table. If the table is not empty, all the data it contains will be lost.
+
+*/
 -- CreateEnum
 CREATE TYPE "StatusItem" AS ENUM ('DISPONIVEL', 'EMPRESTADO', 'MANUTENCAO', 'BAIXADO');
 
@@ -6,6 +14,21 @@ CREATE TYPE "StatusEmprestimo" AS ENUM ('SOLICITADO', 'ATIVO', 'DEVOLVIDO', 'ATR
 
 -- CreateEnum
 CREATE TYPE "TipoMovimentacao" AS ENUM ('ENTRADA', 'SAIDA', 'DEVOLUCAO', 'TRANSFERENCIA', 'MANUTENCAO');
+
+-- DropForeignKey
+ALTER TABLE "tasks" DROP CONSTRAINT "tasks_priorityId_fkey";
+
+-- DropForeignKey
+ALTER TABLE "tasks" DROP CONSTRAINT "tasks_statusId_fkey";
+
+-- DropTable
+DROP TABLE "task_priorities";
+
+-- DropTable
+DROP TABLE "task_statuses";
+
+-- DropTable
+DROP TABLE "tasks";
 
 -- CreateTable
 CREATE TABLE "Estoque" (
@@ -22,10 +45,11 @@ CREATE TABLE "Estoque" (
 -- CreateTable
 CREATE TABLE "Item" (
     "id" TEXT NOT NULL,
-    "tombamento" TEXT NOT NULL,
+    "tombamento" TEXT,
     "nome" TEXT NOT NULL,
     "descricao" TEXT,
     "categoria" TEXT NOT NULL,
+    "nivelMinimo" INTEGER DEFAULT 0,
     "status" "StatusItem" NOT NULL DEFAULT 'DISPONIVEL',
     "estoqueId" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -55,6 +79,7 @@ CREATE TABLE "Movimentacao" (
     "id" TEXT NOT NULL,
     "itemId" TEXT NOT NULL,
     "tipo" "TipoMovimentacao" NOT NULL,
+    "quantidade" INTEGER NOT NULL DEFAULT 1,
     "usuarioId" TEXT NOT NULL,
     "dataMovimentacao" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "observacao" TEXT,

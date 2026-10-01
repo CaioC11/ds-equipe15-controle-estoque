@@ -7,42 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model TaskStatus {
-  id    Int    @id @default(autoincrement())
-  code  String @unique
-  label String
-  tasks Task[]
-
-  @@map("task_statuses")
-}
-
-model TaskPriority {
-  id    Int    @id @default(autoincrement())
-  code  String @unique
-  label String
-  tasks Task[]
-
-  @@map("task_priorities")
-}
-
-model Task {
-  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  title       String
-  description String?
-  statusId    Int
-  status      TaskStatus   @relation(fields: [statusId], references: [id])
-  priorityId  Int
-  priority    TaskPriority @relation(fields: [priorityId], references: [id])
-  dueDate     DateTime?
-  ownerId     String?      @db.Uuid
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-
-  @@index([ownerId])
-  @@index([statusId])
-  @@index([priorityId])
-  @@map("tasks")
-}
 enum StatusItem {
   DISPONIVEL
   EMPRESTADO
@@ -78,10 +42,11 @@ model Estoque {
 
 model Item {
   id            String         @id @default(uuid())
-  tombamento    String         @unique
+  tombamento    String?        @unique
   nome          String
   descricao     String?
   categoria     String
+  nivelMinimo   Int?           @default(0)
   status        StatusItem     @default(DISPONIVEL)
   estoqueId     String
   estoque       Estoque        @relation(fields: [estoqueId], references: [id])
@@ -110,6 +75,7 @@ model Movimentacao {
   itemId           String
   item             Item             @relation(fields: [itemId], references: [id])
   tipo             TipoMovimentacao
+  quantidade       Int              @default(1)
   usuarioId        String
   dataMovimentacao DateTime         @default(now())
   observacao       String?
