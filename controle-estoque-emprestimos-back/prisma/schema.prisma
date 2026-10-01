@@ -7,39 +7,76 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model TaskStatus {
-  id    Int    @id @default(autoincrement())
-  code  String @unique
-  label String
-  tasks Task[]
-
-  @@map("task_statuses")
+enum StatusItem {
+  DISPONIVEL
+  EMPRESTADO
+  MANUTENCAO
+  BAIXADO
 }
 
-model TaskPriority {
-  id    Int    @id @default(autoincrement())
-  code  String @unique
-  label String
-  tasks Task[]
-
-  @@map("task_priorities")
+enum StatusEmprestimo {
+  SOLICITADO
+  ATIVO
+  DEVOLVIDO
+  ATRASADO
+  CANCELADO
 }
 
-model Task {
-  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  title       String
-  description String?
-  statusId    Int
-  status      TaskStatus   @relation(fields: [statusId], references: [id])
-  priorityId  Int
-  priority    TaskPriority @relation(fields: [priorityId], references: [id])
-  dueDate     DateTime?
-  ownerId     String?      @db.Uuid
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+enum TipoMovimentacao {
+  ENTRADA
+  SAIDA
+  DEVOLUCAO
+  TRANSFERENCIA
+  MANUTENCAO
+}
 
-  @@index([ownerId])
-  @@index([statusId])
-  @@index([priorityId])
-  @@map("tasks")
+model Estoque {
+  id          String   @id @default(uuid())
+  nome        String
+  descricao   String?
+  localizacao String?
+  itens       Item[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Item {
+  id            String         @id @default(uuid())
+  tombamento    String?        @unique
+  nome          String
+  descricao     String?
+  categoria     String
+  nivelMinimo   Int?           @default(0)
+  status        StatusItem     @default(DISPONIVEL)
+  estoqueId     String
+  estoque       Estoque        @relation(fields: [estoqueId], references: [id])
+  emprestimos   Emprestimo[]
+  movimentacoes Movimentacao[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model Emprestimo {
+  id                    String           @id @default(uuid())
+  itemId                String
+  item                  Item             @relation(fields: [itemId], references: [id])
+  usuarioSolicitanteId  String
+  dataEmprestimo        DateTime         @default(now())
+  dataPrevistaDevolucao DateTime
+  dataDevolucaoEfetiva  DateTime?
+  status                StatusEmprestimo @default(ATIVO)
+  observacoes           String?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+}
+
+model Movimentacao {
+  id               String           @id @default(uuid())
+  itemId           String
+  item             Item             @relation(fields: [itemId], references: [id])
+  tipo             TipoMovimentacao
+  quantidade       Int              @default(1)
+  usuarioId        String
+  dataMovimentacao DateTime         @default(now())
+  observacao       String?
 }
