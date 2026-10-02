@@ -1,3 +1,4 @@
+import { CategoriasPage } from './pages/categorias';
 import { BrowserRouter, Route, Routes, Navigate, useLocation, Outlet } from 'react-router-dom';
 import { useEffect, useRef } from 'react';
 import { useAuth } from 'react-oidc-context';
@@ -39,7 +40,7 @@ function RouteMap() {
           await auth.removeUser();
           await auth.clearStaleState();
         } catch {
-          // ignore clean up error
+          //ignore clean up error
         }
       });
     }
@@ -126,6 +127,7 @@ function RouteMap() {
         <Route element={<PageCin auth={auth} permittedRoles={ALL_ROLES} />}>
           <Route element={<RouteErrorBoundary />}>
             <Route path={Links.TODOS} element={<TodosPage />} />
+            <Route path={Links.CATEGORIAS} element={<CategoriasPage />} />
             {/* Rota desconhecida: componente de erro pronto da cinnamon (404). */}
             <Route path="*" element={<ErrorScreen errorType={httpErrors.NOTFOUND_404} />} />
           </Route>
