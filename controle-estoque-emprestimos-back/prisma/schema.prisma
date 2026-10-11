@@ -7,6 +7,11 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum TipoItem {
+  PATRIMONIAL
+  CONSUMO
+}
+
 enum StatusItem {
   DISPONIVEL
   EMPRESTADO
@@ -15,10 +20,9 @@ enum StatusItem {
 }
 
 enum StatusEmprestimo {
-  SOLICITADO
+  AGUARDANDO_TERMO
   ATIVO
   DEVOLVIDO
-  ATRASADO
   CANCELADO
 }
 
@@ -32,40 +36,77 @@ enum TipoMovimentacao {
 
 model Estoque {
   id          String   @id @default(uuid())
-  nome        String
+  nome        String   @unique
   descricao   String?
   localizacao String?
+  ativo       Boolean  @default(true)
+  gestorId    String?  // ID do Gestor (Keycloak/Auth)
   itens       Item[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
 
+model Categoria {
+  id        String   @id @default(uuid())
+  nome      String   @unique
+  descricao String?
+  itens     Item[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model Item {
   id            String         @id @default(uuid())
+  tipo          TipoItem
   tombamento    String?        @unique
+  numeroSerie   String?
   nome          String
   descricao     String?
-  categoria     String
   nivelMinimo   Int?           @default(0)
   status        StatusItem     @default(DISPONIVEL)
+  
+  categoriaId   String
+  categoria     Categoria      @relation(fields: [categoriaId], references: [id])
+  
   estoqueId     String
   estoque       Estoque        @relation(fields: [estoqueId], references: [id])
+  
   emprestimos   Emprestimo[]
   movimentacoes Movimentacao[]
+  
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
+}
+
+model Termo {
+  id          String      @id @default(uuid())
+  numeroAno   String      @unique // Ex: "001/2026"
+  arquivoPdf  String      // Caminho ou URL do arquivo
+  emprestimo  Emprestimo?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
 }
 
 model Emprestimo {
   id                    String           @id @default(uuid())
   itemId                String
   item                  Item             @relation(fields: [itemId], references: [id])
-  usuarioSolicitanteId  String
-  dataEmprestimo        DateTime         @default(now())
-  dataPrevistaDevolucao DateTime
+  
+  // Dados do responsável (Temporário até o PO definir)
+  responsavelNome       String
+  responsavelSiape      String
+  responsavelLotacao    String
+  responsavelCargo      String
+  
+  termoId               String?          @unique
+  termo                 Termo?           @relation(fields: [termoId], references: [id])
+  
+  dataRetirada          DateTime         @default(now())
+  prazoDevolucao        DateTime?
   dataDevolucaoEfetiva  DateTime?
-  status                StatusEmprestimo @default(ATIVO)
+  status                StatusEmprestimo @default(AGUARDANDO_TERMO)
   observacoes           String?
+  
   createdAt             DateTime         @default(now())
   updatedAt             DateTime         @updatedAt
 }
