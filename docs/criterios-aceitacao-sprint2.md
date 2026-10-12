@@ -85,7 +85,7 @@ Regra validada com a Gerência de Infraestrutura: o tombamento é **obrigatório
 | Termo | PDF gerado no modelo do CIn, com número sequencial por ano | Time |
 | Assinatura | Fora do sistema; o gestor anexa o PDF assinado | Mateus / Artur |
 | Armazenamento do PDF | Disco persistente (volume Docker), com o caminho no banco, atrás de um serviço de storage (A6) | Artur |
-| Estados do empréstimo | aguardando termo assinado → ativo → devolvido (ou atrasado) | Mateus |
+| Estados do empréstimo | aguardando termo assinado → ativo → devolvido (atraso derivado do prazo, sem status próprio) | Mateus |
 | Atraso | Impede novo empréstimo até a devolução ou justificativa de permanência (A5, confirmado em 05/10; P1) | Time |
 | Quem é gestor de cada estoque | Relação estoque ↔ usuários, preenchida pelo ADMIN (A1) | Mateus / Artur |
 
@@ -113,7 +113,7 @@ Durante a Sprint 2, o PO assumiu estas premissas para destravar o time. Todas fo
 5. O gestor confirma a entrega física e o empréstimo fica "ativo".
 6. Na devolução, só o gestor marca como devolvido, depois de conferir o item.
 
-Estados do empréstimo: **aguardando termo assinado → ativo → devolvido** (ou **atrasado**, quando o prazo vence).
+Estados do empréstimo: **aguardando termo assinado → ativo → devolvido**. O atraso não é um status: é derivado do prazo (empréstimo ativo com `prazoDevolucao` vencido).
 
 A assinatura gov.br **integrada ao sistema** continua sendo Extra. O que entra no MVP é o upload do arquivo assinado, que a Gerência pediu.
 
