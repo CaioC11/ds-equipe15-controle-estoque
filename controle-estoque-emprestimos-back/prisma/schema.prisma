@@ -7,6 +7,11 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum TipoItem {
+  PATRIMONIAL
+  CONSUMO
+}
+
 enum StatusItem {
   DISPONIVEL
   EMPRESTADO
@@ -15,10 +20,9 @@ enum StatusItem {
 }
 
 enum StatusEmprestimo {
-  SOLICITADO
+  AGUARDANDO_TERMO
   ATIVO
   DEVOLVIDO
-  ATRASADO
   CANCELADO
 }
 
@@ -31,43 +35,109 @@ enum TipoMovimentacao {
 }
 
 model Estoque {
-  id          String   @id @default(uuid())
-  nome        String
+  id          String          @id @default(uuid())
+  nome        String          @unique
   descricao   String?
   localizacao String?
+  ativo       Boolean         @default(true)
+  gestores    EstoqueGestor[]
   itens       Item[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+// Relação estoque <-> usuários gestores, preenchida pelo ADMIN (premissa A1)
+model EstoqueGestor {
+  estoqueId String
+  estoque   Estoque  @relation(fields: [estoqueId], references: [id], onDelete: Cascade)
+  usuarioId String // sub do Keycloak
+  createdAt DateTime @default(now())
+
+  @@id([estoqueId, usuarioId])
+  @@index([usuarioId])
+}
+
+// Categorias globais, usadas por todos os estoques (premissa A2)
+model Categoria {
+  id        String   @id @default(uuid())
+  nome      String   @unique
+  descricao String?
+  itens     Item[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Item {
   id            String         @id @default(uuid())
-  tombamento    String?        @unique
+  tipo          TipoItem
+  tombamento    String?        @unique // obrigatório em PATRIMONIAL (ou nº de série / semTombamento); validado no service
+  semTombamento Boolean        @default(false)
+  numeroSerie   String?        @unique
   nome          String
   descricao     String?
-  categoria     String
-  nivelMinimo   Int?           @default(0)
+  nivelMinimo   Int? // null = sem alerta de estoque baixo (premissa A7)
   status        StatusItem     @default(DISPONIVEL)
+
+  categoriaId   String
+  categoria     Categoria      @relation(fields: [categoriaId], references: [id])
+
   estoqueId     String
   estoque       Estoque        @relation(fields: [estoqueId], references: [id])
+
   emprestimos   Emprestimo[]
   movimentacoes Movimentacao[]
+
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 }
 
+// Cadastro simples feito pelo gestor, sem login, reaproveitado em novos empréstimos (premissa A3)
+model Responsavel {
+  id          String       @id @default(uuid())
+  nome        String
+  siape       String?      @unique
+  cpf         String?      @unique // exigir Siape ou CPF no service
+  lotacao     String
+  cargo       String
+  email       String?
+  emprestimos Emprestimo[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Termo {
+  id              String      @id @default(uuid())
+  numeroAno       String      @unique // Ex: "001/2026", gerado no service
+  arquivoPdf      String // caminho do PDF gerado (storage, premissa A6)
+  arquivoAssinado String? // caminho do PDF assinado, anexado pelo gestor
+  emprestimo      Emprestimo?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
 model Emprestimo {
-  id                    String           @id @default(uuid())
-  itemId                String
-  item                  Item             @relation(fields: [itemId], references: [id])
-  usuarioSolicitanteId  String
-  dataEmprestimo        DateTime         @default(now())
-  dataPrevistaDevolucao DateTime
-  dataDevolucaoEfetiva  DateTime?
-  status                StatusEmprestimo @default(ATIVO)
-  observacoes           String?
-  createdAt             DateTime         @default(now())
-  updatedAt             DateTime         @updatedAt
+  id                       String           @id @default(uuid())
+  itemId                   String
+  item                     Item             @relation(fields: [itemId], references: [id])
+
+  responsavelId            String
+  responsavel              Responsavel      @relation(fields: [responsavelId], references: [id])
+
+  termoId                  String?          @unique
+  termo                    Termo?           @relation(fields: [termoId], references: [id])
+
+  dataRetirada             DateTime         @default(now())
+  prazoDevolucao           DateTime? // null = "indefinido"
+  dataDevolucaoEfetiva     DateTime?
+  status                   StatusEmprestimo @default(AGUARDANDO_TERMO)
+  // Atraso é derivado: status ATIVO e prazoDevolucao < agora (premissa A5)
+  justificativaPermanencia String? // libera novo empréstimo mesmo com atraso (A5, P1)
+  observacoes              String?
+
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
+
+  @@index([responsavelId])
 }
 
 model Movimentacao {

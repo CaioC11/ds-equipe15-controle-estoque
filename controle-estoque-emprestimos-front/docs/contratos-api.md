@@ -5,27 +5,49 @@
 ```mermaid
 erDiagram
     ESTOQUE ||--o{ ITEM : "possui"
+    CATEGORIA ||--o{ ITEM : "classifica"
     ITEM ||--o{ EMPRESTIMO : "pertence a"
     ITEM ||--o{ MOVIMENTACAO : "gera histórico"
+    TERMO ||--o| EMPRESTIMO : "formaliza"
+
+    CATEGORIA {
+        string id PK
+        string nome UK
+        string descricao
+        datetime createdAt
+        datetime updatedAt
+    }
 
     ESTOQUE {
         string id PK
-        string nome
+        string nome UK
         string descricao
         string localizacao
+        boolean ativo
+        string gestorId "ID do Gestor (Keycloak)"
         datetime createdAt
         datetime updatedAt
     }
 
     ITEM {
         string id PK
-        string tombamento UK "Opcional - Número de tombamento institucional"
+        string tipo "PATRIMONIAL | CONSUMO"
+        string tombamento UK "Obrigatório se PATRIMONIAL"
+        string numeroSerie "Opcional"
         string nome
         string descricao
-        string categoria
-        int nivelMinimo "Nível mínimo para alerta de estoque"
+        int nivelMinimo "Nível mínimo para alerta"
         string status "DISPONIVEL | EMPRESTADO | MANUTENCAO | BAIXADO"
+        string categoriaId FK
         string estoqueId FK
+        datetime createdAt
+        datetime updatedAt
+    }
+
+    TERMO {
+        string id PK
+        string numeroAno UK "Ex: 001/2026"
+        string arquivoPdf "URL ou Caminho do arquivo"
         datetime createdAt
         datetime updatedAt
     }
@@ -33,11 +55,15 @@ erDiagram
     EMPRESTIMO {
         string id PK
         string itemId FK
-        string usuarioSolicitanteId "Sub / ID do Keycloak"
-        datetime dataEmprestimo
-        datetime dataPrevistaDevolucao
+        string responsavelNome
+        string responsavelSiape
+        string responsavelLotacao
+        string responsavelCargo
+        string termoId FK "Opcional no início"
+        datetime dataRetirada
+        datetime prazoDevolucao
         datetime dataDevolucaoEfetiva
-        string status "SOLICITADO | ATIVO | DEVOLVIDO | ATRASADO | CANCELADO"
+        string status "AGUARDANDO_TERMO | ATIVO | DEVOLVIDO | CANCELADO"
         string observacoes
         datetime createdAt
         datetime updatedAt
