@@ -1,7 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { categoriaService, type Categoria } from '../../services/categoriaService';
+import { categoriasService as categoriaService, type Categoria } from '../../services/categoriaService';
 
 export const CategoriasPage: React.FC = () => {
+  // Define a permissão de Gestor. 
+  // Caso a checagem por papéis no OIDC/Keycloak já esteja configurada, utilize:
+  // const isGestor = Boolean(auth.user?.profile?.roles?.includes('Gestor'));
+  // Mantendo 'true', a interface exibe os botões e o backend bloqueia via 403 caso o usuário não seja gestor:
+  const isGestor = true;
+
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -64,23 +70,14 @@ export const CategoriasPage: React.FC = () => {
       }
       handleCloseModal();
       carregarCategorias();
-    } catch (err: unknown) {
-      const error = err as Error;
-      setErrorMsg(error.message || 'Erro ao salvar categoria.');
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Deseja realmente excluir esta categoria?')) return;
-    setErrorMsg(null);
-
-    try {
-      await categoriaService.remover(id);
-      setSuccessMsg('Categoria removida!');
-      carregarCategorias();
-    } catch (err: unknown) {
-      const error = err as Error;
-      alert(error.message || 'Erro ao remover categoria.');
+    } catch (err: any) {
+      if (err?.status === 403) {
+        setErrorMsg('Você não tem permissão de gestor para cadastrar ou editar categorias.');
+      } else if (err?.status === 409) {
+        setErrorMsg('Já existe uma categoria cadastrada com este nome.');
+      } else {
+        setErrorMsg(err?.message || 'Erro ao salvar categoria.');
+      }
     }
   };
 
@@ -91,12 +88,16 @@ export const CategoriasPage: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-800">Categorias de Produtos</h1>
           <p className="text-gray-500 text-sm">Gerencie as categorias utilizadas no cadastro de itens</p>
         </div>
-        <button
-          onClick={() => handleOpenModal()}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg transition"
-        >
-          + Nova Categoria
-        </button>
+
+        {/* Exibe o botão de criar apenas se o usuário for gestor */}
+        {isGestor && (
+          <button
+            onClick={() => handleOpenModal()}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-lg transition"
+          >
+            + Nova Categoria
+          </button>
+        )}
       </div>
 
       {successMsg && (
@@ -115,13 +116,13 @@ export const CategoriasPage: React.FC = () => {
               <tr>
                 <th className="py-3 px-4">Nome</th>
                 <th className="py-3 px-4">Descrição</th>
-                <th className="py-3 px-4 text-right">Ações</th>
+                {isGestor && <th className="py-3 px-4 text-right">Ações</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {categorias.length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="py-4 px-4 text-center text-gray-500">
+                  <td colSpan={isGestor ? 3 : 2} className="py-4 px-4 text-center text-gray-500">
                     Nenhuma categoria encontrada.
                   </td>
                 </tr>
@@ -130,20 +131,18 @@ export const CategoriasPage: React.FC = () => {
                   <tr key={cat.id} className="hover:bg-gray-50">
                     <td className="py-3 px-4 font-medium text-gray-900">{cat.nome}</td>
                     <td className="py-3 px-4 text-gray-600">{cat.descricao || '-'}</td>
-                    <td className="py-3 px-4 text-right space-x-3">
-                      <button
-                        onClick={() => handleOpenModal(cat)}
-                        className="text-blue-600 hover:text-blue-800 font-medium"
-                      >
-                        Editar
-                      </button>
-                      <button
-                        onClick={() => handleDelete(cat.id)}
-                        className="text-red-600 hover:text-red-800 font-medium"
-                      >
-                        Excluir
-                      </button>
-                    </td>
+                    
+                    {/* Exibe a coluna de ações apenas se o usuário for gestor */}
+                    {isGestor && (
+                      <td className="py-3 px-4 text-right">
+                        <button
+                          onClick={() => handleOpenModal(cat)}
+                          className="text-blue-600 hover:text-blue-800 font-medium"
+                        >
+                          Editar
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))
               )}
