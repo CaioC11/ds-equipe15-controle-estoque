@@ -10,6 +10,7 @@ import swaggerConfig from './config/swagger.config';
 import { PrismaModule } from './database/prisma.module';
 import { HealthModule } from './modules/health/health.module';
 import { TaskModule } from './modules/task/task.module';
+import { CategoriasModule } from './modules/categorias/categorias.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { TaskModule } from './modules/task/task.module';
     AuthModule,
     HealthModule,
     TaskModule,
+    CategoriasModule, // <--- ADICIONADO AQUI
   ],
   providers: [{ provide: APP_PIPE, useClass: ZodValidationPipe }],
 })
