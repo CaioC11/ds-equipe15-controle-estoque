@@ -1,60 +1,57 @@
+import { fetchApi, API_URL, getApiErrorMessage } from './api';
+
 export interface Categoria {
   id: string;
   nome: string;
   descricao?: string;
 }
 
-//Alternar para false quando o backend estiver pronto no Docker
-const USE_MOCK = true;
+export interface CreateCategoriaInput {
+  nome: string;
+  descricao?: string;
+}
 
-//Dados iniciais de teste
-let mockCategorias: Categoria[] = [
-  { id: '1', nome: 'Informática', descricao: 'Notebooks, mouses, teclados e periféricos' },
-  { id: '2', nome: 'Ferramentas', descricao: 'Kits de chaves, alicates e multímetros' },
-  { id: '3', nome: 'Audiovisual', descricao: 'Projetores, câmeras e microfones' },
-];
-
-export const categoriaService = {
-  //Listar categorias
+export const categoriasService = {
   async listar(): Promise<Categoria[]> {
-    if (USE_MOCK) {
-      return new Promise((resolve) => setTimeout(() => resolve([...mockCategorias]), 300));
+    const response = await fetchApi(`${API_URL}/categorias`);
+    if (!response.ok) {
+      const errorMsg = await getApiErrorMessage(response, 'Erro ao listar categorias');
+      throw new Error(errorMsg);
     }
-    //TODO: Subtituir pelo axios quando o backend subir
-    //const res = await api.get('/categorias'); return res.data;
-    return [];
+    return response.json();
   },
 
-  //Criar categoria
-  async criar(dados: Omit<Categoria, 'id'>): Promise<Categoria> {
-    if (USE_MOCK) {
-      const nova: Categoria = { id: String(Date.now()), ...dados };
-      mockCategorias.push(nova);
-      return new Promise((resolve) => setTimeout(() => resolve(nova), 300));
+  async criar(data: CreateCategoriaInput): Promise<Categoria> {
+    const response = await fetchApi(`${API_URL}/categorias`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const errorMsg = await getApiErrorMessage(response, 'Erro ao criar categoria');
+      const error: any = new Error(errorMsg);
+      error.status = response.status;
+      throw error;
     }
-    return {} as Categoria;
+
+    return response.json();
   },
 
-  //Atualizar categoria
-  async atualizar(id: string, dados: Omit<Categoria, 'id'>): Promise<Categoria> {
-    if (USE_MOCK) {
-      mockCategorias = mockCategorias.map((c) => (c.id === id ? { ...c, ...dados } : c));
-      return new Promise((resolve) => setTimeout(() => resolve({ id, ...dados }), 300));
-    }
-    return {} as Categoria;
-  },
+  async atualizar(id: string, data: CreateCategoriaInput): Promise<Categoria> {
+    const response = await fetchApi(`${API_URL}/categorias/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
 
-  //Remover categoria
-  async remover(id: string): Promise<void> {
-    if (USE_MOCK) {
-      // Simulação do requisito: Categoria '1' simulando que tem itens vinculados
-      if (id === '1') {
-        return new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Categoria possui itens vinculados.')), 300)
-        );
-      }
-      mockCategorias = mockCategorias.filter((c) => c.id !== id);
-      return new Promise((resolve) => setTimeout(() => resolve(), 300));
+    if (!response.ok) {
+      const errorMsg = await getApiErrorMessage(response, 'Erro ao atualizar categoria');
+      const error: any = new Error(errorMsg);
+      error.status = response.status;
+      throw error;
     }
-  }
+
+    return response.json();
+  },
 };

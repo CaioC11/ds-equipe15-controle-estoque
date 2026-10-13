@@ -23,7 +23,7 @@ export class EstoquesService {
         nome: createEstoqueDto.nome,
         descricao: createEstoqueDto.descricao,
         localizacao: createEstoqueDto.localizacao,
-        gestorId: createEstoqueDto.gestorId,
+        //gestorId: createEstoqueDto.gestorId,//
         ativo: true, 
       },
     });
