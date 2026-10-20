@@ -9,6 +9,7 @@ import keycloakConfig from './config/keycloak.config';
 import swaggerConfig from './config/swagger.config';
 import { PrismaModule } from './database/prisma.module';
 import { CategoriasModule } from './modules/categorias/categorias.module';
+import { EmprestimosModule } from './modules/emprestimos/emprestimos.module';
 import { EstoquesModule } from './modules/estoques/estoques.module';
 import { HealthModule } from './modules/health/health.module';
 
@@ -28,6 +29,7 @@ import { ItensModule } from './modules/itens/itens.module';
     EstoquesModule,
     EstoquesModule,
     ItensModule,
+    EmprestimosModule,
   ],
   providers: [
     {
