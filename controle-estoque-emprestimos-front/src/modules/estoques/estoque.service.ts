@@ -20,11 +20,17 @@ export class EstoqueApiError extends Error {
   }
 }
 
-async function failFrom(response: Response, fallback: string): Promise<never> {
-  if (response.status === 409) {
+async function failFrom(
+  response: Response,
+  fallback: string,
+  isWrite: boolean,
+): Promise<never> {
+  if (isWrite && response.status === 409) {
     throw new EstoqueApiError('Já existe um estoque com este nome. Escolha outro nome.', 409);
   }
-  if (response.status === 403) {
+  // A mensagem de "apenas administradores" só faz sentido para criar/editar/desativar;
+  // na listagem um 403 deve cair na mensagem genérica da API.
+  if (isWrite && response.status === 403) {
     throw new EstoqueApiError(
       'Apenas administradores podem criar, editar ou desativar estoques.',
       403,
@@ -42,7 +48,7 @@ export class EstoqueService {
   /** Lista os estoques ativos, com itens e saldo. */
   async getAll(): Promise<Estoque[]> {
     const response = await fetchApi(`${API_URL}/estoques`);
-    if (!response.ok) return failFrom(response, 'Erro ao buscar estoques');
+    if (!response.ok) return failFrom(response, 'Erro ao buscar estoques', false);
     const envelope = (await response.json()) as ApiEnvelope<Estoque[]>;
     return envelope.data;
   }
@@ -53,7 +59,7 @@ export class EstoqueService {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(dto),
     });
-    if (!response.ok) return failFrom(response, 'Erro ao criar estoque');
+    if (!response.ok) return failFrom(response, 'Erro ao criar estoque', true);
     const envelope = (await response.json()) as ApiEnvelope<Estoque>;
     return envelope.data;
   }
@@ -64,7 +70,7 @@ export class EstoqueService {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(dto),
     });
-    if (!response.ok) return failFrom(response, 'Erro ao atualizar estoque');
+    if (!response.ok) return failFrom(response, 'Erro ao atualizar estoque', true);
     const envelope = (await response.json()) as ApiEnvelope<Estoque>;
     return envelope.data;
   }
@@ -72,7 +78,7 @@ export class EstoqueService {
   /** "Remover" no backend é desativar o estoque (ele deixa de aparecer na listagem). */
   async remove(id: string): Promise<void> {
     const response = await fetchApi(`${API_URL}/estoques/${id}`, { method: 'DELETE' });
-    if (!response.ok) return failFrom(response, 'Erro ao desativar estoque');
+    if (!response.ok) return failFrom(response, 'Erro ao desativar estoque', true);
   }
 }
 

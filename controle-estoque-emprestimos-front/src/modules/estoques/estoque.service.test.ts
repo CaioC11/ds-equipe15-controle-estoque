@@ -50,6 +50,15 @@ describe('estoqueService', () => {
     });
   });
 
+  it('getAll não usa a mensagem de "apenas administradores" quando a API nega (403)', async () => {
+    fetchApiMock.mockResolvedValue(new Response('{}', { status: 403 }));
+
+    await expect(estoqueService.getAll()).rejects.toMatchObject({
+      status: 403,
+      message: 'Erro ao buscar estoques',
+    });
+  });
+
   it('remove chama DELETE no estoque (desativação)', async () => {
     fetchApiMock.mockResolvedValue(new Response('{}', { status: 200 }));
 

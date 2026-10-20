@@ -3,11 +3,9 @@ import { ChevronDown, ChevronRight, Edit2, PowerOff } from 'lucide-react';
 import { TableCell, TableRow } from '@cincoders/cinnamon';
 import { Can } from '../../../components/auth/Can';
 import { WRITE_ROLES } from '../../../utils/enums';
+import { ESTOQUE_TABLE_COLUMNS } from '../estoque.constants';
 import { STATUS_ITEM_LABELS, TIPO_ITEM_LABELS } from '../estoque.types';
-import type { Estoque, ItemEstoque } from '../estoque.types';
-
-/** Número de colunas da tabela de estoques (usado nos estados de loading/erro/vazio). */
-export const ESTOQUE_TABLE_COLUMNS = 6;
+import type { Estoque, ItemEstoque, SaldoEstoque } from '../estoque.types';
 
 interface EstoqueRowProps {
   estoque: Estoque;
@@ -22,10 +20,20 @@ function identificacao(item: ItemEstoque): string {
   return '—';
 }
 
+/** Usa o saldo do backend; se vier ausente, calcula a partir dos itens (em vez de mostrar zeros). */
+function calcularSaldo(estoque: Estoque, itens: ItemEstoque[]): SaldoEstoque {
+  if (estoque.saldo) return estoque.saldo;
+  return {
+    totalItens: itens.length,
+    disponiveis: itens.filter((item) => item.status === 'DISPONIVEL').length,
+    emprestados: itens.filter((item) => item.status === 'EMPRESTADO').length,
+  };
+}
+
 export function EstoqueRow({ estoque, onEdit, onDeactivate }: EstoqueRowProps) {
   const [expanded, setExpanded] = useState(false);
   const itens = estoque.itens ?? [];
-  const saldo = estoque.saldo ?? { totalItens: itens.length, disponiveis: 0, emprestados: 0 };
+  const saldo = calcularSaldo(estoque, itens);
 
   return (
     <>
@@ -69,17 +77,19 @@ export function EstoqueRow({ estoque, onEdit, onDeactivate }: EstoqueRowProps) {
           <div className="flex items-center justify-end gap-2">
             <Can roles={WRITE_ROLES}>
               <button
+                type="button"
                 onClick={() => onEdit(estoque)}
                 title="Editar"
+                aria-label={`Editar estoque ${estoque.nome}`}
                 className="cursor-pointer rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-gray-800 dark:hover:text-gray-200"
               >
                 <Edit2 className="h-4 w-4" />
               </button>
-            </Can>
-            <Can roles={WRITE_ROLES}>
               <button
+                type="button"
                 onClick={() => onDeactivate(estoque)}
                 title="Desativar"
+                aria-label={`Desativar estoque ${estoque.nome}`}
                 className="cursor-pointer rounded-lg p-1.5 text-red-500 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/30"
               >
                 <PowerOff className="h-4 w-4" />

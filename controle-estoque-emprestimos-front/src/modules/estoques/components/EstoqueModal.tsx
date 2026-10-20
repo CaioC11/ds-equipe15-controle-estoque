@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -26,9 +27,10 @@ const INPUT_CLASS =
 
 /**
  * Formulário de criação/edição de estoque. Quem renderiza usa `key` para
- * remontar o formulário ao trocar de estoque (mesmo padrão do TodoModal).
+ * remontar o formulário a cada abertura (mesmo padrão do TodoModal).
  */
 export function EstoqueModal({ isOpen, onClose, onSubmit, estoqueToEdit }: EstoqueModalProps) {
+  const formId = useId();
   const {
     register,
     handleSubmit,
@@ -77,8 +79,14 @@ export function EstoqueModal({ isOpen, onClose, onSubmit, estoqueToEdit }: Estoq
       size="lg"
     >
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Nome *</label>
+        <label
+          htmlFor={`${formId}-nome`}
+          className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+        >
+          Nome *
+        </label>
         <input
+          id={`${formId}-nome`}
           type="text"
           {...register('nome')}
           placeholder="Ex: Almoxarifado Central"
@@ -88,10 +96,14 @@ export function EstoqueModal({ isOpen, onClose, onSubmit, estoqueToEdit }: Estoq
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+        <label
+          htmlFor={`${formId}-localizacao`}
+          className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+        >
           Localização
         </label>
         <input
+          id={`${formId}-localizacao`}
           type="text"
           {...register('localizacao')}
           placeholder="Ex: Bloco A, sala 101"
@@ -100,10 +112,14 @@ export function EstoqueModal({ isOpen, onClose, onSubmit, estoqueToEdit }: Estoq
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+        <label
+          htmlFor={`${formId}-descricao`}
+          className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+        >
           Descrição
         </label>
         <textarea
+          id={`${formId}-descricao`}
           rows={3}
           {...register('descricao')}
           placeholder="Descrição opcional do estoque"

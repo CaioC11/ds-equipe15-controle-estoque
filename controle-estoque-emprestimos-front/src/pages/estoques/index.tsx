@@ -15,10 +15,8 @@ import {
   toast,
 } from '@cincoders/cinnamon';
 import { EstoqueModal } from '../../modules/estoques/components/EstoqueModal';
-import {
-  ESTOQUE_TABLE_COLUMNS,
-  EstoqueRow,
-} from '../../modules/estoques/components/EstoqueRow';
+import { EstoqueRow } from '../../modules/estoques/components/EstoqueRow';
+import { ESTOQUE_TABLE_COLUMNS } from '../../modules/estoques/estoque.constants';
 import { EstoqueApiError } from '../../modules/estoques/estoque.service';
 import type { CreateEstoqueDto, Estoque } from '../../modules/estoques/estoque.types';
 import { useEstoques } from '../../modules/estoques/useEstoques';
@@ -29,12 +27,21 @@ import { WRITE_ROLES } from '../../utils/enums';
 
 const SUPPORT_EMAIL = 'helpdesk@cin.ufpe.br';
 
+/** Minúsculas e sem acentos, para a busca achar "almoxarifado" ao digitar "Almoxarífado". */
+const normalizar = (texto: string) =>
+  texto
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
 export default function EstoquesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [estoqueToEdit, setEstoqueToEdit] = useState<Estoque | null>(null);
-  // Muda a cada abertura para criação, forçando o modal a remontar e resetar o formulário.
-  const [newEstoqueKey, setNewEstoqueKey] = useState(0);
+  // Muda a cada abertura (criar ou editar), forçando o modal a remontar e resetar o formulário.
+  // Só usar o id do estoque como key não basta: reabrir o mesmo estoque manteria o que foi
+  // digitado e cancelado antes.
+  const [modalKey, setModalKey] = useState(0);
   const [estoqueToDeactivate, setEstoqueToDeactivate] = useState<Estoque | null>(null);
   const [isDeactivateDialogOpen, setIsDeactivateDialogOpen] = useState(false);
 
@@ -69,27 +76,30 @@ export default function EstoquesPage() {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Falha ao desativar estoque.';
       toast.error(message);
+    } finally {
+      setIsDeactivateDialogOpen(false);
     }
   };
 
   const handleOpenCreateModal = () => {
     setEstoqueToEdit(null);
-    setNewEstoqueKey((key) => key + 1);
+    setModalKey((key) => key + 1);
     setIsModalOpen(true);
   };
 
   const handleOpenEditModal = (estoque: Estoque) => {
     setEstoqueToEdit(estoque);
+    setModalKey((key) => key + 1);
     setIsModalOpen(true);
   };
 
   const filteredEstoques = useMemo(() => {
-    const term = searchTerm.toLowerCase();
+    const term = normalizar(searchTerm);
     return estoques.filter(
       (estoque) =>
-        estoque.nome.toLowerCase().includes(term) ||
-        (estoque.localizacao ?? '').toLowerCase().includes(term) ||
-        (estoque.descricao ?? '').toLowerCase().includes(term),
+        normalizar(estoque.nome).includes(term) ||
+        normalizar(estoque.localizacao ?? '').includes(term) ||
+        normalizar(estoque.descricao ?? '').includes(term),
     );
   }, [estoques, searchTerm]);
 
@@ -229,9 +239,9 @@ export default function EstoquesPage() {
         </Table>
       </Frame>
 
-      {/* 4. Modal de criação/edição (a `key` reseta o formulário) */}
+      {/* 4. Modal de criação/edição (a `key` reseta o formulário a cada abertura) */}
       <EstoqueModal
-        key={estoqueToEdit?.id ?? `new-${newEstoqueKey}`}
+        key={modalKey}
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSubmit={handleSaveEstoque}
