@@ -26,7 +26,6 @@ import { ItensModule } from './modules/itens/itens.module';
     AuthModule,
     CategoriasModule,
     EstoquesModule,
-    EstoquesModule,
     ItensModule,
   ],
   providers: [
