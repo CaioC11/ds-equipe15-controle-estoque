@@ -201,3 +201,162 @@ describe('MovimentacoesService', () => {
       mockPrisma.movimentacao.groupBy.mockResolvedValue(
         gruposPorTipo([TipoMovimentacao.ENTRADA, 5]),
       );
+      mockPrisma.movimentacao.create.mockResolvedValue({ id: 'mov-4' });
+      mockPrisma.$transaction.mockRejectedValueOnce({ code: 'P2034' });
+
+      const resultado = await service.registrarMovimentacao(
+        { itemId: 'item-1', tipo: TipoMovimentacao.SAIDA, quantidade: 1 },
+        'gestor-1',
+        false,
+      );
+
+      expect(mockPrisma.$transaction).toHaveBeenCalledTimes(2);
+      expect(resultado.saldoAtual).toBe(4);
+    });
+
+    it('lança ConflictException quando esgota as tentativas', async () => {
+      mockPrisma.$transaction.mockRejectedValue({ code: 'P2034' });
+
+      await expect(
+        service.registrarMovimentacao(
+          { itemId: 'item-1', tipo: TipoMovimentacao.SAIDA, quantidade: 1 },
+          'gestor-1',
+          false,
+        ),
+      ).rejects.toThrow(ConflictException);
+
+      expect(mockPrisma.$transaction).toHaveBeenCalledTimes(3);
+    });
+  });
+
+  describe('calcularSaldoItem', () => {
+    it('calcula saldo com entradas, devoluções, saídas e manutenção', async () => {
+      mockPrisma.movimentacao.groupBy.mockResolvedValue(
+        gruposPorTipo(
+          [TipoMovimentacao.ENTRADA, 10],
+          [TipoMovimentacao.DEVOLUCAO, 2],
+          [TipoMovimentacao.SAIDA, 3],
+          [TipoMovimentacao.MANUTENCAO, 1],
+        ),
+      );
+
+      await expect(service.calcularSaldoItem('item-1')).resolves.toBe(8);
+    });
+
+    it('retorna 0 quando não há movimentações', async () => {
+      mockPrisma.movimentacao.groupBy.mockResolvedValue([]);
+      await expect(service.calcularSaldoItem('item-1')).resolves.toBe(0);
+    });
+  });
+
+  describe('consultarSaldoItem', () => {
+    it('abaixoDoMinimo verdadeiro quando saldo <= nivelMinimo', async () => {
+      mockPrisma.item.findUnique.mockResolvedValue({ ...itemBase, nivelMinimo: 3 });
+      mockPrisma.movimentacao.groupBy.mockResolvedValue(
+        gruposPorTipo([TipoMovimentacao.ENTRADA, 3]),
+      );
+
+      const resultado = await service.consultarSaldoItem('item-1');
+      expect(resultado.abaixoDoMinimo).toBe(true);
+    });
+
+    it('abaixoDoMinimo falso quando saldo > nivelMinimo', async () => {
+      mockPrisma.item.findUnique.mockResolvedValue({ ...itemBase, nivelMinimo: 3 });
+      mockPrisma.movimentacao.groupBy.mockResolvedValue(
+        gruposPorTipo([TipoMovimentacao.ENTRADA, 2], [TipoMovimentacao.ENTRADA, 3]),
+      );
+
+      const resultado = await service.consultarSaldoItem('item-1');
+      expect(resultado.saldo).toBe(5);
+      expect(resultado.abaixoDoMinimo).toBe(false);
+    });
+
+    it('sem nível mínimo, abaixoDoMinimo nunca é verdadeiro', async () => {
+      mockPrisma.item.findUnique.mockResolvedValue(itemBase);
+      mockPrisma.movimentacao.groupBy.mockResolvedValue([]);
+
+      const resultado = await service.consultarSaldoItem('item-1');
+      expect(resultado.abaixoDoMinimo).toBe(false);
+    });
+
+    it('qualquer usuário consulta o saldo, sem checar vínculo de gestor', async () => {
+      mockPrisma.item.findUnique.mockResolvedValue(itemBase);
+      mockPrisma.movimentacao.groupBy.mockResolvedValue([]);
+
+      await expect(service.consultarSaldoItem('item-1')).resolves.toBeDefined();
+      expect(mockPrisma.estoqueGestor.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('retorna 404 para item inexistente', async () => {
+      mockPrisma.item.findUnique.mockResolvedValue(null);
+
+      await expect(service.consultarSaldoItem('nao-existe')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('consultarSaldoEstoque', () => {
+    it('retorna o saldo de cada item com a flag abaixoDoMinimo, sem exigir vínculo de gestor', async () => {
+      mockPrisma.estoque.findUnique.mockResolvedValue({ id: 'estoque-1' });
+      mockPrisma.item.findMany.mockResolvedValue([
+        { id: 'item-1', nome: 'Cabo', nivelMinimo: 5 },
+        { id: 'item-2', nome: 'Mouse', nivelMinimo: null },
+        { id: 'item-3', nome: 'Teclado', nivelMinimo: 2 },
+      ]);
+      mockPrisma.movimentacao.groupBy.mockImplementation(
+        async ({ where }: { where: { itemId: string } }) => {
+          if (where.itemId === 'item-1')
+            return gruposPorTipo([TipoMovimentacao.ENTRADA, 10], [TipoMovimentacao.SAIDA, 6]);
+          if (where.itemId === 'item-2') return gruposPorTipo([TipoMovimentacao.ENTRADA, 1]);
+          return [];
+        },
+      );
+
+      const resultado = await service.consultarSaldoEstoque('estoque-1');
+
+      expect(resultado.itens).toEqual([
+        { itemId: 'item-1', nomeItem: 'Cabo', saldo: 4, nivelMinimo: 5, abaixoDoMinimo: true },
+        { itemId: 'item-2', nomeItem: 'Mouse', saldo: 1, nivelMinimo: null, abaixoDoMinimo: false },
+        { itemId: 'item-3', nomeItem: 'Teclado', saldo: 0, nivelMinimo: 2, abaixoDoMinimo: true },
+      ]);
+      expect(mockPrisma.estoqueGestor.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('retorna 404 quando o estoque não existe', async () => {
+      mockPrisma.estoque.findUnique.mockResolvedValue(null);
+
+      await expect(service.consultarSaldoEstoque('x')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('consultarHistoricoEstoque', () => {
+    it('retorna o histórico da mais recente para a mais antiga', async () => {
+      comoGestor();
+      mockPrisma.movimentacao.findMany.mockResolvedValue([]);
+
+      await service.consultarHistoricoEstoque('estoque-1', 'gestor-1', false);
+
+      expect(mockPrisma.movimentacao.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { item: { estoqueId: 'estoque-1' } },
+          orderBy: { dataMovimentacao: 'desc' },
+        }),
+      );
+    });
+
+    it('nega acesso a quem não é gestor nem ADMIN (403)', async () => {
+      comoNaoGestor();
+
+      await expect(
+        service.consultarHistoricoEstoque('estoque-1', 'outro-usuario', false),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('permite ao ADMIN consultar o histórico', async () => {
+      mockPrisma.movimentacao.findMany.mockResolvedValue([]);
+
+      await expect(
+        service.consultarHistoricoEstoque('estoque-1', 'admin-1', true),
+      ).resolves.toEqual([]);
+    });
+  });
+});
