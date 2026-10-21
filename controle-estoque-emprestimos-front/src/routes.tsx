@@ -12,6 +12,7 @@ import { ALL_ROLES, Links, Roles } from './utils/enums';
 import TodosPage from './pages/todos';
 import TeamPage from './pages/team';
 import LoginPage from './pages/login';
+import EmprestimosPage from './pages/emprestimos';
 
 /**
  * Error boundary de nível de rota: um erro de renderização numa página mostra a
@@ -130,6 +131,7 @@ function RouteMap() {
             <Route path={Links.TODOS} element={<TodosPage />} />
             <Route path={Links.ESTOQUES} element={<EstoquesPage />} />
             <Route path={Links.CATEGORIAS} element={<CategoriasPage />} />
+            <Route path={Links.EMPRESTIMOS} element={<EmprestimosPage />} />
             {/* Rota desconhecida: componente de erro pronto da cinnamon (404). */}
             <Route path="*" element={<ErrorScreen errorType={httpErrors.NOTFOUND_404} />} />
           </Route>
