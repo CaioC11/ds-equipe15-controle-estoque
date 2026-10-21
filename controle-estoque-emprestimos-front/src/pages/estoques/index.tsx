@@ -24,6 +24,7 @@ import { Can } from '../../components/auth/Can';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { EmptyState } from '../../components/EmptyState';
 import { WRITE_ROLES } from '../../utils/enums';
+import { GerenciamentoEstoque } from '../../components/GerenciamentoEstoque';
 
 const SUPPORT_EMAIL = 'helpdesk@cin.ufpe.br';
 
@@ -38,14 +39,14 @@ export default function EstoquesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [estoqueToEdit, setEstoqueToEdit] = useState<Estoque | null>(null);
-  // Muda a cada abertura (criar ou editar), forçando o modal a remontar e resetar o formulário.
-  // Só usar o id do estoque como key não basta: reabrir o mesmo estoque manteria o que foi
-  // digitado e cancelado antes.
   const [modalKey, setModalKey] = useState(0);
   const [estoqueToDeactivate, setEstoqueToDeactivate] = useState<Estoque | null>(null);
   const [isDeactivateDialogOpen, setIsDeactivateDialogOpen] = useState(false);
 
   const { estoques, isLoading, error, reload, create, update, deactivate } = useEstoques();
+
+
+  const usuarioLogadoEhGestor = true;
 
   const handleSaveEstoque = async (dto: CreateEstoqueDto) => {
     try {
@@ -59,7 +60,7 @@ export default function EstoquesPage() {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Falha ao salvar estoque.';
       toast.error(message);
-      throw err; // Repassa para o modal não fechar em caso de erro
+      throw err;
     }
   };
 
@@ -153,7 +154,7 @@ export default function EstoquesPage() {
         </button>
       </div>
 
-      {/* 3. Tabela: loading/erro/vazio viram linhas dentro do TableBody */}
+      {/* 3. Tabela de Estoques */}
       <Frame className="w-full">
         <Table
           variant="card"
@@ -176,7 +177,6 @@ export default function EstoquesPage() {
               <TableMessageRow colSpan={ESTOQUE_TABLE_COLUMNS}>
                 <div className="flex flex-col items-center py-4">
                   <ErrorScreen errorType={httpErrors.SERVER_ERROR} />
-                  {/* A ilustração é genérica: aqui mostramos a causa real para facilitar o diagnóstico. */}
                   <p
                     data-testid="estoques-error-detail"
                     className="mt-2 max-w-xl text-center text-sm text-gray-600 dark:text-gray-400"
@@ -239,7 +239,19 @@ export default function EstoquesPage() {
         </Table>
       </Frame>
 
-      {/* 4. Modal de criação/edição (a `key` reseta o formulário a cada abertura) */}
+      {/* 3.5. COMPONENTE DA US03 (Gerenciamento de Itens do Estoque) */}
+      <div className="mt-10">
+        <GerenciamentoEstoque
+          estoqueId="EST-001"
+          nomeEstoque="Almoxarifado Principal"
+          isGestor={usuarioLogadoEhGestor}
+          onSalvarItem={(dados) => {
+            console.log('Item pronto para envio à API:', dados);
+          }}
+        />
+      </div>
+
+      {/* 4. Modal de criação/edição */}
       <EstoqueModal
         key={modalKey}
         isOpen={isModalOpen}
