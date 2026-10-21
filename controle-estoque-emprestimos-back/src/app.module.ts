@@ -12,8 +12,8 @@ import { CategoriasModule } from './modules/categorias/categorias.module';
 import { EmprestimosModule } from './modules/emprestimos/emprestimos.module';
 import { EstoquesModule } from './modules/estoques/estoques.module';
 import { HealthModule } from './modules/health/health.module';
-
 import { ItensModule } from './modules/itens/itens.module';
+import { MovimentacoesModule } from './modules/movimentacoes/movimentacoes.module';
 
 @Module({
   imports: [
@@ -29,6 +29,7 @@ import { ItensModule } from './modules/itens/itens.module';
     EstoquesModule,
     ItensModule,
     EmprestimosModule,
+    MovimentacoesModule,
   ],
   providers: [
     {
