@@ -76,19 +76,12 @@ export class MovimentacoesService {
     }
   }
 
-  async consultarSaldoItem(itemId: string, usuarioId: string, isAdmin: boolean) {
+  async consultarSaldoItem(itemId: string) {
     const item = await this.prisma.item.findUnique({ where: { id: itemId } });
 
     if (!item) {
       throw new NotFoundException('Item não encontrado');
     }
-
-    await this.garantirAcessoLeitura(
-      item.estoqueId,
-      usuarioId,
-      isAdmin,
-      'Acesso negado às informações deste estoque',
-    );
 
     const saldo = await this.calcularSaldoItem(itemId);
 
@@ -102,36 +95,22 @@ export class MovimentacoesService {
     };
   }
 
-  async consultarSaldoEstoque(estoqueId: string, usuarioId: string, isAdmin: boolean) {
-    await this.garantirAcessoLeitura(
-      estoqueId,
-      usuarioId,
-      isAdmin,
-      'Acesso negado às informações deste estoque',
-    );
+  async consultarSaldoEstoque(estoqueId: string) {
+    const estoque = await this.prisma.estoque.findUnique({
+      where: { id: estoqueId },
+    });
+
+    if (!estoque) {
+      throw new NotFoundException('Estoque não encontrado');
+    }
 
     const itens = await this.prisma.item.findMany({
       where: { estoqueId },
-      select: { id: true, nome: true, nivelMinimo: true },
-      orderBy: { nome: 'asc' },
     });
 
-    const grupos = await this.prisma.movimentacao.groupBy({
-      by: ['itemId', 'tipo'],
-      where: { item: { estoqueId } },
-      _sum: { quantidade: true },
-    });
-
-    const saldos = new Map<string, number>();
-    for (const g of grupos) {
-      const atual = saldos.get(g.itemId) ?? 0;
-      saldos.set(g.itemId, atual + this.aplicarSinal(g.tipo, g._sum.quantidade ?? 0));
-    }
-
-    return {
-      estoqueId,
-      itens: itens.map((item) => {
-        const saldo = saldos.get(item.id) ?? 0;
+    const saldos = await Promise.all(
+      itens.map(async (item) => {
+        const saldo = await this.calcularSaldoItem(item.id);
         return {
           itemId: item.id,
           nomeItem: item.nome,
@@ -140,6 +119,11 @@ export class MovimentacoesService {
           abaixoDoMinimo: this.abaixoDoMinimo(saldo, item.nivelMinimo),
         };
       }),
+    );
+
+    return {
+      estoqueId,
+      itens: saldos,
     };
   }
 
@@ -152,11 +136,21 @@ export class MovimentacoesService {
     );
 
     return this.prisma.movimentacao.findMany({
-      where: { item: { estoqueId } },
-      include: {
-        item: { select: { id: true, nome: true, tipo: true } },
+      where: {
+        item: { estoqueId },
       },
-      orderBy: { dataMovimentacao: 'desc' },
+      include: {
+        item: {
+          select: {
+            id: true,
+            nome: true,
+            tipo: true,
+          },
+        },
+      },
+      orderBy: {
+        dataMovimentacao: 'desc',
+      },
     });
   }
 
@@ -178,7 +172,6 @@ export class MovimentacoesService {
 
     const saldoAtual = await this.calcularSaldoItem(dto.itemId, tx);
 
-    // Vale para qualquer tipo que subtrai do saldo, não só SAIDA.
     if (TIPOS_QUE_SUBTRAEM.includes(dto.tipo) && dto.quantidade > saldoAtual) {
       throw new BadRequestException('Saldo insuficiente para realizar a movimentação');
     }
@@ -221,12 +214,10 @@ export class MovimentacoesService {
     return 0;
   }
 
-  /** Sem nível mínimo definido, nunca está abaixo do mínimo. */
   private abaixoDoMinimo(saldo: number, nivelMinimo: number | null | undefined): boolean {
     return nivelMinimo !== null && nivelMinimo !== undefined && saldo <= nivelMinimo;
   }
 
-  /** P2034: falha de escrita/conflito de transação (Serializable). */
   private eConflitoDeSerializacao(erro: unknown): boolean {
     return (erro as { code?: string } | null)?.code === 'P2034';
   }

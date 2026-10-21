@@ -22,10 +22,7 @@ export class MovimentacoesController {
   }
 
   @Post()
-  async registrar(
-    @Body() dto: RegistrarMovimentacaoDto,
-    @GetCurrentUser() user: CurrentUser,
-  ) {
+  async registrar(@Body() dto: RegistrarMovimentacaoDto, @GetCurrentUser() user: CurrentUser) {
     return this.movimentacoesService.registrarMovimentacao(
       dto,
       this.getUserId(user),
@@ -34,27 +31,13 @@ export class MovimentacoesController {
   }
 
   @Get('saldo/item/:itemId')
-  async consultarSaldoItem(
-    @Param('itemId') itemId: string,
-    @GetCurrentUser() user: CurrentUser,
-  ) {
-    return this.movimentacoesService.consultarSaldoItem(
-      itemId,
-      this.getUserId(user),
-      this.checkIsAdmin(user),
-    );
+  consultarSaldoItem(@Param('itemId') itemId: string) {
+    return this.movimentacoesService.consultarSaldoItem(itemId);
   }
 
   @Get('saldo/estoque/:estoqueId')
-  async consultarSaldoEstoque(
-    @Param('estoqueId') estoqueId: string,
-    @GetCurrentUser() user: CurrentUser,
-  ) {
-    return this.movimentacoesService.consultarSaldoEstoque(
-      estoqueId,
-      this.getUserId(user),
-      this.checkIsAdmin(user),
-    );
+  consultarSaldoEstoque(@Param('estoqueId') estoqueId: string) {
+    return this.movimentacoesService.consultarSaldoEstoque(estoqueId);
   }
 
   @Get('historico/estoque/:estoqueId')
