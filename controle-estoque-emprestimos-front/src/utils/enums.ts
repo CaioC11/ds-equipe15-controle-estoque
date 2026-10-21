@@ -8,6 +8,7 @@ export enum Links {
   CATEGORIAS = '/categorias',
   EMPRESTIMOS = '/emprestimos',
   ESTOQUES = '/estoques',
+  MOVIMENTACOES = '/movimentacoes',
 }
 
 /**
