@@ -13,6 +13,8 @@ import TodosPage from './pages/todos';
 import TeamPage from './pages/team';
 import LoginPage from './pages/login';
 import EmprestimosPage from './pages/emprestimos';
+import MovimentacoesPage from './pages/movimentacoes';
+
 
 /**
  * Error boundary de nível de rota: um erro de renderização numa página mostra a
@@ -132,6 +134,7 @@ function RouteMap() {
             <Route path={Links.ESTOQUES} element={<EstoquesPage />} />
             <Route path={Links.CATEGORIAS} element={<CategoriasPage />} />
             <Route path={Links.EMPRESTIMOS} element={<EmprestimosPage />} />
+            <Route path={Links.MOVIMENTACOES} element={<MovimentacoesPage />} />
             {/* Rota desconhecida: componente de erro pronto da cinnamon (404). */}
             <Route path="*" element={<ErrorScreen errorType={httpErrors.NOTFOUND_404} />} />
           </Route>

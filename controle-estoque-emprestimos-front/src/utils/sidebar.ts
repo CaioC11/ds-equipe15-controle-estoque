@@ -1,5 +1,5 @@
 import { type SidebarData } from '@cincoders/cinnamon';
-import { ListChecks, Users, Tags, Warehouse, ClipboardList } from 'lucide-react';
+import { ListChecks, Users, Tags, Warehouse, ClipboardList, ArrowLeftRight } from 'lucide-react';
 import { Links } from './enums';
 import cincodersLogo from '../assets/icons/logo_cincoders-icon.svg';
 
@@ -33,11 +33,17 @@ export const sidebar: SidebarData = {
       href: Links.CATEGORIAS,
       IconComponent: Tags,
     },
-        {
+    {
       id: 'emprestimos',
       title: 'Empréstimos',
       href: Links.EMPRESTIMOS,
       IconComponent: ClipboardList,
+    },
+    {
+      id: 'movimentacoes',
+      title: 'Movimentações e Saldo',
+      href: Links.MOVIMENTACOES,
+      IconComponent: ArrowLeftRight,
     },
     {
       id: 'team',
