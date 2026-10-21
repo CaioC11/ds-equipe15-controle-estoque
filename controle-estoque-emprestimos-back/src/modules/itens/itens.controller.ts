@@ -1,12 +1,12 @@
 import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import type { CurrentUser } from '../../common/auth/current-user.interface';
 import { GetCurrentUser } from '../../common/auth/decorators/current-user.decorator';
-import { AuthGuard } from '../../common/auth/guards/auth.guard';
-import { RolesGuard } from '../../common/auth/guards/roles.guard';
 import { PaginationQueryDto } from '../../common/pagination/pagination-query.dto';
 import { CreateItemDto } from './dto/create-item.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
 import { ItensService } from './itens.service';
+import { AuthGuard } from '../../common/auth/guards/auth.guard';
+import { RolesGuard } from '../../common/auth/guards/roles.guard';
 
 @Controller('estoques/:estoqueId/itens')
 @UseGuards(AuthGuard, RolesGuard)

@@ -11,8 +11,8 @@ import { PrismaModule } from './database/prisma.module';
 import { CategoriasModule } from './modules/categorias/categorias.module';
 import { EstoquesModule } from './modules/estoques/estoques.module';
 import { HealthModule } from './modules/health/health.module';
-
 import { ItensModule } from './modules/itens/itens.module';
+import { MovimentacoesModule } from './modules/movimentacoes/movimentacoes.module';
 
 @Module({
   imports: [
@@ -27,6 +27,7 @@ import { ItensModule } from './modules/itens/itens.module';
     CategoriasModule,
     EstoquesModule,
     ItensModule,
+    MovimentacoesModule,
   ],
   providers: [
     {
