@@ -6,6 +6,7 @@ export enum Links {
   TODOS = '/todos',
   TEAM = '/team',
   CATEGORIAS = '/categorias',
+  EMPRESTIMOS = '/emprestimos',
   ESTOQUES = '/estoques',
 }
 
