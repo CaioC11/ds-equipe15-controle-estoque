@@ -1,44 +1,71 @@
-import { Body, Controller, Get, Param, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import type { CurrentUser } from '../../common/auth/current-user.interface';
+import { GetCurrentUser } from '../../common/auth/decorators/current-user.decorator';
+import { AuthGuard } from '../../common/auth/guards/auth.guard';
 import { RegistrarMovimentacaoDto } from './dto/registrar-movimentacao.dto';
 import { MovimentacoesService } from './movimentacoes.service';
 
 @Controller('movimentacoes')
+@UseGuards(AuthGuard)
 export class MovimentacoesController {
   constructor(private readonly movimentacoesService: MovimentacoesService) {}
 
-  @Post()
-  async registrar(@Body() dto: RegistrarMovimentacaoDto, @Req() req: any) {
-    const usuarioId = req.user?.sub || req.user?.id;
-    const roles: string[] = req.user?.roles || req.user?.realm_access?.roles || [];
-    const isAdmin = roles.includes('ADMIN');
+  private getUserId(user: CurrentUser): string {
+    const userObj = user as any;
+    return userObj?.sub || userObj?.id || '';
+  }
 
-    return this.movimentacoesService.registrarMovimentacao(dto, usuarioId, isAdmin);
+  private checkIsAdmin(user: CurrentUser): boolean {
+    const userObj = user as any;
+    const roles: string[] = userObj?.roles || userObj?.realm_access?.roles || [];
+    return roles.includes('ADMIN');
+  }
+
+  @Post()
+  async registrar(
+    @Body() dto: RegistrarMovimentacaoDto,
+    @GetCurrentUser() user: CurrentUser,
+  ) {
+    return this.movimentacoesService.registrarMovimentacao(
+      dto,
+      this.getUserId(user),
+      this.checkIsAdmin(user),
+    );
   }
 
   @Get('saldo/item/:itemId')
-  async consultarSaldoItem(@Param('itemId') itemId: string, @Req() req: any) {
-    const usuarioId = req.user?.sub || req.user?.id;
-    const roles: string[] = req.user?.roles || req.user?.realm_access?.roles || [];
-    const isAdmin = roles.includes('ADMIN');
-
-    return this.movimentacoesService.consultarSaldoItem(itemId, usuarioId, isAdmin);
+  async consultarSaldoItem(
+    @Param('itemId') itemId: string,
+    @GetCurrentUser() user: CurrentUser,
+  ) {
+    return this.movimentacoesService.consultarSaldoItem(
+      itemId,
+      this.getUserId(user),
+      this.checkIsAdmin(user),
+    );
   }
 
   @Get('saldo/estoque/:estoqueId')
-  async consultarSaldoEstoque(@Param('estoqueId') estoqueId: string, @Req() req: any) {
-    const usuarioId = req.user?.sub || req.user?.id;
-    const roles: string[] = req.user?.roles || req.user?.realm_access?.roles || [];
-    const isAdmin = roles.includes('ADMIN');
-
-    return this.movimentacoesService.consultarSaldoEstoque(estoqueId, usuarioId, isAdmin);
+  async consultarSaldoEstoque(
+    @Param('estoqueId') estoqueId: string,
+    @GetCurrentUser() user: CurrentUser,
+  ) {
+    return this.movimentacoesService.consultarSaldoEstoque(
+      estoqueId,
+      this.getUserId(user),
+      this.checkIsAdmin(user),
+    );
   }
 
   @Get('historico/estoque/:estoqueId')
-  async consultarHistoricoEstoque(@Param('estoqueId') estoqueId: string, @Req() req: any) {
-    const usuarioId = req.user?.sub || req.user?.id;
-    const roles: string[] = req.user?.roles || req.user?.realm_access?.roles || [];
-    const isAdmin = roles.includes('ADMIN');
-
-    return this.movimentacoesService.consultarHistoricoEstoque(estoqueId, usuarioId, isAdmin);
+  async consultarHistoricoEstoque(
+    @Param('estoqueId') estoqueId: string,
+    @GetCurrentUser() user: CurrentUser,
+  ) {
+    return this.movimentacoesService.consultarHistoricoEstoque(
+      estoqueId,
+      this.getUserId(user),
+      this.checkIsAdmin(user),
+    );
   }
 }
