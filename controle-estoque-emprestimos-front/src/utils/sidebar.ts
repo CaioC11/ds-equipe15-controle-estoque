@@ -1,5 +1,5 @@
 import { type SidebarData } from '@cincoders/cinnamon';
-import { ListChecks, Users, Tags } from 'lucide-react'; // 1. Importe o ícone Tags
+import { ListChecks, Users, Tags, Warehouse } from 'lucide-react';
 import { Links } from './enums';
 import cincodersLogo from '../assets/icons/logo_cincoders-icon.svg';
 
@@ -21,7 +21,12 @@ export const sidebar: SidebarData = {
       href: Links.TODOS,
       IconComponent: ListChecks,
     },
-    // 2. Adicione este bloco para as Categorias:
+    {
+      id: 'estoques',
+      title: 'Estoques',
+      href: Links.ESTOQUES,
+      IconComponent: Warehouse,
+    },
     {
       id: 'categorias',
       title: 'Categorias',

@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { AuthGuard } from './guards/auth.guard';
@@ -6,6 +6,7 @@ import { RolesGuard } from './guards/roles.guard';
 import { IDENTITY_SOURCE } from './identity/identity-source.interface';
 import { KeycloakIdentitySource } from './identity/keycloak.identity-source';
 
+@Global()
 @Module({
   imports: [ConfigModule],
   providers: [
@@ -13,5 +14,6 @@ import { KeycloakIdentitySource } from './identity/keycloak.identity-source';
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
   ],
+  exports: [IDENTITY_SOURCE],
 })
 export class AuthModule {}
