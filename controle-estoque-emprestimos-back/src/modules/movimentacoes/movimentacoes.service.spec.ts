@@ -251,12 +251,11 @@ describe('MovimentacoesService', () => {
   describe('consultarSaldoItem', () => {
     it('abaixoDoMinimo verdadeiro quando saldo <= nivelMinimo', async () => {
       mockPrisma.item.findUnique.mockResolvedValue({ ...itemBase, nivelMinimo: 3 });
-      comoGestor();
       mockPrisma.movimentacao.groupBy.mockResolvedValue(
         gruposPorTipo([TipoMovimentacao.ENTRADA, 3]),
       );
 
-      const resultado = await service.consultarSaldoItem('item-1', 'gestor-1', false);
+      const resultado = await service.consultarSaldoItem('item-1');
       expect(resultado.abaixoDoMinimo).toBe(true);
     });
 
@@ -267,7 +266,7 @@ describe('MovimentacoesService', () => {
         gruposPorTipo([TipoMovimentacao.ENTRADA, 2], [TipoMovimentacao.ENTRADA, 3]),
       );
 
-      const resultado = await service.consultarSaldoItem('item-1', 'gestor-1', false);
+      const resultado = await service.consultarSaldoItem('item-1');
       expect(resultado.saldo).toBe(5);
       expect(resultado.abaixoDoMinimo).toBe(false);
     });
@@ -277,32 +276,22 @@ describe('MovimentacoesService', () => {
       comoGestor();
       mockPrisma.movimentacao.groupBy.mockResolvedValue([]);
 
-      const resultado = await service.consultarSaldoItem('item-1', 'gestor-1', false);
+      const resultado = await service.consultarSaldoItem('item-1');
       expect(resultado.abaixoDoMinimo).toBe(false);
     });
 
-    it('permite consulta ao ADMIN mesmo sem ser gestor', async () => {
-      mockPrisma.item.findUnique.mockResolvedValue(itemBase);
-      mockPrisma.movimentacao.groupBy.mockResolvedValue([]);
-
-      await expect(service.consultarSaldoItem('item-1', 'admin-1', true)).resolves.toBeDefined();
-    });
-
-    it('nega consulta a quem não é gestor nem ADMIN (403)', async () => {
+    it('permite consulta sem vínculo de gestor', async () => {
       mockPrisma.item.findUnique.mockResolvedValue(itemBase);
       comoNaoGestor();
+      mockPrisma.movimentacao.groupBy.mockResolvedValue([]);
 
-      await expect(service.consultarSaldoItem('item-1', 'outro-usuario', false)).rejects.toThrow(
-        ForbiddenException,
-      );
+      await expect(service.consultarSaldoItem('item-1')).resolves.toBeDefined();
     });
 
     it('retorna 404 para item inexistente', async () => {
       mockPrisma.item.findUnique.mockResolvedValue(null);
 
-      await expect(service.consultarSaldoItem('nao-existe', 'gestor-1', false)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.consultarSaldoItem('nao-existe')).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -320,7 +309,7 @@ describe('MovimentacoesService', () => {
         { itemId: 'item-2', tipo: TipoMovimentacao.ENTRADA, _sum: { quantidade: 1 } },
       ]);
 
-      const resultado = await service.consultarSaldoEstoque('estoque-1', 'gestor-1', false);
+      const resultado = await service.consultarSaldoEstoque('estoque-1');
 
       expect(resultado.itens).toEqual([
         { itemId: 'item-1', nomeItem: 'Cabo', saldo: 4, nivelMinimo: 5, abaixoDoMinimo: true },
@@ -329,12 +318,14 @@ describe('MovimentacoesService', () => {
       ]);
     });
 
-    it('nega acesso a quem não é gestor nem ADMIN (403)', async () => {
-      comoNaoGestor();
+    it('permite consulta do saldo do estoque sem vínculo de gestor', async () => {
+      mockPrisma.item.findMany.mockResolvedValue([]);
+      mockPrisma.movimentacao.groupBy.mockResolvedValue([]);
 
-      await expect(
-        service.consultarSaldoEstoque('estoque-1', 'outro-usuario', false),
-      ).rejects.toThrow(ForbiddenException);
+      await expect(service.consultarSaldoEstoque('estoque-1')).resolves.toEqual({
+        estoqueId: 'estoque-1',
+        itens: [],
+      });
     });
   });
 

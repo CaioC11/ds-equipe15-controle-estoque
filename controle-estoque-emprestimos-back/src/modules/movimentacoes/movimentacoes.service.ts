@@ -76,19 +76,12 @@ export class MovimentacoesService {
     }
   }
 
-  async consultarSaldoItem(itemId: string, usuarioId: string, isAdmin: boolean) {
+  async consultarSaldoItem(itemId: string) {
     const item = await this.prisma.item.findUnique({ where: { id: itemId } });
 
     if (!item) {
       throw new NotFoundException('Item não encontrado');
     }
-
-    await this.garantirAcessoLeitura(
-      item.estoqueId,
-      usuarioId,
-      isAdmin,
-      'Acesso negado às informações deste estoque',
-    );
 
     const saldo = await this.calcularSaldoItem(itemId);
 
@@ -102,14 +95,7 @@ export class MovimentacoesService {
     };
   }
 
-  async consultarSaldoEstoque(estoqueId: string, usuarioId: string, isAdmin: boolean) {
-    await this.garantirAcessoLeitura(
-      estoqueId,
-      usuarioId,
-      isAdmin,
-      'Acesso negado às informações deste estoque',
-    );
-
+  async consultarSaldoEstoque(estoqueId: string) {
     const itens = await this.prisma.item.findMany({
       where: { estoqueId },
       select: { id: true, nome: true, nivelMinimo: true },

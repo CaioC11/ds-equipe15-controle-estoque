@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { AccessRole } from '../../common/auth/access-role.enum';
 import type { CurrentUser } from '../../common/auth/current-user.interface';
 import { GetCurrentUser } from '../../common/auth/decorators/current-user.decorator';
 import { AuthGuard } from '../../common/auth/guards/auth.guard';
@@ -11,21 +12,15 @@ export class MovimentacoesController {
   constructor(private readonly movimentacoesService: MovimentacoesService) {}
 
   private getUserId(user: CurrentUser): string {
-    const userObj = user as any;
-    return userObj?.sub || userObj?.id || '';
+    return user.userId ?? '';
   }
 
   private checkIsAdmin(user: CurrentUser): boolean {
-    const userObj = user as any;
-    const roles: string[] = userObj?.roles || userObj?.realm_access?.roles || [];
-    return roles.includes('ADMIN');
+    return user.role === AccessRole.ADMIN;
   }
 
   @Post()
-  async registrar(
-    @Body() dto: RegistrarMovimentacaoDto,
-    @GetCurrentUser() user: CurrentUser,
-  ) {
+  async registrar(@Body() dto: RegistrarMovimentacaoDto, @GetCurrentUser() user: CurrentUser) {
     return this.movimentacoesService.registrarMovimentacao(
       dto,
       this.getUserId(user),
@@ -34,27 +29,13 @@ export class MovimentacoesController {
   }
 
   @Get('saldo/item/:itemId')
-  async consultarSaldoItem(
-    @Param('itemId') itemId: string,
-    @GetCurrentUser() user: CurrentUser,
-  ) {
-    return this.movimentacoesService.consultarSaldoItem(
-      itemId,
-      this.getUserId(user),
-      this.checkIsAdmin(user),
-    );
+  async consultarSaldoItem(@Param('itemId') itemId: string) {
+    return this.movimentacoesService.consultarSaldoItem(itemId);
   }
 
   @Get('saldo/estoque/:estoqueId')
-  async consultarSaldoEstoque(
-    @Param('estoqueId') estoqueId: string,
-    @GetCurrentUser() user: CurrentUser,
-  ) {
-    return this.movimentacoesService.consultarSaldoEstoque(
-      estoqueId,
-      this.getUserId(user),
-      this.checkIsAdmin(user),
-    );
+  async consultarSaldoEstoque(@Param('estoqueId') estoqueId: string) {
+    return this.movimentacoesService.consultarSaldoEstoque(estoqueId);
   }
 
   @Get('historico/estoque/:estoqueId')
