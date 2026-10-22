@@ -23,7 +23,8 @@ export const CategoriasPage: React.FC = () => {
     try {
       setLoading(true);
       const dados = await categoriaService.listar();
-      setCategorias(dados);
+      const lista = (dados as any).data || (Array.isArray(dados) ? dados : []);
+      setCategorias(lista);
     } catch {
       setErrorMsg('Erro ao carregar lista de categorias.');
     } finally {
@@ -120,7 +121,7 @@ export const CategoriasPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {categorias.length === 0 ? (
+              {!Array.isArray(categorias) || categorias.length === 0 ? (
                 <tr>
                   <td colSpan={isGestor ? 3 : 2} className="py-4 px-4 text-center text-gray-500">
                     Nenhuma categoria encontrada.
