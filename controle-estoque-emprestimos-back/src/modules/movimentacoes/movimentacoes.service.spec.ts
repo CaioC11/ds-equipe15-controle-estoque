@@ -279,6 +279,14 @@ describe('MovimentacoesService', () => {
       expect(resultado.abaixoDoMinimo).toBe(false);
     });
 
+    it('permite consulta sem vínculo de gestor', async () => {
+      mockPrisma.item.findUnique.mockResolvedValue(itemBase);
+      comoNaoGestor();
+      mockPrisma.movimentacao.groupBy.mockResolvedValue([]);
+
+      await expect(service.consultarSaldoItem('item-1')).resolves.toBeDefined();
+    });
+
     it('qualquer usuário consulta o saldo, sem checar vínculo de gestor', async () => {
       mockPrisma.item.findUnique.mockResolvedValue(itemBase);
       mockPrisma.movimentacao.groupBy.mockResolvedValue([]);
@@ -321,6 +329,15 @@ describe('MovimentacoesService', () => {
       expect(mockPrisma.estoqueGestor.findUnique).not.toHaveBeenCalled();
     });
 
+    it('permite consulta do saldo do estoque sem vínculo de gestor', async () => {
+      mockPrisma.item.findMany.mockResolvedValue([]);
+      mockPrisma.movimentacao.groupBy.mockResolvedValue([]);
+
+      await expect(service.consultarSaldoEstoque('estoque-1')).resolves.toEqual({
+        estoqueId: 'estoque-1',
+        itens: [],
+      });
+    })
     it('retorna 404 quando o estoque não existe', async () => {
       mockPrisma.estoque.findUnique.mockResolvedValue(null);
 

@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { AccessRole } from '../../common/auth/access-role.enum';
 import type { CurrentUser } from '../../common/auth/current-user.interface';
 import { GetCurrentUser } from '../../common/auth/decorators/current-user.decorator';
 import { AuthGuard } from '../../common/auth/guards/auth.guard';
@@ -11,14 +12,11 @@ export class MovimentacoesController {
   constructor(private readonly movimentacoesService: MovimentacoesService) {}
 
   private getUserId(user: CurrentUser): string {
-    const userObj = user as any;
-    return userObj?.sub || userObj?.id || '';
+    return user.userId ?? '';
   }
 
   private checkIsAdmin(user: CurrentUser): boolean {
-    const userObj = user as any;
-    const roles: string[] = userObj?.roles || userObj?.realm_access?.roles || [];
-    return roles.includes('ADMIN');
+    return user.role === AccessRole.ADMIN;
   }
 
   @Post()
@@ -31,12 +29,12 @@ export class MovimentacoesController {
   }
 
   @Get('saldo/item/:itemId')
-  consultarSaldoItem(@Param('itemId') itemId: string) {
+  async consultarSaldoItem(@Param('itemId') itemId: string) {
     return this.movimentacoesService.consultarSaldoItem(itemId);
   }
 
   @Get('saldo/estoque/:estoqueId')
-  consultarSaldoEstoque(@Param('estoqueId') estoqueId: string) {
+  async consultarSaldoEstoque(@Param('estoqueId') estoqueId: string) {
     return this.movimentacoesService.consultarSaldoEstoque(estoqueId);
   }
 
