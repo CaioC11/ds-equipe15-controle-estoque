@@ -15,6 +15,7 @@ describe('MovimentacoesService', () => {
 
   const mockPrisma = {
     $transaction: vi.fn(),
+    estoque: { findUnique: vi.fn() },
     estoqueGestor: { findUnique: vi.fn() },
     item: { findUnique: vi.fn(), findMany: vi.fn() },
     movimentacao: { groupBy: vi.fn(), create: vi.fn(), findMany: vi.fn() },
@@ -259,9 +260,8 @@ describe('MovimentacoesService', () => {
       expect(resultado.abaixoDoMinimo).toBe(true);
     });
 
-    it('abaixoDoMinimo falso quando saldo > nivelMinimo (volta a falso após reposição)', async () => {
+    it('abaixoDoMinimo falso quando saldo > nivelMinimo', async () => {
       mockPrisma.item.findUnique.mockResolvedValue({ ...itemBase, nivelMinimo: 3 });
-      comoGestor();
       mockPrisma.movimentacao.groupBy.mockResolvedValue(
         gruposPorTipo([TipoMovimentacao.ENTRADA, 2], [TipoMovimentacao.ENTRADA, 3]),
       );
@@ -273,7 +273,6 @@ describe('MovimentacoesService', () => {
 
     it('sem nível mínimo, abaixoDoMinimo nunca é verdadeiro', async () => {
       mockPrisma.item.findUnique.mockResolvedValue(itemBase);
-      comoGestor();
       mockPrisma.movimentacao.groupBy.mockResolvedValue([]);
 
       const resultado = await service.consultarSaldoItem('item-1');
@@ -286,6 +285,12 @@ describe('MovimentacoesService', () => {
       mockPrisma.movimentacao.groupBy.mockResolvedValue([]);
 
       await expect(service.consultarSaldoItem('item-1')).resolves.toBeDefined();
+    it('qualquer usuário consulta o saldo, sem checar vínculo de gestor', async () => {
+      mockPrisma.item.findUnique.mockResolvedValue(itemBase);
+      mockPrisma.movimentacao.groupBy.mockResolvedValue([]);
+
+      await expect(service.consultarSaldoItem('item-1')).resolves.toBeDefined();
+      expect(mockPrisma.estoqueGestor.findUnique).not.toHaveBeenCalled();
     });
 
     it('retorna 404 para item inexistente', async () => {
@@ -296,18 +301,21 @@ describe('MovimentacoesService', () => {
   });
 
   describe('consultarSaldoEstoque', () => {
-    it('retorna o saldo de cada item do estoque com a flag abaixoDoMinimo', async () => {
-      comoGestor();
+    it('retorna o saldo de cada item com a flag abaixoDoMinimo, sem exigir vínculo de gestor', async () => {
+      mockPrisma.estoque.findUnique.mockResolvedValue({ id: 'estoque-1' });
       mockPrisma.item.findMany.mockResolvedValue([
         { id: 'item-1', nome: 'Cabo', nivelMinimo: 5 },
         { id: 'item-2', nome: 'Mouse', nivelMinimo: null },
         { id: 'item-3', nome: 'Teclado', nivelMinimo: 2 },
       ]);
-      mockPrisma.movimentacao.groupBy.mockResolvedValue([
-        { itemId: 'item-1', tipo: TipoMovimentacao.ENTRADA, _sum: { quantidade: 10 } },
-        { itemId: 'item-1', tipo: TipoMovimentacao.SAIDA, _sum: { quantidade: 6 } },
-        { itemId: 'item-2', tipo: TipoMovimentacao.ENTRADA, _sum: { quantidade: 1 } },
-      ]);
+      mockPrisma.movimentacao.groupBy.mockImplementation(
+        async ({ where }: { where: { itemId: string } }) => {
+          if (where.itemId === 'item-1')
+            return gruposPorTipo([TipoMovimentacao.ENTRADA, 10], [TipoMovimentacao.SAIDA, 6]);
+          if (where.itemId === 'item-2') return gruposPorTipo([TipoMovimentacao.ENTRADA, 1]);
+          return [];
+        },
+      );
 
       const resultado = await service.consultarSaldoEstoque('estoque-1');
 
@@ -316,6 +324,7 @@ describe('MovimentacoesService', () => {
         { itemId: 'item-2', nomeItem: 'Mouse', saldo: 1, nivelMinimo: null, abaixoDoMinimo: false },
         { itemId: 'item-3', nomeItem: 'Teclado', saldo: 0, nivelMinimo: 2, abaixoDoMinimo: true },
       ]);
+      expect(mockPrisma.estoqueGestor.findUnique).not.toHaveBeenCalled();
     });
 
     it('permite consulta do saldo do estoque sem vínculo de gestor', async () => {
@@ -326,6 +335,10 @@ describe('MovimentacoesService', () => {
         estoqueId: 'estoque-1',
         itens: [],
       });
+    it('retorna 404 quando o estoque não existe', async () => {
+      mockPrisma.estoque.findUnique.mockResolvedValue(null);
+
+      await expect(service.consultarSaldoEstoque('x')).rejects.toThrow(NotFoundException);
     });
   });
 
