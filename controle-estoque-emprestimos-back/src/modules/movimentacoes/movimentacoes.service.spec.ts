@@ -285,6 +285,8 @@ describe('MovimentacoesService', () => {
       mockPrisma.movimentacao.groupBy.mockResolvedValue([]);
 
       await expect(service.consultarSaldoItem('item-1')).resolves.toBeDefined();
+    });
+
     it('qualquer usuário consulta o saldo, sem checar vínculo de gestor', async () => {
       mockPrisma.item.findUnique.mockResolvedValue(itemBase);
       mockPrisma.movimentacao.groupBy.mockResolvedValue([]);
@@ -335,6 +337,7 @@ describe('MovimentacoesService', () => {
         estoqueId: 'estoque-1',
         itens: [],
       });
+    })
     it('retorna 404 quando o estoque não existe', async () => {
       mockPrisma.estoque.findUnique.mockResolvedValue(null);
 
