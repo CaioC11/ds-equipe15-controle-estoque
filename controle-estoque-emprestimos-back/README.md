@@ -53,6 +53,15 @@ O arquivo `.env` já foi criado pelo gerador a partir do `.env.example`. Ajuste 
 - **Keycloak Admin**: `http://localhost:8080/auth` (admin/admin, realm: `Local`)
 - **Usuários de teste**: `admin`/`admin` (roles `sys_controle-estoque-emprestimos-admin` e `sys_controle-estoque-emprestimos-users`) e `user`/`user` (role `sys_controle-estoque-emprestimos-users`)
 
+### Termos de responsabilidade
+
+Ao registrar um empréstimo, a API gera o termo de acautelamento em PDF e o armazena em `TERMO_STORAGE_PATH` (padrão: `./storage/termos`). O Docker Compose monta um volume persistente nesse diretório. Em produção, configure `TERMO_STORAGE_PATH` para um volume persistente e faça backup dos documentos.
+
+- `GET /api/v1/estoques/:estoqueId/emprestimos/:id/termo`: visualiza o PDF.
+- `GET /api/v1/estoques/:estoqueId/emprestimos/:id/termo/download`: baixa o PDF.
+
+Ambos os endpoints exigem autenticação e permitem acesso ao gestor do estoque e ao ADMIN. A numeração do termo é sequencial por ano.
+
 ---
 
 ## 🛠️ Comandos Disponíveis

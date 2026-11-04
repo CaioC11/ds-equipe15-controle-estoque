@@ -7,6 +7,7 @@ import {
   Param,
   Post,
   Query,
+  StreamableFile,
   UseGuards,
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
@@ -65,5 +66,39 @@ export class EmprestimosController {
     @GetCurrentUser() user?: CurrentUser,
   ) {
     return this.emprestimosService.devolver(estoqueId, id, user?.userId);
+  }
+
+  @Get(':id/termo')
+  @ApiOperation({ summary: 'Visualiza o termo de responsabilidade em PDF' })
+  @ApiResponse({ status: 200, description: 'PDF do termo', content: { 'application/pdf': {} } })
+  @ApiResponse({ status: 403, description: 'Sem permissão para consultar este estoque' })
+  @ApiResponse({ status: 404, description: 'Empréstimo ou termo não encontrado' })
+  async visualizarTermo(
+    @Param('estoqueId') estoqueId: string,
+    @Param('id') id: string,
+    @GetCurrentUser() user?: CurrentUser,
+  ): Promise<StreamableFile> {
+    const { pdf, nomeArquivo } = await this.emprestimosService.obterPdf(estoqueId, id, user);
+    return new StreamableFile(pdf, {
+      type: 'application/pdf',
+      disposition: `inline; filename="${nomeArquivo}"`,
+    });
+  }
+
+  @Get(':id/termo/download')
+  @ApiOperation({ summary: 'Baixa o termo de responsabilidade em PDF' })
+  @ApiResponse({ status: 200, description: 'PDF do termo', content: { 'application/pdf': {} } })
+  @ApiResponse({ status: 403, description: 'Sem permissão para consultar este estoque' })
+  @ApiResponse({ status: 404, description: 'Empréstimo ou termo não encontrado' })
+  async baixarTermo(
+    @Param('estoqueId') estoqueId: string,
+    @Param('id') id: string,
+    @GetCurrentUser() user?: CurrentUser,
+  ): Promise<StreamableFile> {
+    const { pdf, nomeArquivo } = await this.emprestimosService.obterPdf(estoqueId, id, user);
+    return new StreamableFile(pdf, {
+      type: 'application/pdf',
+      disposition: `attachment; filename="${nomeArquivo}"`,
+    });
   }
 }

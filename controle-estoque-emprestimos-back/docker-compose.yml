@@ -34,9 +34,11 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-postgres}
       DB_DATABASE: ${DB_DATABASE:-controle_estoque_emprestimos}
       NODE_ENV: development
+      TERMO_STORAGE_PATH: /app/storage/termos
     volumes:
       - .:/app
       - /app/node_modules
+      - termos:/app/storage
     depends_on:
       postgres:
         condition: service_healthy
@@ -90,3 +92,4 @@ services:
 volumes:
   pgdata:
   pg_keycloak_data:
+  termos:

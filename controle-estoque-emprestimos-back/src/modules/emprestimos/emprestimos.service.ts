@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { Prisma, StatusEmprestimo, StatusItem, TipoItem, TipoMovimentacao } from '@prisma/client';
 import { AccessRole } from '../../common/auth/access-role.enum';
@@ -11,11 +12,17 @@ import { PaginatedResponseDto } from '../../common/pagination/paginated-response
 import type { PaginationQueryDto } from '../../common/pagination/pagination-query.dto';
 import { PrismaService } from '../../database/prisma.service';
 import type { CreateEmprestimoDto } from './dto/create-emprestimo.dto';
+import { TermoPdfService } from './termo-pdf.service';
+import { TermoStorageService } from './termo-storage.service';
 
 // Empréstimo que ainda ocupa o item: aguardando o termo assinado ou ativo
 const STATUS_PENDENTES = [StatusEmprestimo.AGUARDANDO_TERMO, StatusEmprestimo.ATIVO];
 
-const INCLUDE_EMPRESTIMO = { item: true, responsavel: true } as const;
+const INCLUDE_EMPRESTIMO = {
+  item: true,
+  responsavel: true,
+  termo: { select: { id: true, numeroAno: true } },
+} as const;
 
 type ResponsavelInput = CreateEmprestimoDto['responsavel'];
 
@@ -33,10 +40,14 @@ export function estaAtrasado(
 
 @Injectable()
 export class EmprestimosService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly termoPdf: TermoPdfService,
+    private readonly termoStorage: TermoStorageService,
+  ) {}
 
   async create(estoqueId: string, dto: CreateEmprestimoDto, userId?: string) {
-    await this.findEstoqueOrFail(estoqueId);
+    const estoque = await this.findEstoqueOrFail(estoqueId);
     await this.assertGestorDoEstoque(estoqueId, userId);
 
     const item = await this.prisma.item.findFirst({ where: { id: dto.itemId, estoqueId } });
@@ -63,6 +74,7 @@ export class EmprestimosService {
       );
     }
 
+    let arquivoPdfCriado: string | undefined;
     try {
       return await this.prisma.$transaction(async (tx) => {
         // Reconfere dentro da transação: o item não pode ter outro empréstimo em aberto
@@ -99,11 +111,81 @@ export class EmprestimosService {
           },
         });
 
-        return emprestimo;
+        const ano = new Date().getFullYear();
+        const contador = await tx.contadorTermo.upsert({
+          where: { ano },
+          create: { ano, ultimoNumero: 1 },
+          update: { ultimoNumero: { increment: 1 } },
+        });
+        const numeroAno = `${String(contador.ultimoNumero).padStart(2, '0')}/${ano}`;
+        const arquivoPdf = `${ano}/${randomUUID()}.pdf`;
+        const pdf = await this.termoPdf.gerar({
+          numeroAno,
+          responsavel: {
+            nome: responsavel.nome,
+            siape: responsavel.siape,
+            lotacao: responsavel.lotacao,
+            cargo: responsavel.cargo,
+          },
+          unidade: estoque.nome,
+          dataAbertura: emprestimo.dataRetirada,
+          dataFechamento: emprestimo.prazoDevolucao,
+          item: {
+            nome: item.nome,
+            tombamento: item.tombamento,
+            numeroSerie: item.numeroSerie,
+            descricao: item.descricao,
+          },
+        });
+        await this.termoStorage.write(arquivoPdf, pdf);
+        arquivoPdfCriado = arquivoPdf;
+
+        const termo = await tx.termo.create({
+          data: { numeroAno, arquivoPdf },
+        });
+
+        return tx.emprestimo.update({
+          where: { id: emprestimo.id },
+          data: { termoId: termo.id },
+          include: INCLUDE_EMPRESTIMO,
+        });
       });
     } catch (error) {
+      if (arquivoPdfCriado) {
+        try {
+          await this.termoStorage.remove(arquivoPdfCriado);
+        } catch (cleanupError) {
+          throw new AggregateError(
+            [error, cleanupError],
+            'Falha ao salvar o empréstimo e ao remover o PDF temporário do termo.',
+          );
+        }
+      }
       this.traduzirErroDeUnicidade(error);
     }
+  }
+
+  async obterPdf(estoqueId: string, emprestimoId: string, user?: CurrentUser) {
+    await this.findEstoqueOrFail(estoqueId);
+    if (user?.role !== AccessRole.ADMIN) {
+      await this.assertGestorDoEstoque(estoqueId, user?.userId);
+    }
+
+    const emprestimo = await this.prisma.emprestimo.findFirst({
+      where: { id: emprestimoId, item: { estoqueId } },
+      include: { termo: true },
+    });
+    if (!emprestimo) {
+      throw new ResourceNotFoundException('Empréstimo', emprestimoId);
+    }
+    if (!emprestimo.termo) {
+      throw new ResourceNotFoundException('Termo', emprestimoId);
+    }
+
+    return {
+      pdf: await this.termoStorage.read(emprestimo.termo.arquivoPdf),
+      nomeArquivo: `termo-${emprestimo.termo.numeroAno.replace('/', '-')}.pdf`,
+    };
   }
 
   // Pendentes = aguardando termo + ativos, com "atrasado" calculado na hora

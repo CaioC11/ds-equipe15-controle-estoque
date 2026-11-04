@@ -7,6 +7,8 @@ import { ResourceConflictException } from '../../common/exceptions/resource-conf
 import { ResourceNotFoundException } from '../../common/exceptions/resource-not-found.exception';
 import { PrismaService } from '../../database/prisma.service';
 import { EmprestimosService, estaAtrasado } from './emprestimos.service';
+import { TermoPdfService } from './termo-pdf.service';
+import { TermoStorageService } from './termo-storage.service';
 
 const prismaMock = {
   $transaction: vi.fn(),
@@ -20,10 +22,16 @@ const prismaMock = {
     findUniqueOrThrow: vi.fn(),
     count: vi.fn(),
     create: vi.fn(),
+    update: vi.fn(),
     updateMany: vi.fn(),
   },
+  contadorTermo: { upsert: vi.fn() },
+  termo: { create: vi.fn() },
   movimentacao: { create: vi.fn() },
 };
+
+const termoPdfMock = { gerar: vi.fn() };
+const termoStorageMock = { write: vi.fn(), read: vi.fn(), remove: vi.fn() };
 
 const DIA = 24 * 60 * 60 * 1000;
 const amanha = () => new Date(Date.now() + DIA);
@@ -44,14 +52,28 @@ describe('EmprestimosService', () => {
 
   beforeEach(async () => {
     vi.resetAllMocks();
+    termoPdfMock.gerar.mockResolvedValue(new Uint8Array([37, 80, 68, 70]));
+    termoStorageMock.write.mockResolvedValue(undefined);
+    termoStorageMock.read.mockResolvedValue(Buffer.from('%PDF'));
+    termoStorageMock.remove.mockResolvedValue(undefined);
+    prismaMock.contadorTermo.upsert.mockImplementation(
+      ({ create }: { create: { ultimoNumero: number } }) =>
+        Promise.resolve({ ultimoNumero: create.ultimoNumero }),
+    );
+    prismaMock.termo.create.mockResolvedValue({ id: 'termo-1' });
     const module: TestingModule = await Test.createTestingModule({
-      providers: [EmprestimosService, { provide: PrismaService, useValue: prismaMock }],
+      providers: [
+        EmprestimosService,
+        { provide: PrismaService, useValue: prismaMock },
+        { provide: TermoPdfService, useValue: termoPdfMock },
+        { provide: TermoStorageService, useValue: termoStorageMock },
+      ],
     }).compile();
     service = module.get(EmprestimosService);
 
     // A transação reaproveita o próprio mock como "tx"
     prismaMock.$transaction.mockImplementation((cb: (tx: unknown) => unknown) => cb(prismaMock));
-    prismaMock.estoque.findUnique.mockResolvedValue({ id: 'est-1' });
+    prismaMock.estoque.findUnique.mockResolvedValue({ id: 'est-1', nome: 'Estoque de teste' });
     prismaMock.estoqueGestor.findUnique.mockResolvedValue({
       estoqueId: 'est-1',
       usuarioId: 'user-1',
@@ -64,11 +86,30 @@ describe('EmprestimosService', () => {
         id: 'item-1',
         tipo: 'PATRIMONIAL',
         status: 'DISPONIVEL',
+        nome: 'Notebook',
+        tombamento: 'T-001',
+        numeroSerie: null,
+        descricao: 'Notebook de teste',
       });
       prismaMock.emprestimo.findFirst.mockResolvedValue(null);
       prismaMock.responsavel.findMany.mockResolvedValue([]);
-      prismaMock.responsavel.create.mockResolvedValue({ id: 'resp-1', nome: 'Maria Silva' });
-      prismaMock.emprestimo.create.mockResolvedValue({ id: 'emp-1', status: 'AGUARDANDO_TERMO' });
+      prismaMock.responsavel.create.mockResolvedValue({
+        id: 'resp-1',
+        ...dtoBase.responsavel,
+        cpf: null,
+      });
+      prismaMock.emprestimo.create.mockImplementation(({ data }) =>
+        Promise.resolve({
+          id: 'emp-1',
+          ...data,
+          status: 'AGUARDANDO_TERMO',
+        }),
+      );
+      prismaMock.emprestimo.update.mockResolvedValue({
+        id: 'emp-1',
+        status: 'AGUARDANDO_TERMO',
+        termo: { id: 'termo-1', numeroAno: '01/2026' },
+      });
     });
 
     it('registra o empréstimo (aguardando termo) com responsável novo e gera movimentação SAIDA', async () => {
@@ -76,7 +117,7 @@ describe('EmprestimosService', () => {
 
       const result = await service.create('est-1', { ...dtoBase, prazoDevolucao: prazo }, 'user-1');
 
-      expect(result).toEqual({ id: 'emp-1', status: 'AGUARDANDO_TERMO' });
+      expect(result).toMatchObject({ id: 'emp-1', status: 'AGUARDANDO_TERMO' });
       expect(prismaMock.responsavel.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           nome: 'Maria Silva',
@@ -100,6 +141,41 @@ describe('EmprestimosService', () => {
           quantidade: 1,
           usuarioId: 'user-1',
         }),
+      });
+      expect(prismaMock.termo.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          numeroAno: expect.stringMatching(/^\d{2}\/\d{4}$/),
+          arquivoPdf: expect.stringMatching(/^\d{4}\/.+\.pdf$/),
+        }),
+      });
+      expect(prismaMock.emprestimo.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'emp-1' },
+          data: { termoId: 'termo-1' },
+        }),
+      );
+      expect(termoPdfMock.gerar).toHaveBeenCalledWith(
+        expect.objectContaining({
+          responsavel: expect.objectContaining({ siape: '1234567' }),
+          unidade: 'Estoque de teste',
+          item: expect.objectContaining({ nome: 'Notebook', tombamento: 'T-001' }),
+        }),
+      );
+    });
+
+    it('usa o próximo número do contador anual ao criar o termo', async () => {
+      const ano = new Date().getFullYear();
+      prismaMock.contadorTermo.upsert.mockResolvedValue({ ultimoNumero: 17 });
+
+      await service.create('est-1', dtoBase, 'user-1');
+
+      expect(prismaMock.contadorTermo.upsert).toHaveBeenCalledWith({
+        where: { ano },
+        create: { ano, ultimoNumero: 1 },
+        update: { ultimoNumero: { increment: 1 } },
+      });
+      expect(prismaMock.termo.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ numeroAno: `17/${ano}` }),
       });
     });
 
@@ -232,6 +308,65 @@ describe('EmprestimosService', () => {
       await expect(service.create('est-1', dtoBase, 'user-1')).rejects.toBeInstanceOf(
         ResourceConflictException,
       );
+    });
+  });
+
+  describe('obterPdf', () => {
+    beforeEach(() => {
+      prismaMock.emprestimo.findFirst.mockResolvedValue({
+        termo: { arquivoPdf: '2026/termo.pdf', numeroAno: '01/2026' },
+      });
+    });
+
+    it('permite ao gestor consultar e baixar o termo do próprio estoque', async () => {
+      const result = await service.obterPdf('est-1', 'emp-1', {
+        userId: 'user-1',
+        role: AccessRole.USER,
+      });
+
+      expect(result).toEqual({
+        pdf: Buffer.from('%PDF'),
+        nomeArquivo: 'termo-01-2026.pdf',
+      });
+      expect(prismaMock.emprestimo.findFirst).toHaveBeenCalledWith({
+        where: { id: 'emp-1', item: { estoqueId: 'est-1' } },
+        include: { termo: true },
+      });
+      expect(termoStorageMock.read).toHaveBeenCalledWith('2026/termo.pdf');
+    });
+
+    it('permite ao ADMIN consultar qualquer estoque', async () => {
+      prismaMock.estoqueGestor.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.obterPdf('est-1', 'emp-1', { userId: 'admin-1', role: AccessRole.ADMIN }),
+      ).resolves.toBeDefined();
+      expect(prismaMock.estoqueGestor.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('recusa (403) usuário que não é gestor nem ADMIN', async () => {
+      prismaMock.estoqueGestor.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.obterPdf('est-1', 'emp-1', { userId: 'user-2', role: AccessRole.USER }),
+      ).rejects.toBeInstanceOf(AccessDeniedException);
+      expect(prismaMock.emprestimo.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('retorna 404 quando o empréstimo não existe no estoque', async () => {
+      prismaMock.emprestimo.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.obterPdf('est-1', 'emp-404', { userId: 'user-1', role: AccessRole.USER }),
+      ).rejects.toBeInstanceOf(ResourceNotFoundException);
+    });
+
+    it('retorna 404 quando o empréstimo ainda não possui termo', async () => {
+      prismaMock.emprestimo.findFirst.mockResolvedValue({ termo: null });
+
+      await expect(
+        service.obterPdf('est-1', 'emp-1', { userId: 'user-1', role: AccessRole.USER }),
+      ).rejects.toBeInstanceOf(ResourceNotFoundException);
     });
   });
 
