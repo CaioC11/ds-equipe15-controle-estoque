@@ -34,6 +34,7 @@
     "class-validator": "^0.15.1",
     "jose": "^6.2.3",
     "nestjs-zod": "^5.5.0",
+    "pdf-lib": "^1.17.1",
     "pg": "^8.21.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",

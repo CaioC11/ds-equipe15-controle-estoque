@@ -115,6 +115,11 @@ model Termo {
   updatedAt       DateTime    @updatedAt
 }
 
+model ContadorTermo {
+  ano          Int @id
+  ultimoNumero Int @default(0)
+}
+
 model Emprestimo {
   id                       String           @id @default(uuid())
   itemId                   String

@@ -1,3 +1,4 @@
+import { StreamableFile } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AccessRole } from '../../common/auth/access-role.enum';
 import { AuthGuard } from '../../common/auth/guards/auth.guard';
@@ -7,7 +8,12 @@ import { EmprestimosService } from './emprestimos.service';
 
 describe('EmprestimosController', () => {
   let controller: EmprestimosController;
-  const service = { create: vi.fn(), findPendentes: vi.fn(), devolver: vi.fn() };
+  const service = {
+    create: vi.fn(),
+    findPendentes: vi.fn(),
+    devolver: vi.fn(),
+    obterPdf: vi.fn(),
+  };
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -40,5 +46,41 @@ describe('EmprestimosController', () => {
   it('repassa o userId do usuário logado ao devolver', async () => {
     await controller.devolver('est-1', 'emp-1', { userId: 'u1' } as never);
     expect(service.devolver).toHaveBeenCalledWith('est-1', 'emp-1', 'u1');
+  });
+
+  it('serve o termo em linha para visualização', async () => {
+    service.obterPdf.mockResolvedValue({
+      pdf: Buffer.from('pdf'),
+      nomeArquivo: 'termo-01-2026.pdf',
+    });
+
+    const result = await controller.visualizarTermo('est-1', 'emp-1', {
+      userId: 'u1',
+      role: AccessRole.USER,
+    } as never);
+
+    expect(result).toBeInstanceOf(StreamableFile);
+    expect(service.obterPdf).toHaveBeenCalledWith('est-1', 'emp-1', {
+      userId: 'u1',
+      role: AccessRole.USER,
+    });
+  });
+
+  it('serve o termo como anexo para download', async () => {
+    service.obterPdf.mockResolvedValue({
+      pdf: Buffer.from('pdf'),
+      nomeArquivo: 'termo-01-2026.pdf',
+    });
+
+    const result = await controller.baixarTermo('est-1', 'emp-1', {
+      userId: 'admin',
+      role: AccessRole.ADMIN,
+    } as never);
+
+    expect(result).toBeInstanceOf(StreamableFile);
+    expect(service.obterPdf).toHaveBeenCalledWith('est-1', 'emp-1', {
+      userId: 'admin',
+      role: AccessRole.ADMIN,
+    });
   });
 });
