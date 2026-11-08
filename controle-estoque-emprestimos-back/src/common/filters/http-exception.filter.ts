@@ -110,6 +110,8 @@ export class HttpExceptionFilter implements ExceptionFilter {
   private mapStatusToErrorCode(status: number): ErrorCode {
     switch (status) {
       case HttpStatus.BAD_REQUEST:
+      case HttpStatus.PAYLOAD_TOO_LARGE:
+      case HttpStatus.UNSUPPORTED_MEDIA_TYPE:
       case HttpStatus.UNPROCESSABLE_ENTITY:
         return ErrorCode.VALIDATION_FAILED;
       case HttpStatus.NOT_FOUND:

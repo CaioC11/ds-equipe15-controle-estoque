@@ -12,6 +12,12 @@ import { PaginatedResponseDto } from '../../common/pagination/paginated-response
 import type { PaginationQueryDto } from '../../common/pagination/pagination-query.dto';
 import { PrismaService } from '../../database/prisma.service';
 import type { CreateEmprestimoDto } from './dto/create-emprestimo.dto';
+import {
+  type ArquivoUpload,
+  PDF_MAGIC,
+  TERMO_ASSINADO_MAX_BYTES,
+  TERMO_ASSINADO_MIME,
+} from './termo-assinado.constants';
 import { TermoPdfService } from './termo-pdf.service';
 import { TermoStorageService } from './termo-storage.service';
 
@@ -89,7 +95,7 @@ export class EmprestimosService {
 
         const responsavel = await this.obterResponsavel(tx, dto.responsavel);
 
-        // Nasce em AGUARDANDO_TERMO (default do schema); a ativação é a issue #22
+        // Nasce em AGUARDANDO_TERMO (default do schema); a ativação é feita em confirmarEntrega.
         const emprestimo = await tx.emprestimo.create({
           data: {
             itemId: item.id,
@@ -186,6 +192,148 @@ export class EmprestimosService {
       pdf: await this.termoStorage.read(emprestimo.termo.arquivoPdf),
       nomeArquivo: `termo-${emprestimo.termo.numeroAno.replace('/', '-')}.pdf`,
     };
+  }
+
+  // Anexa (ou substitui, enquanto aguarda) o PDF assinado. Não ativa o empréstimo.
+  async anexarTermoAssinado(
+    estoqueId: string,
+    emprestimoId: string,
+    arquivo: ArquivoUpload | undefined,
+    userId?: string,
+  ) {
+    await this.findEstoqueOrFail(estoqueId);
+    await this.assertGestorDoEstoque(estoqueId, userId);
+
+    const emprestimo = await this.prisma.emprestimo.findFirst({
+      where: { id: emprestimoId, item: { estoqueId } },
+      include: { termo: true },
+    });
+    if (!emprestimo) {
+      throw new ResourceNotFoundException('Empréstimo', emprestimoId);
+    }
+    if (!emprestimo.termo) {
+      throw new ResourceNotFoundException('Termo', emprestimoId);
+    }
+    if (emprestimo.status !== StatusEmprestimo.AGUARDANDO_TERMO) {
+      throw new ResourceConflictException(
+        `Só é possível anexar o termo assinado a empréstimo aguardando termo (status atual: ${emprestimo.status}).`,
+      );
+    }
+
+    this.validarPdf(arquivo);
+
+    const anterior = emprestimo.termo.arquivoAssinado;
+    const ano = new Date().getFullYear();
+    const novoCaminho = `${ano}/assinados/${randomUUID()}.pdf`;
+
+    await this.termoStorage.write(novoCaminho, arquivo.buffer);
+    try {
+      await this.prisma.termo.update({
+        where: { id: emprestimo.termo.id },
+        data: { arquivoAssinado: novoCaminho },
+      });
+    } catch (error) {
+      await this.termoStorage.remove(novoCaminho).catch(() => undefined);
+      throw error;
+    }
+    // Reenvio: descarta o arquivo anterior só depois de gravar o novo vínculo
+    if (anterior) {
+      await this.termoStorage.remove(anterior).catch(() => undefined);
+    }
+
+    return this.prisma.emprestimo.findUniqueOrThrow({
+      where: { id: emprestimoId },
+      include: INCLUDE_EMPRESTIMO,
+    });
+  }
+
+  async obterPdfAssinado(estoqueId: string, emprestimoId: string, user?: CurrentUser) {
+    await this.findEstoqueOrFail(estoqueId);
+    if (user?.role !== AccessRole.ADMIN) {
+      await this.assertGestorDoEstoque(estoqueId, user?.userId);
+    }
+
+    const emprestimo = await this.prisma.emprestimo.findFirst({
+      where: { id: emprestimoId, item: { estoqueId } },
+      include: { termo: true },
+    });
+    if (!emprestimo) {
+      throw new ResourceNotFoundException('Empréstimo', emprestimoId);
+    }
+    if (!emprestimo.termo?.arquivoAssinado) {
+      throw new ResourceNotFoundException('Termo assinado', emprestimoId);
+    }
+
+    return {
+      pdf: await this.termoStorage.read(emprestimo.termo.arquivoAssinado),
+      nomeArquivo: `termo-${emprestimo.termo.numeroAno.replace('/', '-')}-assinado.pdf`,
+    };
+  }
+
+  // Confirma a entrega física: AGUARDANDO_TERMO -> ATIVO e item -> EMPRESTADO
+  async confirmarEntrega(estoqueId: string, emprestimoId: string, userId?: string) {
+    await this.findEstoqueOrFail(estoqueId);
+    await this.assertGestorDoEstoque(estoqueId, userId);
+
+    return this.prisma.$transaction(async (tx) => {
+      const emprestimo = await tx.emprestimo.findFirst({
+        where: { id: emprestimoId, item: { estoqueId } },
+        include: { termo: true },
+      });
+      if (!emprestimo) {
+        throw new ResourceNotFoundException('Empréstimo', emprestimoId);
+      }
+      if (emprestimo.status !== StatusEmprestimo.AGUARDANDO_TERMO) {
+        throw new ResourceConflictException(
+          `Só é possível confirmar a entrega de empréstimo aguardando termo (status atual: ${emprestimo.status}).`,
+        );
+      }
+      if (!emprestimo.termo?.arquivoAssinado) {
+        throw new ResourceConflictException(
+          'Anexe o termo de responsabilidade assinado antes de confirmar a entrega.',
+        );
+      }
+
+      // Guarda contra confirmação dupla simultânea
+      const { count } = await tx.emprestimo.updateMany({
+        where: { id: emprestimoId, status: StatusEmprestimo.AGUARDANDO_TERMO },
+        data: { status: StatusEmprestimo.ATIVO },
+      });
+      if (count === 0) {
+        throw new ResourceConflictException('A entrega deste empréstimo já foi confirmada.');
+      }
+
+      await tx.item.update({
+        where: { id: emprestimo.itemId },
+        data: { status: StatusItem.EMPRESTADO },
+      });
+
+      return tx.emprestimo.findUniqueOrThrow({
+        where: { id: emprestimoId },
+        include: INCLUDE_EMPRESTIMO,
+      });
+    });
+  }
+
+  // Valida tipo, tamanho e assinatura real do arquivo (não confia só no mimetype do cliente)
+  private validarPdf(arquivo: ArquivoUpload | undefined): asserts arquivo is ArquivoUpload {
+    const invalido = (mensagem: string) =>
+      new AppException(ErrorCode.VALIDATION_FAILED, mensagem, HttpStatus.BAD_REQUEST);
+
+    if (!arquivo?.buffer?.length) {
+      throw invalido('Envie o PDF assinado no campo "arquivo" (multipart/form-data).');
+    }
+    if (arquivo.size > TERMO_ASSINADO_MAX_BYTES) {
+      throw invalido(
+        `O arquivo excede o limite de ${TERMO_ASSINADO_MAX_BYTES / (1024 * 1024)} MB.`,
+      );
+    }
+    if (
+      arquivo.mimetype !== TERMO_ASSINADO_MIME ||
+      !arquivo.buffer.subarray(0, PDF_MAGIC.length).equals(PDF_MAGIC)
+    ) {
+      throw invalido('Arquivo inválido: apenas PDF é aceito.');
+    }
   }
 
   // Pendentes = aguardando termo + ativos, com "atrasado" calculado na hora
