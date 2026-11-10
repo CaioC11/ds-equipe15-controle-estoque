@@ -91,6 +91,49 @@ export class EmprestimoService {
       { method: 'POST' },
     );
   }
+
+  private base(estoqueId: string, emprestimoId: string) {
+    return `/estoques/${encodeURIComponent(estoqueId)}/emprestimos/${encodeURIComponent(emprestimoId)}`;
+  }
+
+  /** Não há GET por id no back: procura na lista de pendentes do estoque. */
+  async buscarEmprestimo(estoqueId: string, emprestimoId: string): Promise<Emprestimo> {
+    const lista = await this.listarPendentes(estoqueId);
+    const encontrado = lista.find((e) => e.id === emprestimoId);
+    if (!encontrado) throw new HttpError('Empréstimo não encontrado ou já encerrado.', 404);
+    return encontrado;
+  }
+
+  private async pdfBlob(path: string, fallback: string): Promise<Blob> {
+    const response = await fetchApi(`${API_URL}${path}`);
+    if (!response.ok) {
+      throw new HttpError(await getApiErrorMessage(response, fallback), response.status);
+    }
+    return response.blob();
+  }
+
+  obterTermoBlob(estoqueId: string, emprestimoId: string): Promise<Blob> {
+    return this.pdfBlob(`${this.base(estoqueId, emprestimoId)}/termo`, 'Erro ao carregar o termo');
+  }
+
+  obterTermoAssinadoBlob(estoqueId: string, emprestimoId: string): Promise<Blob> {
+    return this.pdfBlob(`${this.base(estoqueId, emprestimoId)}/termo/assinado`, 'Erro ao baixar o termo assinado');
+  }
+
+  async anexarTermoAssinado(estoqueId: string, emprestimoId: string, arquivo: File): Promise<Emprestimo> {
+    const form = new FormData();
+    form.append('arquivo', arquivo); // nome do campo exigido pelo FileInterceptor
+    return request<Emprestimo>(`${this.base(estoqueId, emprestimoId)}/termo/assinado`, 'Erro ao anexar o termo assinado', {
+      method: 'POST',
+      body: form,
+    });
+  }
+
+  async confirmarEntrega(estoqueId: string, emprestimoId: string): Promise<Emprestimo> {
+    return request<Emprestimo>(`${this.base(estoqueId, emprestimoId)}/confirmar-entrega`, 'Erro ao confirmar a entrega', {
+      method: 'POST',
+    });
+  }
 }
 
 /** Instância única do serviço — mesma vida útil da aplicação. */
