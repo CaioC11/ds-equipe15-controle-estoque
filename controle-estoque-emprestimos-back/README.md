@@ -27,25 +27,59 @@ API REST em Node.js com [NestJS 11](https://nestjs.com/), [Prisma](https://www.p
 
 Pré-requisitos: Node.js 22 LTS, npm 11+, Docker + Docker Compose.
 
-```bash
-# 1. Instalar dependências
+Execute os passos abaixo em um terminal PowerShell. O `docker-compose.yml` sobe Postgres e Keycloak; a API é iniciada separadamente pelo npm.
+
+```powershell
+# 1. Entre na pasta do backend
+cd controle-estoque-emprestimos-back
+
+# 2. Crie o arquivo de ambiente local (se ainda não existir) e instale as dependências
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 npm install
 
-# 2. Iniciar os serviços de infraestrutura localmente
+# 3. Suba Postgres e Keycloak
 docker compose up -d
 
-# 3. Gerar o Prisma Client e executar migrations pendentes
+# 4. Gere o Prisma Client e aplique as migrations
 npm run prisma:generate
 npm run migration:run
 
-# 4. (Opcional) Popular tabelas de lookup (roles, status, priority)
-node prisma/seed.mjs
+# 5. Crie os dados de demonstração da US02
+npm run seed
 
-# 5. Iniciar a API em modo watch
+# 6. Inicie o backend; mantenha este terminal aberto
 npm run dev
 ```
 
-O arquivo `.env` já foi criado pelo gerador a partir do `.env.example`. Ajuste as variáveis conforme o seu ambiente.
+O seed consulta o Keycloak local para encontrar o `sub` atual do usuário `user`, cria/atualiza o estoque `Estoque demonstração US02` e autoriza esse usuário como gestor. Ele é idempotente: pode ser executado novamente sem duplicar o estoque ou o vínculo. Por padrão usa `admin`/`admin` para a conta administrativa do Keycloak; configure `KEYCLOAK_ADMIN_USERNAME` e `KEYCLOAK_ADMIN_PASSWORD` no `.env` se forem diferentes.
+
+Após o backend iniciar, abra o Swagger no navegador:
+
+```text
+http://localhost:3000/api/docs
+```
+
+No Swagger, use **Authorize** com um access token do Keycloak. Para obter um token local no PowerShell, copie e execute o exemplo abaixo e cole o resultado de `$token` no diálogo de autorização. Troque `admin`/`admin` por `user`/`user` para conferir as respostas `403` dos endpoints exclusivos do ADMIN.
+
+```powershell
+$token = (Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://localhost:8080/auth/realms/Local/protocol/openid-connect/token" `
+  -ContentType "application/x-www-form-urlencoded" `
+  -Body @{
+    grant_type = "password"
+    client_id = "controle-estoque-emprestimos-back"
+    client_secret = "dev-secret"
+    username = "admin"
+    password = "admin"
+  }).access_token
+
+$token
+```
+
+Para parar Postgres e Keycloak ao terminar, rode `docker compose down` na pasta do backend. Os dados continuam nos volumes locais; para removê-los também, use `docker compose down -v`.
+
+O `.env.example` contém os valores locais padrão. Ajuste as variáveis conforme o seu ambiente.
 
 - **API Base**: `http://localhost:3000/controle-estoque-emprestimos/api` (recursos versionados em `/controle-estoque-emprestimos/api/v1/...`)
 - **Health Check**: `http://localhost:3000/controle-estoque-emprestimos/api/health` (público, sem versionamento)
@@ -57,8 +91,8 @@ O arquivo `.env` já foi criado pelo gerador a partir do `.env.example`. Ajuste 
 
 Ao registrar um empréstimo, a API gera o termo de acautelamento em PDF e o armazena em `TERMO_STORAGE_PATH` (padrão: `./storage/termos`). O Docker Compose monta um volume persistente nesse diretório. Em produção, configure `TERMO_STORAGE_PATH` para um volume persistente e faça backup dos documentos.
 
-- `GET /api/v1/estoques/:estoqueId/emprestimos/:id/termo`: visualiza o PDF.
-- `GET /api/v1/estoques/:estoqueId/emprestimos/:id/termo/download`: baixa o PDF.
+- `GET /controle-estoque-emprestimos/api/v1/estoques/:estoqueId/emprestimos/:id/termo`: visualiza o PDF.
+- `GET /controle-estoque-emprestimos/api/v1/estoques/:estoqueId/emprestimos/:id/termo/download`: baixa o PDF.
 
 Ambos os endpoints exigem autenticação e permitem acesso ao gestor do estoque e ao ADMIN. A numeração do termo é sequencial por ano.
 
@@ -79,6 +113,7 @@ Ambos os endpoints exigem autenticação e permitem acesso ao gestor do estoque 
 | `npm run prisma:generate` | Gera o Prisma Client a partir de `prisma/schema.prisma` |
 | `npm run migration:generate` | Cria e aplica uma nova migration a partir de mudanças no `schema.prisma` (`prisma migrate dev`) |
 | `npm run migration:run` | Aplica todas as migrations pendentes no PostgreSQL (`prisma migrate deploy`) |
+| `npm run seed` | Cria/atualiza o estoque de demonstração e autoriza `user` como gestor |
 
 ---
 
