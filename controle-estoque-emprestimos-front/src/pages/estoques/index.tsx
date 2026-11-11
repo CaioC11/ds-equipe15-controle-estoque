@@ -242,12 +242,9 @@ export default function EstoquesPage() {
       {/* 3.5. COMPONENTE DA US03 (Gerenciamento de Itens do Estoque) */}
       <div className="mt-10">
         <GerenciamentoEstoque
-          estoqueId="EST-001"
-          nomeEstoque="Almoxarifado Principal"
+          estoques={estoques}
           isGestor={usuarioLogadoEhGestor}
-          onSalvarItem={(dados) => {
-            console.log('Item pronto para envio à API:', dados);
-          }}
+          onItemCriado={reload}
         />
       </div>
 
