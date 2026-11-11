@@ -16,8 +16,15 @@ export class ItensService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(estoqueId: string, dto: CreateItemDto, userId?: string) {
-    await this.findEstoqueOrFail(estoqueId);
+    const estoque = await this.findEstoqueOrFail(estoqueId);
     await this.assertGestorDoEstoque(estoqueId, userId);
+    if (!estoque.ativo) {
+      throw new AppException(
+        ErrorCode.VALIDATION_FAILED,
+        'Estoque desativado não aceita novos itens',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
     await this.assertCategoriaExiste(dto.categoriaId);
 
     try {

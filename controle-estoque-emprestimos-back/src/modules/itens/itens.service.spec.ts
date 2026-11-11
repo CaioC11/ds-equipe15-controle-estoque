@@ -44,7 +44,7 @@ describe('ItensService', () => {
     }).compile();
     service = module.get(ItensService);
 
-    prismaMock.estoque.findUnique.mockResolvedValue({ id: 'est-1' });
+    prismaMock.estoque.findUnique.mockResolvedValue({ id: 'est-1', ativo: true });
     prismaMock.categoria.findUnique.mockResolvedValue({ id: 'cat-1' });
     prismaMock.estoqueGestor.findUnique.mockResolvedValue({
       estoqueId: 'est-1',
@@ -53,6 +53,13 @@ describe('ItensService', () => {
   });
 
   describe('create', () => {
+    it('recusa (400) item em estoque desativado', async () => {
+      prismaMock.estoque.findUnique.mockResolvedValue({ id: 'est-1', ativo: false });
+
+      await expect(service.create('est-1', dtoPatrimonial, 'user-1')).rejects.toThrow('desativado');
+      expect(prismaMock.item.create).not.toHaveBeenCalled();
+    });
+
     it('cadastra item patrimonial no estoque quando o usuário é gestor', async () => {
       prismaMock.item.create.mockResolvedValue({ id: 'item-1' });
 
