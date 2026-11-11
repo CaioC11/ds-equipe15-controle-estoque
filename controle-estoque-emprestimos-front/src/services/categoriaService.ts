@@ -18,7 +18,8 @@ export const categoriasService = {
       const errorMsg = await getApiErrorMessage(response, 'Erro ao listar categorias');
       throw new Error(errorMsg);
     }
-    return response.json();
+    const body = await response.json();
+    return Array.isArray(body) ? body : body.data;
   },
 
   async criar(data: CreateCategoriaInput): Promise<Categoria> {

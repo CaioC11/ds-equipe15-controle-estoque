@@ -3,19 +3,26 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Package, ShieldAlert, PlusCircle, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { useAsync } from '../hooks/useAsync';
+import { STATUS_ITEM_LABELS, TIPO_ITEM_LABELS } from '../modules/estoques/estoque.types';
+import type { Estoque } from '../modules/estoques/estoque.types';
+import { ItemApiError, itemService } from '../modules/estoques/item.service';
+import type { CreateItemDto, ItemListado } from '../modules/estoques/item.service';
+import { categoriasService } from '../services/categoriaService';
 
-// 1. Zod puro, sem coerções que quebrem a tipagem
 const itemSchema = z
   .object({
-    categoria: z.string().min(1, 'A categoria é obrigatória'),
-    tipo: z.enum(['patrimonial', 'consumo']),
-    numeroSerie: z.string().min(1, 'O número de série é obrigatório'),
-    // Apenas z.number() direto, sem o objeto de erro interno
-    nivelMinimo: z.number().min(0, 'O nível mínimo não pode ser negativo'),
+    estoqueId: z.string().min(1, 'Selecione um estoque'),
+    categoriaId: z.string().min(1, 'A categoria é obrigatória'),
+    nome: z.string().trim().min(1, 'O nome é obrigatório'),
+    tipo: z.enum(['PATRIMONIAL', 'CONSUMO']),
+    numeroSerie: z.string().optional(),
+    // string no formulário (vazio = sem alerta); convertida para número no envio
+    nivelMinimo: z.string().regex(/^\d*$/, 'Informe um número inteiro maior ou igual a 0'),
     tombamento: z.string().optional(),
   })
   .superRefine((data, ctx) => {
-    if (data.tipo === 'patrimonial' && (!data.tombamento || data.tombamento.trim() === '')) {
+    if (data.tipo === 'PATRIMONIAL' && (!data.tombamento || data.tombamento.trim() === '')) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Tombamento é obrigatório para itens de tipo Patrimonial',
@@ -24,35 +31,28 @@ const itemSchema = z
     }
   });
 
-// Tipagem perfeitamente alinhada com o formulário
 type ItemFormData = z.infer<typeof itemSchema>;
 
-export interface ItemEstoque {
-  id: string;
-  categoria: string;
-  tipo: 'patrimonial' | 'consumo';
-  numeroSerie: string;
-  nivelMinimo: number;
-  tombamento?: string;
-}
+const valoresIniciais: ItemFormData = {
+  estoqueId: '',
+  categoriaId: '',
+  nome: '',
+  tipo: 'PATRIMONIAL',
+  numeroSerie: '',
+  nivelMinimo: '',
+  tombamento: '',
+};
 
 interface Props {
-  estoqueId: string;
-  nomeEstoque: string;
+  estoques: Estoque[];
   isGestor: boolean;
-  itensIniciais?: ItemEstoque[];
-  onSalvarItem?: (novoItem: ItemFormData) => Promise<void> | void;
+  /** Chamado depois de criar um item (a página usa para recarregar os saldos). */
+  onItemCriado?: () => void;
 }
 
-export const GerenciamentoEstoque: React.FC<Props> = ({
-  estoqueId,
-  nomeEstoque,
-  isGestor,
-  itensIniciais = [],
-  onSalvarItem,
-}) => {
-  const [itens, setItens] = useState<ItemEstoque[]>(itensIniciais);
+export const GerenciamentoEstoque: React.FC<Props> = ({ estoques, isGestor, onItemCriado }) => {
   const [sucessoMsg, setSucessoMsg] = useState<string | null>(null);
+  const estoquesAtivos = estoques.filter((estoque) => estoque.ativo);
 
   const {
     register,
@@ -62,67 +62,73 @@ export const GerenciamentoEstoque: React.FC<Props> = ({
     setError,
     formState: { errors, isSubmitting },
   } = useForm<ItemFormData>({
-    // O erro do resolver deve sumir agora
     resolver: zodResolver(itemSchema),
-    defaultValues: {
-      categoria: '',
-      tipo: 'patrimonial',
-      numeroSerie: '',
-      nivelMinimo: 1,
-      tombamento: '',
-    },
+    defaultValues: valoresIniciais,
   });
 
   const tipoSelecionado = watch('tipo');
+  const estoqueSelecionado = watch('estoqueId');
 
-  // O erro do onSubmit também some
+  const { data: categorias = [], error: erroCategorias } = useAsync(
+    () => categoriasService.listar(),
+    [],
+  );
+
+  const {
+    data: itens = [],
+    isLoading: carregandoItens,
+    error: erroItens,
+    reload: recarregarItens,
+  } = useAsync<ItemListado[]>(
+    () => (estoqueSelecionado ? itemService.listar(estoqueSelecionado) : Promise.resolve([])),
+    [estoqueSelecionado],
+  );
+
+  const nomeEstoque = estoquesAtivos.find((e) => e.id === estoqueSelecionado)?.nome;
+
   const onSubmit = async (data: ItemFormData) => {
     setSucessoMsg(null);
 
-    if (data.tipo === 'patrimonial' && data.tombamento) {
-      const tombamentoExistente = itens.some(
-        (item) => item.tombamento?.trim().toLowerCase() === data.tombamento?.trim().toLowerCase()
-      );
-
-      if (tombamentoExistente) {
-        setError('tombamento', {
-          type: 'manual',
-          message: `O tombamento "${data.tombamento}" já existe neste estoque.`,
-        });
-        return;
-      }
-    }
+    const dto: CreateItemDto = {
+      tipo: data.tipo,
+      nome: data.nome.trim(),
+      categoriaId: data.categoriaId,
+      // o back recusa tombamento vazio e tombamento em item de consumo
+      tombamento: data.tipo === 'PATRIMONIAL' ? data.tombamento?.trim() || undefined : undefined,
+      numeroSerie: data.numeroSerie?.trim() || undefined,
+      nivelMinimo: data.nivelMinimo === '' ? undefined : Number(data.nivelMinimo),
+    };
 
     try {
-      if (onSalvarItem) {
-        await onSalvarItem(data);
+      await itemService.criar(data.estoqueId, dto);
+    } catch (err) {
+      const message =
+        err instanceof ItemApiError
+          ? err.message
+          : 'Não foi possível falar com a API. Tente novamente.';
+      if (err instanceof ItemApiError && err.status === 409 && /tombamento/i.test(message)) {
+        setError('tombamento', { type: 'server', message });
+      } else if (err instanceof ItemApiError && err.status === 409 && /s[eé]rie/i.test(message)) {
+        setError('numeroSerie', { type: 'server', message });
+      } else {
+        setError('root', { type: 'server', message });
       }
-
-      const novoItem: ItemEstoque = {
-        id: crypto.randomUUID(),
-        ...data,
-      };
-
-      setItens((prev) => [novoItem, ...prev]);
-      setSucessoMsg('Item cadastrado com sucesso!');
-      reset();
-    } catch {
-      setError('root', {
-        type: 'manual',
-        message: 'Ocorreu um erro ao salvar o item.',
-      });
+      return;
     }
+
+    setSucessoMsg('Item cadastrado com sucesso!');
+    reset({ ...valoresIniciais, estoqueId: data.estoqueId });
+    recarregarItens();
+    onItemCriado?.();
   };
 
   return (
     <div className="w-full max-w-5xl mx-auto p-6 space-y-8">
-      {/* Cabeçalho */}
       <div className="border-b pb-4">
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
           <Package className="h-7 w-7 text-blue-600" />
-          Estoque: {nomeEstoque}
+          Itens do estoque{nomeEstoque ? `: ${nomeEstoque}` : ''}
         </h1>
-        <p className="text-sm text-gray-500 mt-1">ID: {estoqueId}</p>
       </div>
 
       {isGestor ? (
@@ -148,13 +154,48 @@ export const GerenciamentoEstoque: React.FC<Props> = ({
 
           <form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Estoque *</label>
+              <select
+                {...register('estoqueId')}
+                className="w-full px-3 py-2 border rounded-md text-sm border-gray-300 focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Selecione um estoque</option>
+                {estoquesAtivos.map((estoque) => (
+                  <option key={estoque.id} value={estoque.id}>
+                    {estoque.nome}
+                  </option>
+                ))}
+              </select>
+              {errors.estoqueId && <p className="text-xs text-red-600 mt-1">{errors.estoqueId.message}</p>}
+            </div>
+
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Categoria *</label>
+              <select
+                {...register('categoriaId')}
+                className="w-full px-3 py-2 border rounded-md text-sm border-gray-300 focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">Selecione uma categoria</option>
+                {categorias.map((categoria) => (
+                  <option key={categoria.id} value={categoria.id}>
+                    {categoria.nome}
+                  </option>
+                ))}
+              </select>
+              {errors.categoriaId && <p className="text-xs text-red-600 mt-1">{errors.categoriaId.message}</p>}
+              {erroCategorias && (
+                <p className="text-xs text-red-600 mt-1">Não foi possível carregar as categorias.</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nome *</label>
               <input
                 type="text"
-                {...register('categoria')}
+                {...register('nome')}
                 className="w-full px-3 py-2 border rounded-md text-sm border-gray-300 focus:ring-2 focus:ring-blue-500"
               />
-              {errors.categoria && <p className="text-xs text-red-600 mt-1">{errors.categoria.message}</p>}
+              {errors.nome && <p className="text-xs text-red-600 mt-1">{errors.nome.message}</p>}
             </div>
 
             <div>
@@ -163,14 +204,13 @@ export const GerenciamentoEstoque: React.FC<Props> = ({
                 {...register('tipo')}
                 className="w-full px-3 py-2 border rounded-md text-sm border-gray-300 focus:ring-2 focus:ring-blue-500"
               >
-                <option value="patrimonial">Patrimonial</option>
-                <option value="consumo">Consumo</option>
+                <option value="PATRIMONIAL">{TIPO_ITEM_LABELS.PATRIMONIAL}</option>
+                <option value="CONSUMO">{TIPO_ITEM_LABELS.CONSUMO}</option>
               </select>
-              {errors.tipo && <p className="text-xs text-red-600 mt-1">{errors.tipo.message}</p>}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nº de Série *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nº de Série</label>
               <input
                 type="text"
                 {...register('numeroSerie')}
@@ -180,12 +220,12 @@ export const GerenciamentoEstoque: React.FC<Props> = ({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nível Mínimo *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nível Mínimo</label>
               <input
                 type="number"
                 min="0"
-                // 3. Adicionado valueAsNumber: true para que o React avise ao Zod que isso é um Number
-                {...register('nivelMinimo', { valueAsNumber: true })}
+                step="1"
+                {...register('nivelMinimo')}
                 className="w-full px-3 py-2 border rounded-md text-sm border-gray-300 focus:ring-2 focus:ring-blue-500"
               />
               {errors.nivelMinimo && <p className="text-xs text-red-600 mt-1">{errors.nivelMinimo.message}</p>}
@@ -193,14 +233,14 @@ export const GerenciamentoEstoque: React.FC<Props> = ({
 
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Tombamento {tipoSelecionado === 'patrimonial' && <span className="text-red-500">*</span>}
+                Tombamento {tipoSelecionado === 'PATRIMONIAL' && <span className="text-red-500">*</span>}
               </label>
               <input
                 type="text"
-                disabled={tipoSelecionado === 'consumo'}
+                disabled={tipoSelecionado === 'CONSUMO'}
                 {...register('tombamento')}
                 className={`w-full px-3 py-2 border rounded-md text-sm border-gray-300 focus:ring-2 focus:ring-blue-500 ${
-                  tipoSelecionado === 'consumo' ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'
+                  tipoSelecionado === 'CONSUMO' ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'
                 }`}
               />
               {errors.tombamento && (
@@ -229,7 +269,6 @@ export const GerenciamentoEstoque: React.FC<Props> = ({
         </div>
       )}
 
-      {/* Listagem */}
       <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
         <div className="px-6 py-4 border-b bg-gray-50">
           <h2 className="text-base font-semibold text-gray-800">Itens do Estoque</h2>
@@ -238,26 +277,44 @@ export const GerenciamentoEstoque: React.FC<Props> = ({
           <table className="w-full text-left text-sm text-gray-600">
             <thead className="bg-gray-100 text-gray-700 uppercase text-xs font-medium">
               <tr>
+                <th className="px-6 py-3">Nome</th>
                 <th className="px-6 py-3">Categoria</th>
                 <th className="px-6 py-3">Tipo</th>
                 <th className="px-6 py-3">Série</th>
                 <th className="px-6 py-3">Tombamento</th>
                 <th className="px-6 py-3">Mínimo</th>
+                <th className="px-6 py-3">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {itens.length === 0 ? (
+              {!estoqueSelecionado ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-gray-500">Nenhum item cadastrado.</td>
+                  <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
+                    Selecione um estoque para ver os itens.
+                  </td>
+                </tr>
+              ) : carregandoItens ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-8 text-center text-gray-500">Carregando itens...</td>
+                </tr>
+              ) : erroItens ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-8 text-center text-red-600">{erroItens.message}</td>
+                </tr>
+              ) : itens.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-8 text-center text-gray-500">Nenhum item cadastrado.</td>
                 </tr>
               ) : (
                 itens.map((item) => (
                   <tr key={item.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4">{item.categoria}</td>
-                    <td className="px-6 py-4 capitalize">{item.tipo}</td>
-                    <td className="px-6 py-4 font-mono">{item.numeroSerie}</td>
+                    <td className="px-6 py-4">{item.nome}</td>
+                    <td className="px-6 py-4">{item.categoria?.nome ?? '-'}</td>
+                    <td className="px-6 py-4">{TIPO_ITEM_LABELS[item.tipo]}</td>
+                    <td className="px-6 py-4 font-mono">{item.numeroSerie || '-'}</td>
                     <td className="px-6 py-4 font-mono">{item.tombamento || '-'}</td>
-                    <td className="px-6 py-4">{item.nivelMinimo}</td>
+                    <td className="px-6 py-4">{item.nivelMinimo ?? '-'}</td>
+                    <td className="px-6 py-4">{STATUS_ITEM_LABELS[item.status]}</td>
                   </tr>
                 ))
               )}
