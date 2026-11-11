@@ -44,6 +44,8 @@ export interface Emprestimo {
   responsavel: Responsavel;
   /** Calculado pelo backend a partir do prazo (não é um status salvo). */
   atrasado: boolean;
+  termo: { id: string; numeroAno: string } | null;
+  termoAssinadoAnexado: boolean;
 }
 
 /**

@@ -25,6 +25,12 @@ const PAGE_HEIGHT = 841.89;
 const MARGIN = 48;
 const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
 
+const formatarData = (val: any): string => {
+  if (!val || val === 'null') return 'INDEFINIDO';
+  const d = new Date(val);
+  return isNaN(d.getTime()) ? 'INDEFINIDO' : d.toLocaleDateString('pt-BR');
+};
+
 @Injectable()
 export class TermoPdfService {
   async gerar(data: TermoPdfData): Promise<Uint8Array> {
@@ -78,7 +84,7 @@ export class TermoPdfService {
     };
 
     const drawSection = (title: string) => {
-      y -= 8;
+      y -= 20;
       addPageIfNeeded(24);
       page.drawRectangle({
         x: MARGIN,
@@ -128,7 +134,7 @@ export class TermoPdfService {
     drawField('Data de Abertura', date(data.dataAbertura));
     drawField(
       'Data Prevista para Fechamento',
-      data.dataFechamento ? date(data.dataFechamento) : 'INDEFINIDO',
+      formatarData(data.dataFechamento),
     );
 
     drawSection('BENS ACAUTELADOS');

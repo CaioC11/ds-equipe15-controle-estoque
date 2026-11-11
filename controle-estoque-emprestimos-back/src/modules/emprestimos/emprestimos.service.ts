@@ -27,8 +27,19 @@ const STATUS_PENDENTES = [StatusEmprestimo.AGUARDANDO_TERMO, StatusEmprestimo.AT
 const INCLUDE_EMPRESTIMO = {
   item: true,
   responsavel: true,
-  termo: { select: { id: true, numeroAno: true } },
+  termo: { select: { id: true, numeroAno: true, arquivoAssinado: true } },
 } as const;
+
+function comFlagTermo<T extends { termo: { id: string; numeroAno: string; arquivoAssinado: string | null } | null }>(
+  emprestimo: T,
+) {
+  const { termo, ...resto } = emprestimo;
+  return {
+    ...resto,
+    termo: termo ? { id: termo.id, numeroAno: termo.numeroAno } : null,
+    termoAssinadoAnexado: !!termo?.arquivoAssinado,
+  };
+}
 
 type ResponsavelInput = CreateEmprestimoDto['responsavel'];
 
@@ -83,7 +94,6 @@ export class EmprestimosService {
     let arquivoPdfCriado: string | undefined;
     try {
       return await this.prisma.$transaction(async (tx) => {
-        // Reconfere dentro da transação: o item não pode ter outro empréstimo em aberto
         const emAberto = await tx.emprestimo.findFirst({
           where: { itemId: item.id, status: { in: STATUS_PENDENTES } },
         });
@@ -95,7 +105,6 @@ export class EmprestimosService {
 
         const responsavel = await this.obterResponsavel(tx, dto.responsavel);
 
-        // Nasce em AGUARDANDO_TERMO (default do schema); a ativação é feita em confirmarEntrega.
         const emprestimo = await tx.emprestimo.create({
           data: {
             itemId: item.id,
@@ -150,11 +159,13 @@ export class EmprestimosService {
           data: { numeroAno, arquivoPdf },
         });
 
-        return tx.emprestimo.update({
+        const resultado = await tx.emprestimo.update({
           where: { id: emprestimo.id },
           data: { termoId: termo.id },
           include: INCLUDE_EMPRESTIMO,
         });
+
+        return comFlagTermo(resultado);
       });
     } catch (error) {
       if (arquivoPdfCriado) {
@@ -236,15 +247,16 @@ export class EmprestimosService {
       await this.termoStorage.remove(novoCaminho).catch(() => undefined);
       throw error;
     }
-    // Reenvio: descarta o arquivo anterior só depois de gravar o novo vínculo
     if (anterior) {
       await this.termoStorage.remove(anterior).catch(() => undefined);
     }
 
-    return this.prisma.emprestimo.findUniqueOrThrow({
+    const resultado = await this.prisma.emprestimo.findUniqueOrThrow({
       where: { id: emprestimoId },
       include: INCLUDE_EMPRESTIMO,
     });
+
+    return comFlagTermo(resultado);
   }
 
   async obterPdfAssinado(estoqueId: string, emprestimoId: string, user?: CurrentUser) {
@@ -294,7 +306,6 @@ export class EmprestimosService {
         );
       }
 
-      // Guarda contra confirmação dupla simultânea
       const { count } = await tx.emprestimo.updateMany({
         where: { id: emprestimoId, status: StatusEmprestimo.AGUARDANDO_TERMO },
         data: { status: StatusEmprestimo.ATIVO },
@@ -308,10 +319,12 @@ export class EmprestimosService {
         data: { status: StatusItem.EMPRESTADO },
       });
 
-      return tx.emprestimo.findUniqueOrThrow({
+      const resultado = await tx.emprestimo.findUniqueOrThrow({
         where: { id: emprestimoId },
         include: INCLUDE_EMPRESTIMO,
       });
+
+      return comFlagTermo(resultado);
     });
   }
 
@@ -359,7 +372,7 @@ export class EmprestimosService {
 
     const agora = new Date();
     const items = emprestimos.map((emprestimo) => ({
-      ...emprestimo,
+      ...comFlagTermo(emprestimo),
       atrasado: estaAtrasado(emprestimo, agora),
     }));
 
@@ -383,7 +396,6 @@ export class EmprestimosService {
         );
       }
 
-      // Guarda contra devolução dupla simultânea: só atualiza se ainda estiver ATIVO
       const { count } = await tx.emprestimo.updateMany({
         where: { id: emprestimoId, status: StatusEmprestimo.ATIVO },
         data: { status: StatusEmprestimo.DEVOLVIDO, dataDevolucaoEfetiva: new Date() },
@@ -407,10 +419,12 @@ export class EmprestimosService {
         },
       });
 
-      return tx.emprestimo.findUniqueOrThrow({
+      const resultado = await tx.emprestimo.findUniqueOrThrow({
         where: { id: emprestimoId },
         include: INCLUDE_EMPRESTIMO,
       });
+
+      return comFlagTermo(resultado);
     });
   }
 
