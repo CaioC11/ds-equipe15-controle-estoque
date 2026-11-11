@@ -22,7 +22,11 @@
     "prisma:generate": "prisma generate --schema prisma/schema.prisma",
     "migration:generate": "prisma migrate dev --schema prisma/schema.prisma",
     "migration:run": "prisma migrate deploy --schema prisma/schema.prisma",
+    "seed": "prisma db seed",
     "prepare": "husky"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.mjs"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.24",

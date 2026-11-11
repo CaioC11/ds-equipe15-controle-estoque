@@ -1,8 +1,6 @@
-import {
-  Injectable,
-  ConflictException,
-  NotFoundException,
-} from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ResourceConflictException } from '../../common/exceptions/resource-conflict.exception';
+import { ResourceNotFoundException } from '../../common/exceptions/resource-not-found.exception';
 import { PrismaService } from '../../database/prisma.service';
 import { CreateEstoqueDto } from './dto/create-estoque.dto';
 import { UpdateEstoqueDto } from './dto/update-estoque.dto';
@@ -98,14 +96,55 @@ export class EstoquesService {
     });
   }
 
+  async listGestores(estoqueId: string) {
+    await this.assertEstoqueExiste(estoqueId);
+    return this.prisma.estoqueGestor.findMany({
+      where: { estoqueId },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async addGestor(estoqueId: string, usuarioId: string) {
+    await this.assertEstoqueExiste(estoqueId);
+    const existente = await this.prisma.estoqueGestor.findUnique({
+      where: { estoqueId_usuarioId: { estoqueId, usuarioId } },
+    });
+    if (existente) {
+      throw new ResourceConflictException('Este usuário já é gestor deste estoque.');
+    }
+
+    return this.prisma.estoqueGestor.create({
+      data: { estoqueId, usuarioId },
+    });
+  }
+
+  async removeGestor(estoqueId: string, usuarioId: string) {
+    await this.assertEstoqueExiste(estoqueId);
+    const vinculo = await this.prisma.estoqueGestor.findUnique({
+      where: { estoqueId_usuarioId: { estoqueId, usuarioId } },
+    });
+    if (!vinculo) {
+      throw new ResourceNotFoundException('Vínculo de gestor', usuarioId);
+    }
+
+    return this.prisma.estoqueGestor.delete({
+      where: { estoqueId_usuarioId: { estoqueId, usuarioId } },
+    });
+  }
+
+  private async assertEstoqueExiste(estoqueId: string) {
+    const estoque = await this.prisma.estoque.findUnique({ where: { id: estoqueId } });
+    if (!estoque) {
+      throw new ResourceNotFoundException('Estoque', estoqueId);
+    }
+  }
+
   private formatEstoqueComSaldo(estoque: any) {
     const totalItens = estoque.itens?.length || 0;
     const itensDisponiveis =
-      estoque.itens?.filter((item: any) => item.status === 'DISPONIVEL')
-        .length || 0;
+      estoque.itens?.filter((item: any) => item.status === 'DISPONIVEL').length || 0;
     const itensEmprestados =
-      estoque.itens?.filter((item: any) => item.status === 'EMPRESTADO')
-        .length || 0;
+      estoque.itens?.filter((item: any) => item.status === 'EMPRESTADO').length || 0;
 
     return {
       ...estoque,
