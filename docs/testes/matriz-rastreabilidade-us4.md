@@ -1,0 +1,177 @@
+# Matriz de rastreabilidade — US04 (Registro de Empréstimo e devolução)
+
+Sprint 3, Parte 1 (suíte de testes gerada por LLM). Responsável: Theo. Prazo: 11/11, até 12:00.
+
+Esta matriz foi escrita **antes** de qualquer interação com a LLM. Os resultados esperados vêm dos critérios de aceitação da US04 (`docs/criterios-aceitacao-sprint2.md`), da matriz de permissões (`docs/permissoes.md`) e das premissas A3 e A5 (`docs/adr/ADR-002-premissas-sem-cliente.md`), não do código. Onde o requisito não define o comportamento, o ponto está registrado como **premissa** (seção 5) e marcado com `*` nas tabelas.
+
+## 1. Escopo
+
+- User story: US04 (RF05), o gestor de estoque registra a saída de um item associado a um responsável e a um prazo de devolução, para acompanhar as pendências.
+- Operações cobertas: registrar empréstimo (escolhendo ou cadastrando o responsável), guardar o prazo, ativar o empréstimo (anexo do termo assinado e confirmação da entrega), registrar a devolução, destacar atraso na listagem, bloquear novo empréstimo de quem está em atraso e consultar o histórico do responsável.
+- Estados do empréstimo (fonte: fluxo do termo): **aguardando termo assinado → ativo → devolvido**. O atraso não é um estado: é um empréstimo ativo com prazo vencido.
+- Fora desta matriz: a geração do PDF do termo, o formato do arquivo anexado e seu tamanho (US05, matriz própria); detentor aluno (P1); relatório de atrasos (Extra).
+- Os resultados "recusado" não fixam código HTTP nem texto exato, porque o requisito só define o **403** para quem não é gestor do estoque. As mensagens e os demais códigos serão conferidos contra o que a equipe definir.
+
+## 2. Critérios de aceitação
+
+| ID | Critério (fonte: US04 em `criterios-aceitacao-sprint2.md`, salvo indicação) |
+|----|------------------------------------------------------------------------------|
+| CA-01 | Item disponível + responsável escolhido ou cadastrado no ato: o empréstimo fica "aguardando termo assinado" (A3) |
+| CA-02 | Responsável já cadastrado pode ser selecionado na lista (nome e Siape ou CPF), sem digitar os dados de novo (A3) |
+| CA-03 | Prazo de devolução informado é guardado; se não informado, fica "indefinido" |
+| CA-04 | Empréstimo aguardando termo: ao anexar o termo assinado e confirmar a entrega física, fica "ativo" e o item passa a "emprestado" (com a regra "sem termo anexado não fica ativo", da US05) |
+| CA-05 | Item já emprestado não pode ser emprestado de novo |
+| CA-06 | Item de consumo não permite empréstimo (só entrada e saída, por saldo) |
+| CA-07 | Devolução de empréstimo ativo: o item volta a ficar disponível (só o gestor registra, depois de conferir o item) |
+| CA-08 | Empréstimo com prazo vencido aparece com o atraso destacado na listagem |
+| CA-09 | Responsável com item em atraso: novo empréstimo é impedido, com informação da pendência, até a devolução ou o registro de justificativa de permanência (A5) |
+| CA-10 | Histórico do responsável mostra o que já pegou e devolveu |
+| CA-11 | Só o gestor daquele estoque registra empréstimo e devolução; ADMIN, gestor de outro estoque e requisitante recebem 403 e nada é alterado (US02, RNF01 e `permissoes.md`) |
+
+Os textos sobre aluno como detentor (P1) e sobre solicitações que chegam fora do sistema não são comportamentos a testar e não entram na contagem de cobertura.
+
+## 3. Variáveis de entrada e partições de equivalência
+
+`V` = válida, `I` = inválida, `*` = depende de premissa da seção 5.
+
+| Variável | ID | Partição | Tipo |
+|----------|----|----------|------|
+| perfil de quem registra ou devolve | PPF-01 | gestor do estoque do item | V |
+| perfil de quem registra ou devolve | PPF-02 | ADMIN | I |
+| perfil de quem registra ou devolve | PPF-03 | gestor de outro estoque | I |
+| perfil de quem registra ou devolve | PPF-04 | requisitante | I |
+| item (existência) | PIE-01 | existente | V |
+| item (existência) | PIE-02 | inexistente | I* |
+| item (tipo) | PIT-01 | patrimonial com tombamento | V |
+| item (tipo) | PIT-02 | patrimonial sem tombamento, com nº de série | V |
+| item (tipo) | PIT-03 | de consumo | I |
+| item (situação) | PIS-01 | disponível (nunca emprestado) | V |
+| item (situação) | PIS-02 | emprestado (empréstimo ativo) | I |
+| item (situação) | PIS-03 | com empréstimo aguardando termo assinado | I* |
+| item (situação) | PIS-04 | devolvido, voltou a ficar disponível | V |
+| responsável (origem) | PRO-01 | já cadastrado, selecionado na lista | V |
+| responsável (origem) | PRO-02 | cadastrado no ato do empréstimo | V |
+| responsável (origem) | PRO-03 | não informado | I |
+| responsável (origem) | PRO-04 | identificador que não existe no cadastro | I* |
+| responsável (dados do novo cadastro) | PRD-01 | nome e Siape ou CPF informados | V |
+| responsável (dados do novo cadastro) | PRD-02 | nome ausente | I* |
+| responsável (dados do novo cadastro) | PRD-03 | nem Siape nem CPF informados | I* |
+| responsável (situação) | PRS-01 | sem empréstimos em atraso | V |
+| responsável (situação) | PRS-02 | com ao menos um empréstimo em atraso | I |
+| responsável (situação) | PRS-03 | atraso regularizado pela devolução | V |
+| responsável (situação) | PRS-04 | atraso com justificativa de permanência registrada | V* |
+| responsável (situação) | PRS-05 | com empréstimo ativo ainda dentro do prazo | V |
+| prazo de devolução | PPZ-01 | informado, posterior à data de retirada | V |
+| prazo de devolução | PPZ-02 | ausente (fica "indefinido") | V |
+| prazo de devolução | PPZ-03 | anterior à data de retirada | I* |
+| prazo de devolução | PPZ-04 | igual à data de retirada | V* |
+| prazo de devolução | PPZ-05 | valor que não é uma data | I* |
+| termo assinado e entrega | PTA-01 | termo anexado e entrega confirmada | V |
+| termo assinado e entrega | PTA-02 | entrega confirmada sem termo anexado | I |
+| termo assinado e entrega | PTA-03 | termo anexado, entrega ainda não confirmada | V* |
+| estado do empréstimo (devolução) | PED-01 | ativo | V |
+| estado do empréstimo (devolução) | PED-02 | aguardando termo assinado | I* |
+| estado do empréstimo (devolução) | PED-03 | já devolvido | I* |
+| empréstimo na listagem (atraso) | PAT-01 | ativo com prazo vencido | V |
+| empréstimo na listagem (atraso) | PAT-02 | ativo com prazo ainda vigente | V |
+| empréstimo na listagem (atraso) | PAT-03 | ativo com prazo indefinido | V* |
+| empréstimo na listagem (atraso) | PAT-04 | aguardando termo, com prazo vencido | V |
+| empréstimo na listagem (atraso) | PAT-05 | devolvido, com prazo que já passou | V |
+| histórico do responsável | PHR-01 | com empréstimos ativos e devolvidos | V |
+| histórico do responsável | PHR-02 | sem nenhum empréstimo | V* |
+
+Total: **43 partições** (29 definidas pelo requisito e 14 dependentes de premissa: PIE-02, PIS-03, PRO-04, PRD-02, PRD-03, PRS-04, PPZ-03, PPZ-04, PPZ-05, PTA-03, PED-02, PED-03, PAT-03 e PHR-02).
+
+## 4. Valores-limite (dois lados de cada fronteira)
+
+"Lado recusado" é o valor que o sistema deve rejeitar (ou o estado em que a ação não ocorre); "lado aceito" é o valor que ele deve aceitar (ou o estado em que a ação ocorre).
+
+| ID | Fronteira | Lado recusado / sem efeito | Lado aceito / com efeito |
+|----|-----------|----------------------------|--------------------------|
+| LM-01 | prazo × data de retirada* | prazo um dia antes da retirada | prazo no mesmo dia da retirada |
+| LM-02 | vencimento do prazo (atraso)* | prazo = hoje: ainda não está em atraso | prazo = ontem: em atraso |
+| LM-03 | empréstimos em atraso do responsável (A5) | 1 empréstimo em atraso: novo empréstimo impedido | 0 empréstimos em atraso: novo empréstimo permitido |
+| LM-04 | empréstimos abertos do mesmo item (item patrimonial tem saldo 1) | 1 empréstimo ativo: novo empréstimo recusado | 0 empréstimos abertos: novo empréstimo aceito |
+| LM-05 | termo assinado anexado × ativação | 0 anexos: a entrega não ativa o empréstimo | 1 anexo: a confirmação da entrega ativa o empréstimo |
+
+Total: **5 fronteiras, 10 valores**.
+
+## 5. Premissas a confirmar com a equipe
+
+Pontos que os critérios da US04 não definem. Se a resposta for diferente, ajustar a linha correspondente antes do commit.
+
+| ID | Premissa adotada na matriz | Por que precisa confirmar |
+|----|----------------------------|---------------------------|
+| PR-01 | Item inexistente e identificador de responsável inexistente são recusados com erro "não encontrado" e nada é criado | Os critérios não tratam esses casos |
+| PR-02 | Item com empréstimo "aguardando termo assinado" já está reservado: novo empréstimo para ele é recusado | O critério só fala em "item já emprestado", e o item passa a "emprestado" apenas quando o empréstimo fica ativo |
+| PR-03 | Prazo anterior à data de retirada é inválido; prazo no mesmo dia da retirada é válido; valor que não é data é inválido | Os critérios dizem só que o prazo é guardado ou fica "indefinido" |
+| PR-04 | Atraso: o empréstimo está atrasado quando a data atual é posterior ao dia do prazo (no dia do prazo ainda não há atraso). Empréstimo ativo com prazo indefinido nunca fica em atraso | O fluxo diz "ativo com prazo vencido", sem definir o dia exato do vencimento nem o caso do prazo indefinido |
+| PR-05 | O bloqueio por atraso (A5) está em vigor. Se ele ficar para a Sprint 3 (P1), CT-04-33, CT-04-36 e CT-04-37 passam a esperar só o aviso, sem impedir o registro | A5 diz que, se não der tempo, vale só o aviso |
+| PR-06 | A justificativa de permanência libera novo empréstimo ao responsável, e seus campos não são testados | O critério cita a justificativa, mas não diz o que ela contém |
+| PR-07 | Novo responsável cadastrado no ato exige ao menos nome e Siape ou CPF; sem eles o registro é recusado | O critério lista nome e Siape ou CPF para a seleção, mas não diz o que é obrigatório |
+| PR-08 | Anexar o termo sem confirmar a entrega mantém o empréstimo "aguardando termo assinado" | O critério descreve anexar e confirmar juntos |
+| PR-09 | Devolver um empréstimo que não está ativo (aguardando termo ou já devolvido) é recusado e o estado fica como estava | Os critérios só descrevem a devolução de empréstimo ativo |
+| PR-10 | Histórico de responsável sem empréstimos é uma lista vazia, sem erro | O critério só descreve o histórico com itens |
+| PR-11 | **Não cobertos** por falta de requisito: formato e tamanho de Siape, CPF e e-mail; responsável duplicado (mesmo Siape ou CPF) cadastrado no ato; ordem do histórico do responsável; empréstimo de item em estoque desativado; mais de um item por empréstimo; detentor aluno (P1) | Os critérios não definem o comportamento |
+
+## 6. Matriz de rastreabilidade
+
+Os casos usam "hoje" como a data de registro do empréstimo.
+
+| Requisito / critério | Variável | Partição ou limite | Caso de teste esperado | Coberto pela v1? | Coberto pela v2? |
+|----------------------|----------|--------------------|------------------------|------------------|------------------|
+| CA-01 | item, responsável, perfil | PPF-01, PIE-01, PIT-01, PIS-01, PRO-01, PRS-01 | CT-04-01: gestor do estoque registra o empréstimo de um item patrimonial com tombamento, disponível, para um responsável já cadastrado e sem atraso → empréstimo criado no estado "aguardando termo assinado", vinculado ao item e ao responsável | (preencher na Etapa 3) | (preencher na Etapa 4) |
+| CA-01 | item (tipo) | PIT-02 | CT-04-02: item patrimonial sem tombamento, com nº de série, disponível → empréstimo "aguardando termo assinado" | | |
+| CA-01 (A3) | responsável (origem e dados) | PRO-02, PRD-01 | CT-04-03: gestor cadastra o responsável no próprio ato (nome, Siape ou CPF, lotação, cargo, e-mail) e registra o empréstimo → empréstimo "aguardando termo assinado" e responsável gravado no cadastro | | |
+| CA-01 | responsável (origem) | PRO-03 | CT-04-04: registrar empréstimo sem informar o responsável → recusado, nenhum empréstimo criado | | |
+| CA-01 (PR-01*) | responsável (origem) | PRO-04 | CT-04-05*: registrar empréstimo com identificador de responsável que não existe → recusado (não encontrado), nenhum empréstimo criado | | |
+| CA-01 (PR-07*) | responsável (dados do novo cadastro) | PRD-02 | CT-04-06*: cadastrar responsável no ato sem nome → recusado, nenhum cadastro nem empréstimo criado | | |
+| CA-01 (PR-07*) | responsável (dados do novo cadastro) | PRD-03 | CT-04-07*: cadastrar responsável no ato sem Siape e sem CPF → recusado, nenhum cadastro nem empréstimo criado | | |
+| CA-01 (PR-01*) | item (existência) | PIE-02 | CT-04-08*: registrar empréstimo de item inexistente → recusado (não encontrado), nenhum empréstimo criado | | |
+| CA-02 (A3) | responsável (origem) | PRO-01, PRO-02 | CT-04-09: depois do CT-04-03, a lista de responsáveis traz o responsável recém-cadastrado, com nome e Siape ou CPF | | |
+| CA-02 (A3) | responsável (origem) | PRO-01 | CT-04-10: novo empréstimo para o mesmo responsável, selecionado na lista, sem enviar seus dados de novo → empréstimo "aguardando termo assinado" ligado ao mesmo cadastro, sem cadastro duplicado | | |
+| CA-03 | prazo | PPZ-01 | CT-04-11: registrar com prazo de devolução 7 dias após hoje → prazo guardado exatamente como informado | | |
+| CA-03 | prazo | PPZ-02 | CT-04-12: registrar sem informar o prazo → empréstimo criado com prazo "indefinido" (não é erro) | | |
+| CA-03 (PR-03*) | prazo | PPZ-03, LM-01 (lado recusado) | CT-04-13*: registrar com prazo um dia antes de hoje → recusado, nenhum empréstimo criado | | |
+| CA-03 (PR-03*) | prazo | PPZ-04, LM-01 (lado aceito) | CT-04-14*: registrar com prazo igual a hoje → aceito, prazo guardado | | |
+| CA-03 (PR-03*) | prazo | PPZ-05 | CT-04-15*: registrar com prazo que não é uma data (ex.: "amanhã cedo") → recusado, nenhum empréstimo criado | | |
+| CA-04 | termo assinado e entrega, item | PTA-01, LM-05 (lado aceito) | CT-04-16: empréstimo aguardando termo, gestor anexa o termo assinado e confirma a entrega física → empréstimo "ativo" e item "emprestado" | | |
+| CA-04 (US05) | termo assinado e entrega | PTA-02, LM-05 (lado recusado) | CT-04-17: gestor confirma a entrega sem termo anexado → recusado; empréstimo continua "aguardando termo assinado" e o item não passa a "emprestado" | | |
+| CA-04 (PR-08*) | termo assinado e entrega | PTA-03 | CT-04-18*: gestor anexa o termo mas não confirma a entrega → empréstimo continua "aguardando termo assinado" | | |
+| CA-05 | item (situação) | PIS-02, LM-04 (lado recusado) | CT-04-19: item com empréstimo ativo, novo empréstimo para outro responsável → recusado; o empréstimo ativo original fica inalterado | | |
+| CA-05 (PR-02*) | item (situação) | PIS-03 | CT-04-20*: item com empréstimo aguardando termo, novo empréstimo → recusado; o empréstimo existente fica inalterado | | |
+| CA-05, CA-07 | item (situação) | PIS-04, LM-04 (lado aceito) | CT-04-21: item devolvido (voltou a ficar disponível), novo empréstimo → aceito, "aguardando termo assinado" | | |
+| CA-06 | item (tipo) | PIT-03 | CT-04-22: registrar empréstimo de item de consumo → recusado; saldo do item e quantidade de empréstimos inalterados | | |
+| CA-07 | estado do empréstimo, item | PED-01 | CT-04-23: gestor registra a devolução de empréstimo ativo → empréstimo "devolvido" e item volta a ficar disponível | | |
+| CA-07 (PR-09*) | estado do empréstimo | PED-02 | CT-04-24*: devolver empréstimo ainda aguardando termo → recusado; estado inalterado | | |
+| CA-07 (PR-09*) | estado do empréstimo | PED-03 | CT-04-25*: devolver empréstimo já devolvido → recusado; estado e disponibilidade do item inalterados | | |
+| CA-08 | empréstimo na listagem | PAT-01 | CT-04-26: empréstimo ativo com prazo vencido há 5 dias, gestor lista os empréstimos → atraso aparece destacado nesse empréstimo | | |
+| CA-08 | empréstimo na listagem | PAT-02 | CT-04-27: empréstimo ativo com prazo daqui a 5 dias → listado sem destaque de atraso | | |
+| CA-08 (PR-04*) | prazo | LM-02 (lado recusado) | CT-04-28*: empréstimo ativo com prazo igual a hoje → listado sem destaque de atraso | | |
+| CA-08 (PR-04*) | prazo | LM-02 (lado aceito) | CT-04-29*: empréstimo ativo com prazo igual a ontem → atraso destacado | | |
+| CA-08 (PR-04*) | empréstimo na listagem | PAT-03 | CT-04-30*: empréstimo ativo com prazo indefinido, mesmo após muitos dias → listado sem destaque de atraso | | |
+| CA-08 | empréstimo na listagem | PAT-04 | CT-04-31: empréstimo aguardando termo com prazo já vencido → listado sem destaque de atraso (atraso é de empréstimo ativo) | | |
+| CA-08 | empréstimo na listagem | PAT-05 | CT-04-32: empréstimo devolvido, com prazo que já passou → listado sem destaque de atraso | | |
+| CA-09 (PR-05*) | responsável (situação) | PRS-02, LM-03 (lado recusado) | CT-04-33*: responsável com 1 empréstimo em atraso, gestor registra novo empréstimo para ele → impedido, com informação da pendência; nenhum empréstimo criado | | |
+| CA-09 | responsável (situação) | PRS-05, LM-03 (lado aceito) | CT-04-34: responsável com empréstimo ativo ainda dentro do prazo (0 em atraso), novo empréstimo → aceito | | |
+| CA-09 | responsável (situação) | PRS-03 | CT-04-35: responsável em atraso devolve o item em atraso e depois recebe novo empréstimo → aceito | | |
+| CA-09 (PR-05*, PR-06*) | responsável (situação) | PRS-04 | CT-04-36*: responsável em atraso com justificativa de permanência registrada, novo empréstimo → aceito | | |
+| CA-09 (PR-05*) | responsável (situação) | PRS-02 | CT-04-37*: o atraso de um responsável não impede o empréstimo de outro responsável sem atraso, para o mesmo estoque → aceito | | |
+| CA-10 | histórico do responsável | PHR-01 | CT-04-38: responsável com um empréstimo ativo e um devolvido, gestor consulta o histórico → os dois aparecem, cada um com o item e a situação (ativo ou devolvido) | | |
+| CA-10 (PR-10*) | histórico do responsável | PHR-02 | CT-04-39*: responsável sem nenhum empréstimo → histórico vazio, sem erro | | |
+| CA-11 | perfil | PPF-02 | CT-04-40: ADMIN tenta registrar empréstimo → 403, nenhum empréstimo criado | | |
+| CA-11 | perfil | PPF-03 | CT-04-41: gestor de outro estoque tenta registrar empréstimo → 403, nenhum empréstimo criado | | |
+| CA-11 | perfil | PPF-04 | CT-04-42: requisitante tenta registrar empréstimo → 403, nenhum empréstimo criado | | |
+| CA-11 | perfil, estado do empréstimo | PPF-02, PED-01 | CT-04-43: ADMIN tenta registrar a devolução de empréstimo ativo → 403; empréstimo continua "ativo" | | |
+| CA-11 | perfil, estado do empréstimo | PPF-03, PED-01 | CT-04-44: gestor de outro estoque tenta registrar a devolução → 403; empréstimo continua "ativo" | | |
+| CA-11 | perfil, estado do empréstimo | PPF-04, PED-01 | CT-04-45: requisitante tenta registrar a devolução → 403; empréstimo continua "ativo" | | |
+| CA-01, CA-03, CA-04, CA-07 | fluxo completo | PPF-01, PIS-01, PTA-01, PED-01 | CT-04-46: gestor registra o empréstimo com prazo, anexa o termo assinado, confirma a entrega e registra a devolução → estados em sequência: aguardando termo, ativo, devolvido; item disponível, emprestado, disponível | | |
+
+## 7. Totais (contados nesta matriz)
+
+| Indicador | Total |
+|-----------|-------|
+| Critérios de aceitação (CA-01 a CA-11) | 11 |
+| Partições de equivalência | 43 |
+| Fronteiras de valor-limite | 5 (10 valores) |
+| Casos de teste esperados | 46 (18 dependem de premissa: CT-04-05, 06, 07, 08, 13, 14, 15, 18, 20, 24, 25, 28, 29, 30, 33, 36, 37, 39) |
