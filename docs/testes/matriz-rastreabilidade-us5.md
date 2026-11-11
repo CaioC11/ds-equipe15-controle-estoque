@@ -2,28 +2,28 @@
 
 Sprint 3, Parte 1 (suíte de testes gerada por LLM). Responsável: Randell. Issue: S3B-06 (#65).
 
-Esta matriz foi escrita **antes** de qualquer interação com a LLM. Os resultados esperados vêm dos critérios de aceitação da US05 (issues #9 e #14), não do código. Onde o requisito não define o comportamento, o ponto está registrado como **premissa** (seção 5) e marcado com `*` nas tabelas.
+Esta matriz foi escrita **antes** de qualquer interação com a LLM. Os resultados esperados vêm dos critérios de aceitação da US05 (issues #20 e #83), não do código. Onde o requisito não define o comportamento, o ponto está registrado como **premissa** (seção 5) e marcado com `*` nas tabelas.
 
 ## 1. Escopo
 
 - User story: US05, o requisitante recebe o Termo de Responsabilidade ao retirar um item emprestado, formalizando a posse temporária do equipamento.
-- Operações cobertas: gerar o termo em PDF para um empréstimo (#9), visualizar e baixar o PDF (#9 e #14), anexar o PDF assinado (#14) e confirmar a entrega (#14).
+- Operações cobertas: gerar o termo em PDF para um empréstimo (#20), visualizar e baixar o PDF (#20 e #83), anexar o PDF assinado (#83) e confirmar a entrega (#83).
 - Os resultados "recusado" não fixam código HTTP nem texto exato, porque o requisito não define esses detalhes. As mensagens e os códigos serão conferidos contra o que a equipe definir.
 
 ## 2. Critérios de aceitação
 
 | ID | Critério (fonte) |
 |----|------------------|
-| CA-01 | PDF gerado com número sequencial por ano (contador simples), no formato "Nº XX/ano" (#9) |
-| CA-02 | O PDF contém: responsável (nome, Siape, lotação e cargo), unidade de acautelamento (estoque), data de abertura, data prevista (ou "INDEFINIDO"), bens (tombamento ou nº de série, e denominação) e declaração de responsabilidade (#9) |
-| CA-03 | Endpoint para visualizar e baixar o PDF; acesso do gestor do estoque e leitura do ADMIN (#9) |
-| CA-04 | Erro tratado para empréstimo inexistente (#9) |
-| CA-05 | Visualizar e baixar o PDF do termo gerado pelo sistema (#14) |
-| CA-06 | Anexar o PDF assinado ao empréstimo (upload) (#14) |
-| CA-07 | Botão de confirmar entrega, habilitado só após o anexo (#14) |
-| CA-08 | Mensagens de erro e sucesso para o upload e para a confirmação (#14) |
+| CA-01 | PDF gerado com número sequencial por ano (contador simples), no formato "Nº XX/ano" (#20) |
+| CA-02 | O PDF contém: responsável (nome, Siape, lotação e cargo), unidade de acautelamento (estoque), data de abertura, data prevista (ou "INDEFINIDO"), bens (tombamento ou nº de série, e denominação) e declaração de responsabilidade (#20) |
+| CA-03 | Endpoint para visualizar e baixar o PDF; acesso do gestor do estoque e leitura do ADMIN (#20) |
+| CA-04 | Erro tratado para empréstimo inexistente (#20) |
+| CA-05 | Visualizar e baixar o PDF do termo gerado pelo sistema (#83) |
+| CA-06 | Anexar o PDF assinado ao empréstimo (upload) (#83) |
+| CA-07 | Botão de confirmar entrega, habilitado só após o anexo (#83) |
+| CA-08 | Mensagens de erro e sucesso para o upload e para a confirmação (#83) |
 
-O critério "Nenhum modelo oficial com dados reais no repositório" da issue #9 é regra de repositório e não um comportamento do sistema, então não entra na contagem de cobertura de requisitos.
+O critério "Nenhum modelo oficial com dados reais no repositório" da issue #20 é regra de repositório e não um comportamento do sistema, então não entra na contagem de cobertura de requisitos.
 
 ## 3. Variáveis de entrada e partições de equivalência
 
@@ -73,16 +73,16 @@ Total: **4 fronteiras, 8 valores**.
 
 ## 5. Premissas a confirmar com a equipe
 
-Pontos que as issues #9 e #14 não definem. Se a resposta for diferente, ajustar a linha correspondente antes do commit.
+Pontos que as issues #20 e #83 não definem. Se a resposta for diferente, ajustar a linha correspondente antes do commit.
 
 | ID | Premissa adotada na matriz | Por que precisa confirmar |
 |----|----------------------------|---------------------------|
-| PR-01 | O upload do PDF assinado e a confirmação da entrega têm suporte no backend, e a recusa de confirmar sem anexo vale também fora do botão | A #9 cobre só a geração e a consulta do PDF; a #14 descreve só a tela |
-| PR-02 | O empréstimo fica pendente depois de gerado o termo e vira ativo ao confirmar a entrega (não ao anexar) | A #14 só diz que o botão é habilitado após o anexo; a #65 cita "upload do assinado e ativação" sem dizer o estado |
-| PR-03 | Gestor de outro estoque e requisitante recebem 403 ao visualizar ou baixar o termo | A #9 diz só quem tem acesso (gestor do estoque e ADMIN) |
-| PR-04 | O tamanho máximo do anexo é 5 MB e arquivo de 0 bytes é inválido | A #14 não define limite de tamanho |
-| PR-05 | A numeração começa em 1 a cada ano e o ano é o da data de abertura do empréstimo | A #9 diz só "Nº XX/ano" e "contador simples" |
-| PR-06 | Cada empréstimo recebe um único número de termo; visualizar ou baixar de novo não consome número novo | A #9 não diz se o número é fixado na geração ou a cada consulta |
+| PR-01 | O upload do PDF assinado e a confirmação da entrega têm suporte no backend, e a recusa de confirmar sem anexo vale também fora do botão | A #20 cobre só a geração e a consulta do PDF; a #83 descreve só a tela |
+| PR-02 | O empréstimo fica pendente depois de gerado o termo e vira ativo ao confirmar a entrega (não ao anexar) | A #83 só diz que o botão é habilitado após o anexo; a #65 cita "upload do assinado e ativação" sem dizer o estado |
+| PR-03 | Gestor de outro estoque e requisitante recebem 403 ao visualizar ou baixar o termo | A #20 diz só quem tem acesso (gestor do estoque e ADMIN) |
+| PR-04 | O tamanho máximo do anexo é 5 MB e arquivo de 0 bytes é inválido | A #83 não define limite de tamanho |
+| PR-05 | A numeração começa em 1 a cada ano e o ano é o da data de abertura do empréstimo | A #20 diz só "Nº XX/ano" e "contador simples" |
+| PR-06 | Cada empréstimo recebe um único número de termo; visualizar ou baixar de novo não consome número novo | A #20 não diz se o número é fixado na geração ou a cada consulta |
 | PR-07 | Anexar ou confirmar em empréstimo com entrega já confirmada é recusado | Nenhuma das issues trata esse caso |
 | PR-08 | **Não cobertos** por falta de requisito: dados incompletos do responsável (ex.: sem Siape), item sem tombamento e sem nº de série, data prevista anterior à data de abertura, e quem pode anexar ou confirmar | As issues não definem o comportamento |
 
