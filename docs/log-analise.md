@@ -8,9 +8,9 @@ Issue de tech-debt. Prazo: 12/11. Escopo: `controle-estoque-emprestimos-back/src
 |---|---|
 | Propriedades de projeto (integridade conceitual, information hiding, acoplamento) | ACH-01, ACH-02, ACH-03, ACH-04 |
 | SOLID e coesão | ACH-05, ACH-06 |
-| Code smells | ACH-07, ACH-08, ACH-09, ACH-10 |
+| Code smells | ACH-07, ACH-08, ACH-09, ACH-10, ACH-13 |
 
-Total: **10 achados** e **9 falsos positivos** (seção 4). A meta do time era cerca de 8.
+Total: **11 achados** e **9 falsos positivos** (seção 4). A meta do time era cerca de 8.
 
 **Como ler o campo "Confirmação":**
 - **Leitura**: o trecho foi lido e o problema aparece no código.
@@ -67,24 +67,24 @@ Total: **10 achados** e **9 falsos positivos** (seção 4). A meta do time era c
 
 ### Grupo 2 — SOLID e coesão
 
-#### ACH-05 — `EmprestimosService` faz coisas demais (SRP, baixa coesão)
+#### ACH-05 — Coesão baixa e risco de timeout na transação de empréstimo (EmprestimosService)
 - **Onde:** `back/src/modules/emprestimos/emprestimos.service.ts` (491 linhas, 13 métodos), principalmente `create` (L66-183, cerca de 118 linhas).
-- **Categoria:** SOLID (responsabilidade única) e coesão.
-- **Problema:** a mesma classe cuida da regra de empréstimo, do cadastro/atualização de responsável (`obterResponsavel`), da numeração anual do termo (`contadorTermo.upsert`, L129-135), da geração do PDF (L137-154), da escrita em disco (L155), da validação do arquivo enviado (`validarPdf`) e da checagem de permissão (`assertGestorDoEstoque`).
-- **Por que atrapalha:** no `create`, a geração do PDF e a escrita em disco acontecem **dentro** do `$transaction` (L96-169), que usa as opções padrão do Prisma (o padrão documentado é 5 s para transações interativas). Um disco lento pode estourar a transação e obrigar a limpeza manual do arquivo (L170-181). Para testar a regra de empréstimo é preciso simular PDF, storage e Prisma ao mesmo tempo.
-- **Como foi encontrado:** tamanho dos arquivos (`wc -l`) e contagem de métodos por classe; depois leitura do método mais longo.
-- **Confirmação:** leitura. O estouro de timeout não foi medido.
-- **Confirmado por:** ______ em __/__
+- **Categoria:** code smell / violação de SRP.
+- **Problema:** a mesma classe cuida da regra de empréstimo, do cadastro/atualização de responsável (`obterResponsavel`, L432), da numeração anual do termo (`contadorTermo.upsert`, L130), da geração do PDF e da gravação, leitura e remoção dos arquivos via `termoStorage` (L155, L173, L203, L240-251, L280), da validação do arquivo enviado (`validarPdf`, L332) e da checagem de permissão (`assertGestorDoEstoque`).
+- **Por que atrapalha:** no `create`, a geração do PDF e a gravação via `termoStorage.write` (L155) acontecem **dentro** do `$transaction` (L96-169). Nenhum dos três `$transaction` do arquivo (L96, L290, L386) define `timeout` ou `maxWait`, então valem os padrões do Prisma (5 s para transações interativas). Um disco lento pode estourar a transação, e a limpeza do arquivo é feita à mão (L170-181). Para testar a regra de empréstimo é preciso simular PDF, storage e Prisma ao mesmo tempo.
+- **Como foi encontrado:** `wc -l` e contagem de métodos; leitura do método mais longo; `Select-String` por `$transaction|timeout|maxWait` e por `termoStorage` (sem timeout configurado).
+- **Confirmação:** leitura e `Select-String`. O estouro de timeout **não foi medido** (a confirmar).
+- **Confirmado por:** Caio em 12/11 (commit `751f68e`)
 - **Ideia de correção:** extrair `TermoService` (numeração, PDF e storage) e `ResponsaveisService`, e gerar o PDF fora da transação.
 
-#### ACH-06 — `GerenciamentoEstoque` mistura formulário, regra de validação, tradução de erro e tabela (SRP)
-- **Onde:** `front/src/components/GerenciamentoEstoque.tsx` (326 linhas): schema Zod (L13-32), `onSubmit` com tradução de erro (L89-123), formulário (L155-263), tabela de itens (L272-324).
-- **Categoria:** SOLID (responsabilidade única) e coesão. O componente também está na pasta `components/` genérica, mas só serve à página de estoques (`pages/estoques/index.tsx` L244), enquanto o resto do domínio vive em `modules/estoques/`.
-- **Problema:** o componente decide qual campo marcar com erro olhando o **texto** da mensagem (`/tombamento/i.test(message)` e `/s[eé]rie/i.test(message)`, L109-111).
-- **Por que atrapalha:** se o back mudar a frase de "Já existe um item com este tombamento." para outra redação, o erro de duplicidade deixa de aparecer no campo e vai para o aviso geral, sem nenhum teste falhar. A lista de itens e o formulário não podem ser reaproveitados separadamente.
-- **Como foi encontrado:** leitura do maior componente do front; busca por `.test(message)`.
-- **Confirmação:** leitura.
-- **Confirmado por:** ______ em __/__
+#### ACH-06 — Componente inflado violando SRP (GerenciamentoEstoque)
+- **Onde:** `front/src/components/GerenciamentoEstoque.tsx` (327 linhas). Schema de validação (L13-34), `onSubmit` com tradução de erros (L89-125), renderização do formulário (L155) e da tabela de listagem (L272-324).
+- **Categoria:** code smell (God Component / quebra de SRP).
+- **Problema:** O componente mistura múltiplas responsabilidades: define as regras de validação do Zod, lida com a submissão, inspeciona e traduz mensagens de erro da API usando regex (`/tombamento/i.test(message)` na L109 e `/s[eé]rie/i.test(message)` na L111), e ainda renderiza tanto o formulário de criação quanto a tabela HTML de itens.
+- **Por que atrapalha:** A manutenção fica difícil e arriscada. O acoplamento da tradução de erros com regex cria uma fragilidade grave (relacionado ao ACH-03): se o backend mudar o texto do erro 409, o formulário para de mostrar o erro no campo certo. Além disso, se a tabela precisar de paginação ou o formulário crescer, o arquivo ficará insustentável.
+- **Como foi encontrado:** Leitura manual guiada pela análise; uso de `(Get-Content ...).Count` e `Select-String` buscando por padrões como `z.object`, `onSubmit`, regexes e tags HTML de tabela.
+- **Confirmação:** Leitura e `Select-String`.
+- **Confirmado por:** Caio em 12/11 (commit `751f68e`)
 - **Ideia de correção:** o back devolver um código de campo (`errors.tombamento`) e o componente usar isso; separar `ItemForm` e `ItemTable` em `modules/estoques/components/`.
 
 ### Grupo 3 — Code smells
@@ -129,6 +129,16 @@ Total: **10 achados** e **9 falsos positivos** (seção 4). A meta do time era c
 - **Confirmado por:** ______ em __/__
 - **Ideia de correção:** remover `todos`/`team` (ou esconder da navegação), redirecionar para `/estoques`, ligar `isGestor` à role real e decidir o destino de `CANCELADO` e `semTombamento`.
 
+#### ACH-13 — Permissão do formulário de itens fixada em `true` no front (stub esquecido)
+- **Onde:** `front/src/pages/estoques/index.tsx`, `EstoquesPage`: `const usuarioLogadoEhGestor = true;` (L49), passada em `<GerenciamentoEstoque isGestor={usuarioLogadoEhGestor} />`. O componente usa essa prop para exibir o formulário (L134) ou o aviso de restrição (L268).
+- **Categoria:** code smell (valor fixo/stub esquecido, generalidade especulativa). Mesmo padrão do `isGestor = true` de `categorias/index.tsx` L9 (ACH-10), mas em outro arquivo e com efeito sobre o cadastro de itens do estoque.
+- **Problema:** A página decide por uma constante fixa que o usuário é gestor. O critério da US03 pede que o formulário de itens apareça só para o gestor daquele estoque.
+- **Por que atrapalha:** Qualquer perfil (REQUISITANTE ou gestor de outro estoque) vê o formulário de cadastro de itens e só descobre que não tem permissão ao enviar, quando o backend responde 403 e o `item.service.ts` (L49) exibe "Apenas gestores deste estoque podem cadastrar ou editar itens.". A regra de permissão real fica oculta no front e nenhum teste cobre essa quebra de UI.
+- **Como foi encontrado:** Leitura manual do fluxo; validado via `Select-String` por `isGestor`, revelando a constante e seu uso em `GerenciamentoEstoque.tsx`.
+- **Confirmação:** Leitura e análise dos componentes.
+- **Confirmado por:** Caio em 12/11 (commit `751f68e`)
+- **Ideia de correção:** derivar a constante `usuarioLogadoEhGestor` a partir da verificação real do papel do usuário e da lista de gestores do estoque selecionado (ou envolver o componente num `<Can>`), além de cobrir o comportamento com testes de renderização.
+
 ---
 
 ## 3. Observações fora das categorias da issue
@@ -148,8 +158,8 @@ Pontos vistos durante a leitura que são defeitos ou lacunas funcionais, não de
 | FP-02 | "`GestorGuard` aceita gestor de qualquer estoque, contra a regra por estoque" (leitura) | Categorias são globais (premissa A2) e a matriz diz "Cadastrar e editar categoria: GESTOR". É intencional. |
 | FP-03 | "`userId as string` em `emprestimos.service.ts` L124 e L417 é cast inseguro" (heurística de lint) | `assertGestorDoEstoque` lança `AccessDeniedException` quando `userId` é indefinido (L469-481) antes de chegar ao cast, então o valor nunca é nulo ali. O cast é feio, mas não causa defeito. (Sugestão de limpeza: estreitar o tipo.) |
 | FP-04 | "`api.ts` do front viola responsabilidade única e tem estado global mutável" (LLM) | Token, renovação e logout são o mesmo assunto (cliente HTTP autenticado), a renovação em voo evita várias chamadas paralelas de `signinSilent`, e há testes. A única parte fora de lugar é `getApiErrorMessage`, que já está em ACH-03. |
-| FP-05 | "Services dependem das classes concretas `PrismaService` e `TermoStorageService` (inversão de dependência)" (LLM) | No Nest, a classe serve de token e pode ser trocada por `useClass`/`useValue` no módulo. A premissa A6 já prevê trocar a implementação do storage. Onde a troca é real, o código usa token (`IDENTITY_SOURCE`). O custo de corrigir não compensa. |
-| FP-06 | "`termo-pdf.service.ts` `gerar` é um método longo (cerca de 130 linhas)" (métrica de tamanho) | É código de layout linear, com funções locais pequenas, uma só responsabilidade (desenhar o PDF) e baixa frequência de mudança. Os problemas reais desse arquivo (datas e `any`) estão em ACH-09. |
+| FP-05 | "Services dependem das classes concretas `PrismaService` e `TermoStorageService` (inversão de dependência)" (LLM) | Conferido por Caio em 12/11 (commit `751f68e`). No Nest a classe serve de token e pode ser trocada por `useClass`/`overrideProvider`, sem alterar o service. O `EmprestimosService` não usa `fs` direto: todo acesso a arquivo passa por `TermoStorageService` (L155, L173, L203, L240-251, L280), e a premissa A6 prevê trocar essa implementação. Onde a troca é real, já há token (`IDENTITY_SOURCE` em `auth.module.ts` L13, injetado em `auth.guard.ts` L26). O custo de criar interfaces para Prisma e storage não compensa. |
+| FP-06 | "`termo-pdf.service.ts` `gerar` é um método longo (cerca de 130 linhas)" (métrica de tamanho) | Conferido por Caio em 12/11 (commit `751f68e`). O `gerar` tem ~130 linhas (167 no arquivo todo), mas é layout linear, com 4 helpers locais pequenos, sem regra de negócio e com uma única responsabilidade (desenhar o PDF). O histórico tem só 2 commits. A mudança pendente (incluir o CPF) é pontual e já está na seção 3. Os problemas reais do arquivo estão no ACH-09. |
 | FP-07 | "Blocos de `import` repetidos em 5 páginas do front" (`docs/ferramentas-analise/dup.py`) | A ferramenta casou listas de `import` (`Table`, `TableBody`, `ErrorScreen`). Não há lógica duplicada. |
 | FP-08 | "`eslint-disable react-hooks/exhaustive-deps` em `useAsync.ts` L59" (grep) | Desabilitação deliberada: o hook recebe a lista de dependências do chamador (`[...deps, reloadToken]`), e o linter não consegue analisar isso. Está comentado e é o padrão de hooks genéricos. |
 | FP-09 | "`TERMO_ASSINADO_MAX_BYTES` é número mágico" (heurística) | É uma constante nomeada, com comentário, em `termo-assinado.constants.ts`, e compartilhada pelo controller e pelo service. |
@@ -166,6 +176,12 @@ Pontos vistos durante a leitura que são defeitos ou lacunas funcionais, não de
 | `docs/ferramentas-analise/dup.py` (script próprio, janelas de 6 e 7 linhas normalizadas) | duplicação | achou `assertGestorDoEstoque` e `request<T>`; 1 resultado era falso (FP-07) |
 | `docs/ferramentas-analise/erro.mjs` (Node 22) | alimenta a cópia de `getApiErrorMessage` com o corpo do filtro do back | reproduziu o JSON cru como mensagem (ACH-03) |
 | `docs/ferramentas-analise/data.mjs` (Node 22, `TZ=UTC` e `TZ=America/Sao_Paulo`) | formatadores de data do PDF | `20/11/2026` em UTC e `19/11/2026` em São Paulo (ACH-09) |
+| `Select-String` (PowerShell, back) | Buscar `fs\.`, `writeFile` e `TermoStorageService` em `emprestimos.service.ts` | Confirmou que todo acesso a arquivo passa pelo `TermoStorageService` (ACH-05 e FP-05) |
+| `Get-ChildItem` + `Select-String` (PowerShell, back) | Buscar `IDENTITY_SOURCE\|@Inject\(` em `back/src` | Encontrou 1 único uso de token de injeção (`IDENTITY_SOURCE`), confirmando FP-05 |
+| `git log --oneline` e `(Get-Content ...).Count` (back) | Histórico e tamanho de `termo-pdf.service.ts` | Mostrou 2 commits e 167 linhas com 4 helpers lineares, confirmando FP-06 |
+| `Select-String` (PowerShell, back) | Buscar `\$transaction\|timeout\|maxWait` em `emprestimos.service.ts` | Revelou 3 transações sem `timeout` ou `maxWait` configurado (ACH-05) |
+| `(Get-Content ...).Count` + `Select-String` (PowerShell, front) | Tamanho e padrões (`z.object`, `onSubmit`, regex, `<table>`) em `GerenciamentoEstoque.tsx` | Confirmou schema, tradução de erro por regex, formulário e tabela em 327 linhas (ACH-06) |
+| `Get-ChildItem` + `Select-String` (PowerShell, front) | Buscar `isGestor\|EhGestor\|gestor` em `front/src` | Encontrou `const usuarioLogadoEhGestor = true` em `estoques/index.tsx` L49 (ACH-13) |
 
 **Ferramentas que não rodaram:** Biome (back) e ESLint (front), `tsc --noEmit` e os testes, porque o ambiente não tinha `node_modules` do projeto nem acesso à rede para instalar. Rodar `npm run lint` nos dois pacotes e comparar com esta lista é um passo que ainda falta.
 
