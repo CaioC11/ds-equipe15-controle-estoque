@@ -198,6 +198,7 @@ $ TZ=America/Sao_Paulo node docs/ferramentas-analise/data.mjs    -> abertura=20/
 
 1. Prompt da issue, colado na íntegra: "Percorrer o código procurando violações de propriedades de projeto (integridade conceitual, information hiding, coesão, acoplamento), de SOLID e code smells, por leitura manual, ferramentas e LLM. Cada achado precisa ser confirmado por alguém olhando o código; falsos positivos são anotados com o motivo." (acompanhado do repositório em `.zip`).
 2. A LLM leu os arquivos do back e do front, escreveu os scripts da seção acima e propôs os candidatos. Cada achado voltou ao código (arquivo e linha) antes de entrar na lista, e os que a leitura não sustentou foram para a seção 4.
+3. LLM (Gemini) para análise do EmprestimosService. Prompt: "Análise de violações de SOLID e code smells no arquivo emprestimos.service.ts".
 
 > Quem usar outra LLM ou ferramenta para a própria parte deve acrescentar aqui o prompt e a ferramenta, uma linha por uso.
 
