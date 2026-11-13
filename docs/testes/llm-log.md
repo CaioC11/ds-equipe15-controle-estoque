@@ -1,42 +1,52 @@
-# Modelo de prompt único (v1)
+# Log de uso da LLM (v1)
 
-Usado por todos os membros, uma story por conversa. Não incluir a matriz de
-rastreabilidade nem os specs que já existem em src/.
+O modelo do prompt está em `prompt-modelo.md`. Este arquivo registra o que foi feito com ele.
 
-## Prompt
+## Decisão (igual para todos)
+- LLM: Claude (Anthropic), pelo app claude.ai
+- Modelo e versão:Claude Sonnet 5.5
+- Configuração: esforço médio (ou "padrão, sem opção de ajuste"), busca na web desligada, conversa nova sem anexos
+- Data da decisão:13/11/2026
+- Matriz de rastreabilidade: não mostrada à LLM; commitada antes da geração.
 
-Você vai gerar testes automatizados com Vitest (TypeScript, NestJS 11, Prisma 5).
+## Regras
+- Até 3 rodadas por story, só para compilar ou rodar. Pedido de "mais testes" fica para a v2.
+- Sem edição manual dos testes; os que não compilam são comentados com registro aqui.
 
-USER STORY
-[nome e descrição]
+---
 
-CRITÉRIOS DE ACEITAÇÃO
-[CA1, CA2... no formato Dado/Quando/Então]
+## US01 — Estoques e movimentação/saldo (Mateus)
+(preencher conforme o modelo da seção abaixo)
 
-CÓDIGO DO MÓDULO
-[para cada arquivo: caminho + conteúdo]
+## US02 — Controle de acesso por grupo (Artur)
 
-INSTRUÇÕES
-1. Aplique partições de equivalência (válidas e inválidas) em cada variável de entrada.
-2. Aplique análise de valores-limite dos dois lados de cada fronteira.
-3. Garanta que cada critério de aceitação tenha ao menos um teste.
-4. Em cada teste, adicione um comentário com a técnica usada
-   (partição / valor-limite / critério) e o requisito coberto (ex.: CA2).
-5. Use apenas os arquivos e caminhos fornecidos. O arquivo de saída é
-   tests/v1-llm/<story>.spec.ts e os imports apontam para ../../src/...
-6. Responda com um único bloco de código.
+## US03 — Itens com tombamento (Caio)
 
-## Arquivos a fornecer por story
+## US04 — Empréstimo e devolução (Theo)
 
-| Story | Arquivos |
+## US05 — Termo de Responsabilidade (Randell)
+
+## US06 — Alerta de estoque baixo (Mateus)
+
+---
+
+### Modelo de seção (copiar para cada story)
+
+#### Rodada N
+- Data e hora: ______
+- Prompt completo: (colar o prompt já preenchido, com a story, os CAs e o código)
+- Resumo da resposta: ______
+- Problemas observados: ______
+- Resultado: __ passando · __ falhando · __ não compilam
+
+#### Contagem final
+| Passando | Falhando | Não compilam |
+|---|---|---|
+
+#### Testes comentados por não compilar
+| Teste | Motivo |
 |---|---|
-| 1. Estoques (CRUD, entrada/saída, saldo) | estoques.controller/service, create/update-estoque.dto, movimentacoes.controller/service, registrar-movimentacao.dto |
-| 2. Acesso por grupo | auth.guard, roles.guard, roles.decorator, access-role.enum + trechos de autorização por gestor nos services |
-| 3. Itens com tombamento | itens.controller/service, create/update-item.dto |
-| 4. Empréstimo e devolução | emprestimos.controller/service, create-emprestimo.dto |
-| 5. Termo de Responsabilidade | termo-pdf.service, termo-storage.service, termo-assinado.constants, trecho de ativação em emprestimos.service |
-| 6. Alerta de estoque baixo | trechos de nível mínimo em movimentacoes.service e itens.service (confirmar onde a regra está) |
 
-## Regras da v1
-- Até 3 rodadas por story, só para a suíte compilar/rodar. Pedidos de "mais testes" ficam para a v2.
-- Sem edição manual dos testes. Os que não compilam podem ser comentados, com registro no log.
+#### Investigação das falhas
+| Teste | Erro | Classificação (oráculo errado, API inventada, setup, defeito real) | Evidência | Issue (se defeito real) |
+|---|---|---|---|---|
