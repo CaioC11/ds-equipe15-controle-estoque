@@ -6,11 +6,11 @@ Issue de tech-debt. Prazo: 12/11. Escopo: `controle-estoque-emprestimos-back/src
 
 | Grupo | Achados confirmados |
 |---|---|
-| Propriedades de projeto (integridade conceitual, information hiding, acoplamento) | ACH-01, ACH-02, ACH-03, ACH-04 |
+| Propriedades de projeto (integridade conceitual, information hiding, acoplamento) | ACH-01, ACH-02, ACH-03, ACH-04, ACH-15 |
 | SOLID e coesão | ACH-05, ACH-06 |
 | Code smells | ACH-07, ACH-08, ACH-09, ACH-10, ACH-13 |
 
-Total: **11 achados** e **9 falsos positivos** (seção 4). A meta do time era cerca de 8.
+Total: **12 achados** e **9 falsos positivos** (seção 4). A meta do time era cerca de 8.
 
 **Como ler o campo "Confirmação":**
 - **Leitura**: o trecho foi lido e o problema aparece no código.
@@ -113,20 +113,20 @@ Total: **11 achados** e **9 falsos positivos** (seção 4). A meta do time era c
 - **Onde:** `back/.../estoques.service.ts` `formatEstoqueComSaldo(estoque: any)` (L142-157, com `'DISPONIVEL'` e `'EMPRESTADO'` como texto nas L145 e L147); `back/.../termo-pdf.service.ts` `formatarData(val: any)` (L28-32) e o formatador `date` (L106-107); `front/src/services/categoriaService.ts` (L34, L51) e `front/src/pages/categorias/index.tsx` (L26, L74).
 - **Categoria:** code smell (uso de `any`, "magic strings", falta de tipagem).
 - **Problema:** o back já tem o enum `StatusItem` (usado em `emprestimos.service.ts` L81), mas `formatEstoqueComSaldo` compara com texto. No PDF, `dataAbertura` é formatada com `timeZone: 'UTC'` (L134), e `dataFechamento` com `toLocaleDateString` no **fuso do servidor** (L135-138).
-- **Por que atrapalha:** (1) renomear um valor do enum compila sem erro e faz o resumo do estoque contar 0 itens. (2) Quando o prazo chega como data pura (ex.: `2026-11-20`, que vira meia-noite UTC), a data prevista sai **um dia antes** se o back roda em fuso brasileiro, e certa se roda em UTC (saída na seção 5). Em desenvolvimento local isso gera termos com datas diferentes das da produção. O `val === 'null'` na L29 mostra que o tipo foi relaxado para esconder um dado mal formado.
-- **Como foi encontrado:** `grep -rnE ": any\b|as any"` e `grep` por literais de enum; a diferença de fuso foi vista na leitura e reproduzida em Node (`docs/ferramentas-analise/data.mjs`).
+- **Por que atrapalha:** (1) renomear um valor do enum compila sem erro e faz o resumo do estoque contar 0 itens. (2) As duas datas do mesmo PDF seguem regras de fuso diferentes: a abertura usa UTC e a data prevista usa o fuso do servidor. O front envia o prazo como fim do dia local (`fimDoDiaISO`, `front/src/modules/emprestimos/emprestimo.utils.ts` L13-15), por exemplo `2026-11-21T02:59:59Z` para quem escolheu 20/11 em Recife. Com o back em UTC (o serviço da API no `docker-compose.yml` não define `TZ`; só o Keycloak define), a data prevista sai **um dia depois** (21/11). Com o back em fuso brasileiro, sai certa (20/11). Quem chama a API com data pura (`2026-11-20`) vê o inverso: um dia antes em fuso brasileiro. A abertura em UTC também mostra o dia seguinte para empréstimo registrado depois das 21h em Recife. O termo impresso, que é um documento formal, pode trazer uma data de devolução diferente da que o gestor escolheu, conforme o fuso de onde o back roda (saída na seção 5). O `val === 'null'` na L29 mostra que o tipo foi relaxado para esconder um dado mal formado.
+- **Como foi encontrado:** `grep -rnE ": any\b|as any"` e `grep` por literais de enum; a diferença de fuso foi vista na leitura e reproduzida em Node (`docs/ferramentas-analise/data-fuso-pdf.mjs`), usando como entrada o valor que o front realmente envia (`fimDoDiaISO`).
 - **Confirmação:** executado (a data); leitura (os `any` e os literais).
-- **Confirmado por:** ______ em __/__
-- **Ideia de correção:** tipar com `Prisma.EstoqueGetPayload` e usar `StatusItem`; usar `timeZone: 'UTC'` nas duas datas.
+- **Confirmado por:** Randell em 13/11
+- **Ideia de correção:** tipar com `Prisma.EstoqueGetPayload` e usar `StatusItem`; formatar as duas datas com um fuso fixo de negócio (`timeZone: 'America/Recife'`). Usar `'UTC'` nas duas não resolve: o prazo enviado pelo front (fim do dia local) sairia no dia seguinte.
 
 #### ACH-10 — Código de exemplo e provisório ainda no produto (código morto)
-- **Onde:** `front/src/modules/todos`, `modules/team`, `pages/todos`, `pages/team` (1.325 das 5.636 linhas do front, **23,5%**); `front/src/routes.tsx` (L114-118: usuário autenticado vai para `/todos`); `front/src/utils/sidebar.ts` ("Tarefas de Exemplo" na L19-23 e "Gerenciar Equipe" na L49); `back/prisma/schema.prisma` (`CANCELADO` em `StatusEmprestimo` e coluna `semTombamento` em `Item`, nunca referenciados em `back/src`); `front/src/pages/categorias/index.tsx` L9 (`const isGestor = true`).
+- **Onde:** `front/src/modules/todos`, `modules/team`, `pages/todos`, `pages/team` (1.325 das 5.636 linhas do front, **23,5%**); `front/src/routes.tsx` (L114-119: usuário autenticado vai para `/todos`); `front/src/utils/sidebar.ts` ("Tarefas de Exemplo" na L19-23 e "Gerenciar Equipe" na L49); `back/prisma/schema.prisma` (`CANCELADO` em `StatusEmprestimo`, coluna `semTombamento` em `Item` e coluna `justificativaPermanencia` em `Emprestimo`, nunca referenciados em `back/src` fora dos specs); `front/src/pages/categorias/index.tsx` L9 (`const isGestor = true`).
 - **Categoria:** code smell (código morto, generalidade especulativa, stub esquecido).
 - **Problema:** módulos do boilerplate permanecem ativos e fazem parte da navegação do produto. A tela inicial depois do login é a lista de tarefas de exemplo.
 - **Por que atrapalha:** o primeiro contato do gestor com o sistema é uma tela que não faz parte do domínio, e os testes e a manutenção seguem pagando por esse código. O estado `CANCELADO` aparece no front (`emprestimo.types.ts` L1) e no schema, mas nenhuma operação do back o produz, então um empréstimo em `AGUARDANDO_TERMO` não tem como ser desfeito. `semTombamento` está no schema, mas o critério da US03 (marcar como "sem tombamento") não é atendido pelo DTO. Com `isGestor = true`, o botão de criar categoria aparece para qualquer perfil e só falha com 403 ao clicar.
-- **Como foi encontrado:** `wc -l` dos módulos de exemplo contra o total; `grep -rn "CANCELADO\|semTombamento" back/src` (sem resultados); leitura de `routes.tsx` e `sidebar.ts`.
+- **Como foi encontrado:** `wc -l` dos módulos de exemplo contra o total; `grep -rnE "CANCELADO|semTombamento|justificativaPermanencia" back/src` (sem resultados fora dos specs); leitura de `routes.tsx` e `sidebar.ts`.
 - **Confirmação:** leitura e `grep`.
-- **Confirmado por:** ______ em __/__
+- **Confirmado por:** Randell em 13/11
 - **Ideia de correção:** remover `todos`/`team` (ou esconder da navegação), redirecionar para `/estoques`, ligar `isGestor` à role real e decidir o destino de `CANCELADO` e `semTombamento`.
 
 #### ACH-13 — Permissão do formulário de itens fixada em `true` no front (stub esquecido)
@@ -138,6 +138,16 @@ Total: **11 achados** e **9 falsos positivos** (seção 4). A meta do time era c
 - **Confirmação:** Leitura e análise dos componentes.
 - **Confirmado por:** Caio em 12/11 (commit `751f68e`)
 - **Ideia de correção:** derivar a constante `usuarioLogadoEhGestor` a partir da verificação real do papel do usuário e da lista de gestores do estoque selecionado (ou envolver o componente num `<Can>`), além de cobrir o comportamento com testes de renderização.
+
+#### ACH-15 — Arquivo do termo ausente no storage vira erro 500 (o erro de disco atravessa o storage)
+- **Onde:** `back/src/modules/emprestimos/termo-storage.service.ts` `read` (L21-23); chamado em `emprestimos.service.ts` `obterPdf` (L203) e `obterPdfAssinado` (L280); expostos em `emprestimos.controller.ts` `visualizarTermo` e `baixarTermo` (L139-171). Filtro global em `common/filters/http-exception.filter.ts` (L88-92).
+- **Categoria:** information hiding e acoplamento (o erro do sistema de arquivos sai pela fronteira do `TermoStorageService` sem tradução) e code smell (tratamento de erro incompleto).
+- **Problema:** o banco guarda só o caminho do PDF (`Termo.arquivoPdf`, `arquivoAssinado`). O service trata a falta do **registro** (404), mas não a falta do **arquivo**. Se o arquivo sumiu (volume recriado, storage limpo, backup incompleto), `readFile` rejeita com `ENOENT`. Não há `catch` nem `ENOENT` em `back/src`. O filtro só conhece `ZodError`, `AppException` e `HttpException`; todo o resto vira `INTERNAL_ERROR` 500 com a mensagem "Erro interno do servidor." e é registrado como falha do servidor. O Swagger desses endpoints documenta 404 "Empréstimo ou termo não encontrado", mas não o 500. O `termo-storage.service.spec.ts` só testa escrita/leitura e caminho fora do storage, sem caso de arquivo ausente.
+- **Por que atrapalha:** o gestor que abre o termo de um empréstimo antigo recebe "Erro interno do servidor", sem saber que o empréstimo existe e o documento é que sumiu. O termo é o documento de responsabilidade do bem, e sua perda fica indistinguível de um bug da API. A premissa A6 prevê trocar a implementação do storage, e cada implementação nova teria de lembrar de tratar a ausência por conta própria, porque o contrato não define o que acontece.
+- **Como foi encontrado:** leitura manual da área (storage, service, controller e filtro); `grep -rnE "ENOENT|termoStorage\.read" back/src` achou os 2 usos de `read` e nenhum tratamento; `docker-compose.yml` mostra que o storage usa o volume nomeado `termos`, então o cenário é falha de operação, não uso normal.
+- **Confirmação:** leitura. O 500 de ponta a ponta está **a confirmar**: subir a API, criar um empréstimo, apagar o PDF em `storage/termos` e chamar `GET /estoques/:estoqueId/emprestimos/:id/termo`.
+- **Confirmado por:** Randell em 13/11
+- **Ideia de correção:** `TermoStorageService.read` traduzir `ENOENT` para uma exceção própria (por exemplo `ResourceNotFoundException('Arquivo do termo', caminho)`), e adicionar o caso de arquivo ausente no spec.
 
 ---
 
@@ -156,13 +166,13 @@ Pontos vistos durante a leitura que são defeitos ou lacunas funcionais, não de
 |---|---|---|
 | FP-01 | "Endpoints de saldo em `MovimentacoesController` sem checagem de gestor" (leitura) | `docs/permissoes.md` libera saldo para qualquer usuário autenticado ("Ver lista de estoques, itens e saldo"). Está de acordo com o requisito. |
 | FP-02 | "`GestorGuard` aceita gestor de qualquer estoque, contra a regra por estoque" (leitura) | Categorias são globais (premissa A2) e a matriz diz "Cadastrar e editar categoria: GESTOR". É intencional. |
-| FP-03 | "`userId as string` em `emprestimos.service.ts` L124 e L417 é cast inseguro" (heurística de lint) | `assertGestorDoEstoque` lança `AccessDeniedException` quando `userId` é indefinido (L469-481) antes de chegar ao cast, então o valor nunca é nulo ali. O cast é feio, mas não causa defeito. (Sugestão de limpeza: estreitar o tipo.) |
+| FP-03 | "`userId as string` em `emprestimos.service.ts` L124 e L417 é cast inseguro" (heurística de lint) | Conferido por Randell em 13/11. `assertGestorDoEstoque` lança `AccessDeniedException` quando `userId` é indefinido (L469-481) antes de chegar ao cast, então o valor nunca é nulo ali. O cast é feio, mas não causa defeito. (Sugestão de limpeza: estreitar o tipo.) |
 | FP-04 | "`api.ts` do front viola responsabilidade única e tem estado global mutável" (LLM) | Token, renovação e logout são o mesmo assunto (cliente HTTP autenticado), a renovação em voo evita várias chamadas paralelas de `signinSilent`, e há testes. A única parte fora de lugar é `getApiErrorMessage`, que já está em ACH-03. |
 | FP-05 | "Services dependem das classes concretas `PrismaService` e `TermoStorageService` (inversão de dependência)" (LLM) | Conferido por Caio em 12/11 (commit `751f68e`). No Nest a classe serve de token e pode ser trocada por `useClass`/`overrideProvider`, sem alterar o service. O `EmprestimosService` não usa `fs` direto: todo acesso a arquivo passa por `TermoStorageService` (L155, L173, L203, L240-251, L280), e a premissa A6 prevê trocar essa implementação. Onde a troca é real, já há token (`IDENTITY_SOURCE` em `auth.module.ts` L13, injetado em `auth.guard.ts` L26). O custo de criar interfaces para Prisma e storage não compensa. |
 | FP-06 | "`termo-pdf.service.ts` `gerar` é um método longo (cerca de 130 linhas)" (métrica de tamanho) | Conferido por Caio em 12/11 (commit `751f68e`). O `gerar` tem ~130 linhas (167 no arquivo todo), mas é layout linear, com 4 helpers locais pequenos, sem regra de negócio e com uma única responsabilidade (desenhar o PDF). O histórico tem só 2 commits. A mudança pendente (incluir o CPF) é pontual e já está na seção 3. Os problemas reais do arquivo estão no ACH-09. |
 | FP-07 | "Blocos de `import` repetidos em 5 páginas do front" (`docs/ferramentas-analise/dup.py`) | A ferramenta casou listas de `import` (`Table`, `TableBody`, `ErrorScreen`). Não há lógica duplicada. |
 | FP-08 | "`eslint-disable react-hooks/exhaustive-deps` em `useAsync.ts` L59" (grep) | Desabilitação deliberada: o hook recebe a lista de dependências do chamador (`[...deps, reloadToken]`), e o linter não consegue analisar isso. Está comentado e é o padrão de hooks genéricos. |
-| FP-09 | "`TERMO_ASSINADO_MAX_BYTES` é número mágico" (heurística) | É uma constante nomeada, com comentário, em `termo-assinado.constants.ts`, e compartilhada pelo controller e pelo service. |
+| FP-09 | "`TERMO_ASSINADO_MAX_BYTES` é número mágico" (heurística) | Conferido por Randell em 13/11. É uma constante nomeada, com comentário, em `termo-assinado.constants.ts`, e compartilhada pelo controller e pelo service. |
 
 ## 5. Ferramentas, comandos e prompts (para o log)
 
@@ -176,6 +186,9 @@ Pontos vistos durante a leitura que são defeitos ou lacunas funcionais, não de
 | `docs/ferramentas-analise/dup.py` (script próprio, janelas de 6 e 7 linhas normalizadas) | duplicação | achou `assertGestorDoEstoque` e `request<T>`; 1 resultado era falso (FP-07) |
 | `docs/ferramentas-analise/erro.mjs` (Node 22) | alimenta a cópia de `getApiErrorMessage` com o corpo do filtro do back | reproduziu o JSON cru como mensagem (ACH-03) |
 | `docs/ferramentas-analise/data.mjs` (Node 22, `TZ=UTC` e `TZ=America/Sao_Paulo`) | formatadores de data do PDF | `20/11/2026` em UTC e `19/11/2026` em São Paulo (ACH-09) |
+| `docs/ferramentas-analise/data-fuso-pdf.mjs` (Node 22, `TZ=UTC` e `TZ=America/Recife`) | formatadores de data do PDF, com a entrada real do front (`fimDoDiaISO`) | prazo de 20/11 sai `21/11/2026` em UTC e `20/11/2026` em Recife; data pura sai `20/11` em UTC e `19/11` em Recife (ACH-09) |
+| `grep -rnE "ENOENT\|termoStorage\.read" back/src` | tratamento de arquivo ausente no storage | 2 usos de `read`, nenhum tratamento (ACH-15) |
+| `grep -rnE "CANCELADO\|semTombamento\|justificativaPermanencia" back/src` | colunas e estados sem uso | nenhum uso fora dos specs (ACH-10) |
 | `Select-String` (PowerShell, back) | Buscar `fs\.`, `writeFile` e `TermoStorageService` em `emprestimos.service.ts` | Confirmou que todo acesso a arquivo passa pelo `TermoStorageService` (ACH-05 e FP-05) |
 | `Get-ChildItem` + `Select-String` (PowerShell, back) | Buscar `IDENTITY_SOURCE\|@Inject\(` em `back/src` | Encontrou 1 único uso de token de injeção (`IDENTITY_SOURCE`), confirmando FP-05 |
 | `git log --oneline` e `(Get-Content ...).Count` (back) | Histórico e tamanho de `termo-pdf.service.ts` | Mostrou 2 commits e 167 linhas com 4 helpers lineares, confirmando FP-06 |
@@ -192,6 +205,15 @@ mensagem exibida ao usuário => {"type":"https://controle-estoque-emprestimos.ex
 
 $ TZ=UTC node docs/ferramentas-analise/data.mjs                  -> abertura=20/11/2026  prevista=20/11/2026
 $ TZ=America/Sao_Paulo node docs/ferramentas-analise/data.mjs    -> abertura=20/11/2026  prevista=19/11/2026
+
+$ TZ=UTC node docs/ferramentas-analise/data-fuso-pdf.mjs
+  prevista (front, 20/11 23:59 local)  -> 21/11/2026
+  prevista (API, "2026-11-20")         -> 20/11/2026
+  abertura (13/11 22:00 local, em UTC) -> 14/11/2026
+$ TZ=America/Recife node docs/ferramentas-analise/data-fuso-pdf.mjs
+  prevista (front, 20/11 23:59 local)  -> 20/11/2026
+  prevista (API, "2026-11-20")         -> 19/11/2026
+  abertura (13/11 22:00 local, em UTC) -> 14/11/2026
 ```
 
 **Prompts usados com a LLM (Claude):**
@@ -199,6 +221,7 @@ $ TZ=America/Sao_Paulo node docs/ferramentas-analise/data.mjs    -> abertura=20/
 1. Prompt da issue, colado na íntegra: "Percorrer o código procurando violações de propriedades de projeto (integridade conceitual, information hiding, coesão, acoplamento), de SOLID e code smells, por leitura manual, ferramentas e LLM. Cada achado precisa ser confirmado por alguém olhando o código; falsos positivos são anotados com o motivo." (acompanhado do repositório em `.zip`).
 2. A LLM leu os arquivos do back e do front, escreveu os scripts da seção acima e propôs os candidatos. Cada achado voltou ao código (arquivo e linha) antes de entrar na lista, e os que a leitura não sustentou foram para a seção 4.
 3. LLM (Gemini) para análise do EmprestimosService. Prompt: "Análise de violações de SOLID e code smells no arquivo emprestimos.service.ts".
+4. Randell (ACH-09, ACH-10, ACH-15, FP-03 e FP-09): prompt com o roteiro da S3B-07 colado, pedindo apoio para conferir ACH-09 e ACH-10, propor um achado em termo em PDF/storage e validar os trechos no código local (`8de43cf`). O script `data-fuso-pdf.mjs` foi executado em `TZ=UTC` e `TZ=America/Recife`, e todos os trechos citados foram lidos diretamente nos arquivos antes da assinatura.
 
 > Quem usar outra LLM ou ferramenta para a própria parte deve acrescentar aqui o prompt e a ferramenta, uma linha por uso.
 
