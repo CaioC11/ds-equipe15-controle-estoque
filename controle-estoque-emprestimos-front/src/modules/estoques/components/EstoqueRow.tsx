@@ -15,6 +15,9 @@ interface EstoqueRowProps {
 
 function identificacao(item: ItemEstoque): string {
   if (item.tombamento) return `Tombamento ${item.tombamento}`;
+  if (item.tombamentoPendente || (item.tipo === 'PATRIMONIAL' && !item.tombamento)) {
+    return 'Tombamento pendente';
+  }
   if (item.numeroSerie) return `Nº de série ${item.numeroSerie}`;
   if (item.semTombamento) return 'Sem tombamento';
   return '—';
