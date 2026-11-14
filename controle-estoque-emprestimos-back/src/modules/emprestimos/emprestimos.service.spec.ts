@@ -296,6 +296,68 @@ describe('EmprestimosService', () => {
       });
     });
 
+    describe('responsável com item em atraso (A5)', () => {
+      const emAtraso = (over: Record<string, unknown> = {}) => ({
+        id: 'emp-0',
+        itemId: 'item-9',
+        responsavelId: 'resp-9',
+        status: 'ATIVO',
+        prazoDevolucao: ontem(),
+        justificativaPermanencia: null,
+        item: { id: 'item-9', nome: 'Projetor', tombamento: 'T-777' },
+        ...over,
+      });
+
+      let pendencia: unknown = null;
+
+      beforeEach(() => {
+        pendencia = null;
+        prismaMock.responsavel.findMany.mockResolvedValue([{ id: 'resp-9' }]);
+        prismaMock.responsavel.update.mockResolvedValue({ id: 'resp-9', nome: 'Maria Silva' });
+        // consulta por item => livre; consulta por responsável => o que cada teste definir
+        prismaMock.emprestimo.findFirst.mockImplementation(
+          ({ where }: { where: { itemId?: string } }) =>
+            Promise.resolve(where.itemId ? null : pendencia),
+        );
+      });
+
+      it('recusa (409) novo empréstimo e informa a pendência, sem criar nada', async () => {
+        pendencia = emAtraso();
+
+        const erro = await service.create('est-1', dtoBase, 'user-1').catch((e) => e);
+
+        expect(erro).toBeInstanceOf(ResourceConflictException);
+        expect(erro.message).toMatch(/Projetor/);
+        expect(erro.message).toMatch(/atraso/);
+        expect(erro.message).toMatch(/justificativa de permanência/);
+        expect(prismaMock.emprestimo.create).not.toHaveBeenCalled();
+        expect(prismaMock.movimentacao.create).not.toHaveBeenCalled();
+      });
+
+      it('só considera atraso ATIVO, vencido e sem justificativa, do próprio responsável', async () => {
+        pendencia = null;
+
+        await service.create('est-1', dtoBase, 'user-1');
+
+        const consulta = (prismaMock.emprestimo.findFirst.mock.calls as { where: object }[][])
+          .map((chamada) => chamada[0].where as Record<string, unknown>)
+          .find((where) => where.responsavelId);
+        expect(consulta).toMatchObject({
+          responsavelId: 'resp-9',
+          status: 'ATIVO',
+          prazoDevolucao: { lt: expect.any(Date) },
+          justificativaPermanencia: null,
+        });
+      });
+
+      it('aceita quando não há empréstimo em atraso (ativo no prazo, indefinido ou devolvido)', async () => {
+        pendencia = null;
+
+        await expect(service.create('est-1', dtoBase, 'user-1')).resolves.toBeDefined();
+        expect(prismaMock.emprestimo.create).toHaveBeenCalledTimes(1);
+      });
+    });
+
     it('traduz P2002 (cadastro simultâneo do responsável) em 409', async () => {
       prismaMock.responsavel.create.mockRejectedValue(
         new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
@@ -438,6 +500,95 @@ describe('EmprestimosService', () => {
         AccessDeniedException,
       );
       expect(prismaMock.emprestimo.updateMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('registrarJustificativaPermanencia', () => {
+    const dto = { justificativa: 'Projeto em andamento, devolução em dezembro' };
+    const atrasado = () => ({
+      id: 'emp-1',
+      itemId: 'item-1',
+      status: 'ATIVO',
+      prazoDevolucao: ontem(),
+      justificativaPermanencia: null,
+    });
+
+    beforeEach(() => {
+      prismaMock.emprestimo.findFirst.mockResolvedValue(atrasado());
+      prismaMock.emprestimo.updateMany.mockResolvedValue({ count: 1 });
+      prismaMock.emprestimo.findUniqueOrThrow.mockResolvedValue({
+        ...atrasado(),
+        justificativaPermanencia: dto.justificativa,
+        termo: null,
+      });
+    });
+
+    it('grava a justificativa no empréstimo em atraso, que continua ATIVO', async () => {
+      const result = await service.registrarJustificativaPermanencia(
+        'est-1',
+        'emp-1',
+        dto,
+        'user-1',
+      );
+
+      expect(prismaMock.emprestimo.updateMany).toHaveBeenCalledWith({
+        where: { id: 'emp-1', justificativaPermanencia: null },
+        data: { justificativaPermanencia: dto.justificativa },
+      });
+      expect(result).toMatchObject({
+        status: 'ATIVO',
+        justificativaPermanencia: dto.justificativa,
+      });
+    });
+
+    it('recusa (403) quem não é gestor do estoque', async () => {
+      prismaMock.estoqueGestor.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.registrarJustificativaPermanencia('est-1', 'emp-1', dto, 'outro-user'),
+      ).rejects.toBeInstanceOf(AccessDeniedException);
+      expect(prismaMock.emprestimo.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('retorna 404 quando o empréstimo não pertence ao estoque', async () => {
+      prismaMock.emprestimo.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.registrarJustificativaPermanencia('est-1', 'emp-9', dto, 'user-1'),
+      ).rejects.toBeInstanceOf(ResourceNotFoundException);
+    });
+
+    it.each([
+      ['ativo dentro do prazo', { prazoDevolucao: amanha() }],
+      ['ativo com prazo indefinido', { prazoDevolucao: null }],
+      ['devolvido', { status: 'DEVOLVIDO' }],
+      ['aguardando termo', { status: 'AGUARDANDO_TERMO' }],
+    ])('recusa (409) empréstimo %s', async (_nome, over) => {
+      prismaMock.emprestimo.findFirst.mockResolvedValue({ ...atrasado(), ...over });
+
+      await expect(
+        service.registrarJustificativaPermanencia('est-1', 'emp-1', dto, 'user-1'),
+      ).rejects.toBeInstanceOf(ResourceConflictException);
+      expect(prismaMock.emprestimo.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('recusa (409) quando a justificativa já foi registrada', async () => {
+      prismaMock.emprestimo.findFirst.mockResolvedValue({
+        ...atrasado(),
+        justificativaPermanencia: 'anterior',
+      });
+
+      await expect(
+        service.registrarJustificativaPermanencia('est-1', 'emp-1', dto, 'user-1'),
+      ).rejects.toBeInstanceOf(ResourceConflictException);
+    });
+
+    it('recusa (409) registro simultâneo (nenhuma linha atualizada)', async () => {
+      prismaMock.emprestimo.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.registrarJustificativaPermanencia('est-1', 'emp-1', dto, 'user-1'),
+      ).rejects.toBeInstanceOf(ResourceConflictException);
     });
   });
 

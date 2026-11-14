@@ -13,6 +13,7 @@ describe('EmprestimosController', () => {
     findPendentes: vi.fn(),
     devolver: vi.fn(),
     obterPdf: vi.fn(),
+    registrarJustificativaPermanencia: vi.fn(),
   };
 
   beforeEach(async () => {
@@ -46,6 +47,19 @@ describe('EmprestimosController', () => {
   it('repassa o userId do usuário logado ao devolver', async () => {
     await controller.devolver('est-1', 'emp-1', { userId: 'u1' } as never);
     expect(service.devolver).toHaveBeenCalledWith('est-1', 'emp-1', 'u1');
+  });
+
+  it('repassa o userId e a justificativa ao registrar a permanência', async () => {
+    const dto = { justificativa: 'Projeto em andamento' } as never;
+    await controller.registrarJustificativaPermanencia('est-1', 'emp-1', dto, {
+      userId: 'u1',
+    } as never);
+    expect(service.registrarJustificativaPermanencia).toHaveBeenCalledWith(
+      'est-1',
+      'emp-1',
+      dto,
+      'u1',
+    );
   });
 
   it('serve o termo em linha para visualização', async () => {
