@@ -2,6 +2,8 @@
 
 Responsável: Randell · Issue: S3B-10 (#69) · Suíte v2: `controle-estoque-emprestimos-back/tests/v2/us05-termo.spec.ts` · Commit medido: `b9b67c5` (`main`).
 
+> Depois do commit `b9b67c5`, a `main` alterou `emprestimos.service.ts`, `emprestimos.controller.ts` e `create-emprestimo.dto.ts` (+90 linhas, sem teste da US05). Uma nova medição tende a dar porcentagens menores nesses dois arquivos; os números abaixo são os de `b9b67c5`.
+
 Mesmo escopo e mesma ferramenta da v1 (Vitest 4.1.8 + `@vitest/coverage-v8`): `termo-pdf.service.ts`, `termo-storage.service.ts`, `termo-assinado.constants.ts`, `emprestimos.service.ts` e `emprestimos.controller.ts`, configuração `vitest.us05-v2.config.ts`. O relatório HTML está em `docs/testes/relatorios/v2/us05/index.html` e o resultado em `docs/testes/relatorios/resultados-v2-us05.json`.
 
 Quatro medições entram na comparação:
