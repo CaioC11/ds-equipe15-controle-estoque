@@ -57,3 +57,29 @@
 @Injectable() // Linha 14: executada 1x (coberta), mas branch-0 marcado como não coberto pelo V8
 export class ItensService {
   constructor(private readonly prisma: PrismaService) {}
+
+---
+
+### 4d. Oráculos (comportamento assumido do código, defeitos e asserções triviais)
+
+* **Casos em que a LLM assumiu o comportamento do código atual em vez do requisito (`27` + `17` ocorrências):** como teve acesso direto ao código de produção durante a geração, a LLM copiou **27 strings exatas de erro** de `create-item.dto.ts` e `itens.service.ts` como oráculo (em vez de validar apenas o status HTTP e a semântica da rejeição, já que a matriz não fixava textos de erro) e acoplou **17 testes** aos argumentos internos repassados ao Prisma (`toHaveBeenCalledWith`). Em **1 caso** (linha 95), ao inferir a mensagem interna do Zod sem ler o requisito, a LLM escreveu um oráculo incorreto e gerou a única falha da suíte (`1/106`):
+
+```ts
+// tests/v1-llm/us03-itens.spec.ts (linhas 92–96)
+it('rejeita tipo fora do enum', () => {
+  const r = CreateItemSchema.safeParse({ ...patrimonialValido, tipo: 'OUTRO' });
+  expect(r.success).toBe(false);
+  expect(mensagens(r)).toContain('Tipo deve ser PATRIMONIAL ou CONSUMO');
+});
+```
+
+* **Testes que passaram validando um defeito (`0` ocorrências):** nenhum dos 105 testes que passaram ocultou ou validou um bug funcional do sistema, e nenhum defeito real foi revelado no código de produção (`src/modules/itens/`).
+* **Testes sem asserção ou com asserção trivial (`0` sem asserção / `1` com asserção trivial na linha 707):** não há testes sem `expect(...)`, mas há **1 teste com asserção trivial** no cenário de estoque vazio (`CT-03-26`), que verifica apenas `toBeDefined()` sem conferir se a lista retornada veio vazia (`[]`) nem os metadados de paginação:
+
+```ts
+// tests/v1-llm/us03-itens.spec.ts (linhas 705–708)
+it('estoque sem itens retorna listagem vazia sem erro', async () => {
+  const resultado = await service.findAllByEstoque(estoqueId, { page: 1, limit: 10 } as any);
+  expect(resultado).toBeDefined();
+});
+```
