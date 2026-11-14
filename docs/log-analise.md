@@ -17,7 +17,7 @@ Total: **14 achados** e **14 falsos positivos** (seção 4). A meta do time era 
 - **Executado**: reproduzi o comportamento rodando um script (os scripts estão em `docs/ferramentas-analise/` e a saída na seção 5).
 - **A confirmar**: depende de rodar a API com banco, que não estava disponível nesta análise.
 
-> **Pendência de quem assina a issue.** A primeira passada foi feita por LLM (Claude) com leitura dos arquivos e dois scripts. O critério da issue pede que **uma pessoa** confirme cada achado olhando o código. Cada achado tem a linha "Confirmado por" para isso. A tabela da seção 6 sugere uma divisão de 2 achados por pessoa.
+> **Pendência de quem assina a issue.** Mateus confirmou ACH-01 a ACH-04, ACH-11 e ACH-12 lendo o código local no commit `b9b67c5`. Permanecem pendentes as confirmações humanas de outros achados com "Confirmado por" em branco e as verificações marcadas **a confirmar**, que ainda dependem de execução. A divisão sugerida da seção 6 é apenas uma proposta de distribuição.
 
 ---
 
@@ -52,7 +52,7 @@ Total: **14 achados** e **14 falsos positivos** (seção 4). A meta do time era 
 - **Por que atrapalha:** o usuário que tenta cadastrar um tombamento duplicado vê na tela o JSON bruto (`{"type":"https://controle-estoque-emprestimos.example/problems/conflict",...,"detail":"Já existe um item com este tombamento."}`) em vez da frase. A tela de itens só marca o campo certo porque a regex `/tombamento/i` (L109 do componente) casa com o texto cru do JSON, o que funciona por acaso. Os erros por campo (`errors`) nunca chegam à tela.
 - **Como foi encontrado:** leitura da cadeia de erro nos dois lados; `Select-String` por `\.detail|problem\+json` em `front/src` (sem resultados) e por `detail|problem` em `api.test.ts` (sem resultados); teste `docs/ferramentas-analise/erro.test.ts` (vitest) que alimenta `getApiErrorMessage` com o corpo que o filtro gera, para 409 e 422 (seção 5).
 - **Confirmação:** executado em 14/11 no commit `b9b67c5`; os dois casos imprimiram o JSON cru como mensagem.
-- **Confirmado por:** ______ em __/__
+- **Confirmado por:** Mateus em 14/11 (commit `b9b67c5`)
 - **Ideia de correção:** `getApiErrorMessage` ler `detail` (e `errors` por campo), e o back e o front concordarem em um único código de status para validação.
 
 #### ACH-04 — Dois estilos para o mesmo problema: exceções e validação de entrada
@@ -62,7 +62,7 @@ Total: **14 achados** e **14 falsos positivos** (seção 4). A meta do time era 
 - **Por que atrapalha:** o formato do erro e o `ErrorCode` dependem do módulo que lançou. Quem mexe em um módulo copia o estilo errado. Os dois DTOs com `class-validator` **não são validados**: no teste, o pipe global deixou passar `{tipo: 'INVALIDO', quantidade: -5}` sem erro, enquanto o `class-validator` executado à mão apontou 2 erros. Isso é compatível com a checagem manual de quantidade em `registrarMovimentacao` (L58-60), que repete o `@IsInt` e o `@Min(1)` do DTO.
 - **Como foi encontrado:** `Select-String` por `new (BadRequest|Conflict|Forbidden|NotFound)Exception` contra `new (AppException|ResourceNotFoundException|ResourceConflictException|AccessDeniedException)`, com contagem por arquivo; por `Pipe` em `main.ts` e `app.module.ts`; por `ValidationPipe|UsePipes|ZodValidationPipe` em `src`; por `class-validator|nestjs-zod|from 'zod'` nos `*.dto.ts`; teste `docs/ferramentas-analise/ach04.test.ts` (vitest) (seção 5).
 - **Confirmação:** leitura para os dois estilos e para o pipe; executado em teste do pipe global contra `RegistrarMovimentacaoDto` no commit `b9b67c5`. Não foi feito por HTTP (`POST /movimentacoes`), e `create-categoria.dto.ts` está confirmado só por leitura e grep.
-- **Confirmado por:** ______ em __/__
+- **Confirmado por:** Mateus em 14/11 (commit `b9b67c5`)
 - **Ideia de correção:** migrar os dois DTOs para Zod e padronizar as exceções na família `AppException`.
 
 ### Grupo 2 — SOLID e coesão
@@ -136,17 +136,17 @@ Total: **14 achados** e **14 falsos positivos** (seção 4). A meta do time era 
 - **Por que atrapalha:** ao navegar diretamente entre termos sem desmontar a página, o documento pode ficar temporariamente em branco ou indisponível; se a nova carga falhar, o estado antigo continua apontando para a URL revogada. O estado local e a limpeza estão no código; a sequência temporal descrita é dedução e não foi reproduzida no navegador.
 - **Como foi encontrado:** leitura de `useTermo` e do ponto de renderização do iframe/link em `TermoPage`, além da rota parametrizada que mantém o mesmo elemento de página.
 - **Confirmação:** leitura; efeito visual da troca ainda **a confirmar** em execução no navegador.
-- **Confirmado por:** ______ em __/__
+- **Confirmado por:** Mateus em 14/11 (commit `b9b67c5`)
 - **Ideia de correção:** limpar `pdfUrl` e `erroPdf` ao iniciar a carga de novos IDs, revogando a URL anterior, e só renderizar o documento correspondente aos parâmetros atuais.
 
 #### ACH-12 — A validação de audiência do token é desativada se faltar configuração
-- **Onde:** `controle-estoque-emprestimos-back/src/config/keycloak.config.ts` (`clientId`, L6-7); `src/common/auth/identity/keycloak.identity-source.ts` (leitura do valor L52-55 e `hasValidAudience`, L110-120); `src/common/auth/guards/auth.guard.ts` (L39-47). A documentação descreve o client backend como esperado em `docs-site/content/docs/architecture/authentication.mdx` (L88-89).
+- **Onde:** `controle-estoque-emprestimos-back/src/config/keycloak.config.ts` (`clientId`, L6-7); `controle-estoque-emprestimos-back/src/common/auth/identity/keycloak.identity-source.ts` (leitura do valor L52-55 e `hasValidAudience`, L110-120); `controle-estoque-emprestimos-back/src/common/auth/guards/auth.guard.ts` (L39-47). A documentação descreve o client backend como esperado em `controle-estoque-emprestimos-back/docs-site/content/docs/architecture/authentication.mdx` (L89).
 - **Categoria:** code smell de segurança (validação fail-open condicionada à configuração).
-- **Problema:** `KEYCLOAK_CLIENT_ID` assume string vazia e é convertido para `undefined`. Nessa condição, `hasValidAudience` retorna `true` sem verificar `aud` ou `azp`; o `AuthGuard` aceita o `CurrentUser` retornado pelo identity source. Assinatura, issuer, expiração e papel continuam sendo verificados, mas não há restrição ao client emissor/consumidor esperado.
+- **Problema:** `KEYCLOAK_CLIENT_ID` assume string vazia e é convertido para `undefined`. Nessa condição, `hasValidAudience` retorna `true` sem verificar `aud` ou `azp`; o `AuthGuard` aceita o `CurrentUser` retornado pelo identity source. Assinatura, issuer, expiração e papel continuam sendo verificados, mas não há restrição ao client emissor/consumidor esperado. O comentário do código (`keycloak.config.ts` L6 e `hasValidAudience`, L112) indica que a validação é opcional por decisão; o risco está no padrão aberto, não em um erro acidental.
 - **Por que atrapalha:** se a variável ficar ausente, um token válido do mesmo realm, emitido para outro client e com uma role reconhecida, pode autenticar na API. O valor padrão e o desvio estão no código; não foi feito teste HTTP com token de outro client.
-- **Como foi encontrado:** leitura da configuração, do ramo `if (!this.clientId) return true`, do retorno de identidade e do `AuthGuard`; a documentação de autenticação do próprio projeto descreve a validação da audiência contra `KEYCLOAK_CLIENT_ID`.
+- **Como foi encontrado:** leitura da configuração, do ramo `if (!this.clientId) return true`, do retorno de identidade e do `AuthGuard`; `controle-estoque-emprestimos-back/docs-site/content/docs/architecture/authentication.mdx` (L89) descreve a validação da audiência contra `KEYCLOAK_CLIENT_ID`.
 - **Confirmação:** leitura; aceitação ponta a ponta de token de outro client **a confirmar** com configuração e token de teste.
-- **Confirmado por:** ______ em __/__
+- **Confirmado por:** Mateus em 14/11 (commit `b9b67c5`)
 - **Ideia de correção:** exigir `KEYCLOAK_CLIENT_ID` na validação de configuração e falhar o bootstrap ou rejeitar o token quando a audiência esperada não estiver configurada.
 
 #### ACH-13 — Permissão do formulário de itens fixada em `true` no front (stub esquecido)
@@ -281,7 +281,7 @@ Sugestão para fechar "2 ou mais achados confirmados por pessoa". Cada um confir
 
 | Critério da issue | Situação |
 |---|---|
-| 2 ou mais achados confirmados por pessoa (meta de cerca de 8 no time) | 14 achados registrados; ainda faltam confirmações humanas para os campos "Confirmado por" em branco |
+| 2 ou mais achados confirmados por pessoa (meta de cerca de 8 no time) | Mateus confirmou ACH-01 a ACH-04, ACH-11 e ACH-12 lendo o código local no commit `b9b67c5`; faltam confirmações humanas dos demais achados com campo "Confirmado por" em branco. As verificações ainda marcadas **a confirmar** dependem de execução. |
 | Achado com arquivo/função, problema, categoria, consequência e como foi encontrado | feito |
 | Falsos positivos anotados com o motivo | feito (14) |
 | Prompts e ferramentas registrados | feito (seção 5) |
