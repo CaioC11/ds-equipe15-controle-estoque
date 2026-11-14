@@ -286,26 +286,32 @@ describe('US03 - CreateItemSchema', () => {
   });
 
   describe('tombamento x tipo', () => {
-    // Critério CA2: patrimonial sem tombamento (campo ausente)
-    it('CA2: rejeita patrimonial sem tombamento', () => {
+    // Critério S3-19 (CA1): patrimonial sem tombamento (campo ausente) fica pendente
+    it('CA1/S3-19: aceita patrimonial sem tombamento', () => {
       const { tombamento: _t, ...semTomb } = patrimonialValido;
       const r = CreateItemSchema.safeParse(semTomb);
-      expect(r.success).toBe(false);
-      expect(mensagens(r)).toContain('Tombamento é obrigatório para item patrimonial');
-      expect(caminhos(r)).toContain('tombamento');
+      expect(r.success).toBe(true);
+      if (r.success) {
+        expect(r.data.tombamento).toBeUndefined();
+      }
     });
 
-    // Valor-limite CA2: 0 caracteres (abaixo do mínimo)
-    it('CA2: rejeita patrimonial com tombamento vazio', () => {
+    // Critério S3-19 (CA1): string vazia vira undefined (pendente)
+    it('CA1/S3-19: aceita patrimonial com tombamento vazio (vira undefined)', () => {
       const r = CreateItemSchema.safeParse({ ...patrimonialValido, tombamento: '' });
-      expect(r.success).toBe(false);
-      expect(mensagens(r)).toContain('Tombamento inválido');
+      expect(r.success).toBe(true);
+      if (r.success) {
+        expect(r.data.tombamento).toBeUndefined();
+      }
     });
 
-    // Valor-limite CA2: só espaços vira vazio após trim
-    it('CA2: rejeita patrimonial com tombamento só de espaços', () => {
+    // Critério S3-19 (CA1): só espaços vira vazio após trim e depois undefined
+    it('CA1/S3-19: aceita patrimonial com tombamento só de espaços (vira undefined)', () => {
       const r = CreateItemSchema.safeParse({ ...patrimonialValido, tombamento: '   ' });
-      expect(r.success).toBe(false);
+      expect(r.success).toBe(true);
+      if (r.success) {
+        expect(r.data.tombamento).toBeUndefined();
+      }
     });
 
     // Valor-limite CA1: 1 caractere (limite válido)
@@ -1216,6 +1222,195 @@ describe('US03 - ItensController', () => {
     await esperarErro(
       controller.create('est-1', { ...patrimonialValido } as any, { userId: 'u2' } as any),
       AccessDeniedException,
+    );
+  });
+});
+// ---------------------------------------------------------------------------
+// S3-19: Tombamento pendente e tombamento posterior
+// ---------------------------------------------------------------------------
+
+describe('S3-19 - Tombamento pendente e tombamento posterior', () => {
+  const estoqueId = 'est-1';
+  const gestorId = 'gestor-1';
+
+  let prisma: {
+    estoque: { findUnique: ReturnType<typeof vi.fn> };
+    estoqueGestor: { findUnique: ReturnType<typeof vi.fn> };
+    categoria: { findUnique: ReturnType<typeof vi.fn> };
+    item: {
+      create: ReturnType<typeof vi.fn>;
+      findMany: ReturnType<typeof vi.fn>;
+      findFirst: ReturnType<typeof vi.fn>;
+      update: ReturnType<typeof vi.fn>;
+      count: ReturnType<typeof vi.fn>;
+    };
+  };
+  let service: ItensService;
+
+  beforeEach(() => {
+    prisma = {
+      estoque: { findUnique: vi.fn().mockResolvedValue({ id: estoqueId, ativo: true }) },
+      estoqueGestor: { findUnique: vi.fn().mockResolvedValue({ estoqueId, usuarioId: gestorId }) },
+      categoria: { findUnique: vi.fn().mockResolvedValue({ id: 'cat-1' }) },
+      item: {
+        create: vi.fn().mockImplementation(async ({ data }) => ({ id: 'item-1', ...data })),
+        findMany: vi.fn().mockResolvedValue([]),
+        findFirst: vi.fn(),
+        update: vi.fn().mockImplementation(async ({ where, data }) => ({ id: where.id, ...data })),
+        count: vi.fn().mockResolvedValue(0),
+      },
+    };
+    service = new ItensService(prisma as any);
+  });
+
+  it('S3-19 CA1: cadastra item patrimonial sem tombamento como pendente (tombamentoPendente=true)', async () => {
+    const { tombamento: _t, ...semTomb } = patrimonialValido;
+    const criado: any = await service.create(estoqueId, semTomb, gestorId);
+
+    expect(criado.tombamento).toBeUndefined();
+    expect(criado.tombamentoPendente).toBe(true);
+  });
+
+  it('S3-19 CA2: gestor do estoque completa tombamento de item patrimonial pendente', async () => {
+    prisma.item.findFirst.mockResolvedValue({
+      id: 'item-1',
+      estoqueId,
+      tipo: 'PATRIMONIAL',
+      tombamento: null,
+    });
+    prisma.item.update.mockResolvedValue({
+      id: 'item-1',
+      estoqueId,
+      tipo: 'PATRIMONIAL',
+      tombamento: 'TOMB-900',
+    });
+
+    const atualizado: any = await service.completarTombamento(
+      estoqueId,
+      'item-1',
+      { tombamento: 'TOMB-900' },
+      gestorId,
+    );
+
+    expect(atualizado.tombamento).toBe('TOMB-900');
+    expect(atualizado.tombamentoPendente).toBe(false);
+  });
+
+  it('S3-19 CA2: recusa completar tombamento com 403 quando usuário não é gestor do estoque', async () => {
+    prisma.estoqueGestor.findUnique.mockResolvedValue(null);
+
+    await esperarErro(
+      service.completarTombamento(estoqueId, 'item-1', { tombamento: 'TOMB-900' }, 'outro-user'),
+      AccessDeniedException,
+      'Apenas gestores deste estoque',
+      HttpStatus.FORBIDDEN,
+    );
+    expect(prisma.item.update).not.toHaveBeenCalled();
+  });
+
+  it('S3-19 CA2: recusa completar tombamento quando item já possui tombamento', async () => {
+    prisma.item.findFirst.mockResolvedValue({
+      id: 'item-1',
+      estoqueId,
+      tipo: 'PATRIMONIAL',
+      tombamento: 'TOMB-001',
+    });
+
+    await esperarErro(
+      service.completarTombamento(estoqueId, 'item-1', { tombamento: 'TOMB-900' }, gestorId),
+      AppException,
+      'já possui tombamento cadastrado',
+      HttpStatus.BAD_REQUEST,
+    );
+  });
+
+  it('S3-19 CA2/CA6: recusa completar tombamento em item de consumo', async () => {
+    prisma.item.findFirst.mockResolvedValue({
+      id: 'item-2',
+      estoqueId,
+      tipo: 'CONSUMO',
+      tombamento: null,
+    });
+
+    await esperarErro(
+      service.completarTombamento(estoqueId, 'item-2', { tombamento: 'TOMB-900' }, gestorId),
+      AppException,
+      'Item de consumo não possui tombamento',
+      HttpStatus.BAD_REQUEST,
+    );
+  });
+
+  it('S3-19 CA3: recusa tombamento duplicado ao completar tombamento com 409', async () => {
+    prisma.item.findFirst.mockResolvedValue({
+      id: 'item-1',
+      estoqueId,
+      tipo: 'PATRIMONIAL',
+      tombamento: null,
+    });
+    prisma.item.update.mockRejectedValue(erroP2002(['tombamento']));
+
+    await esperarErro(
+      service.completarTombamento(estoqueId, 'item-1', { tombamento: 'TOMB-001' }, gestorId),
+      ResourceConflictException,
+      'Já existe um item com este tombamento.',
+      HttpStatus.CONFLICT,
+    );
+  });
+
+  it('S3-19 CA4: bloqueia apagar tombamento já preenchido na edição (400)', async () => {
+    prisma.item.findFirst.mockResolvedValue({
+      id: 'item-1',
+      estoqueId,
+      tipo: 'PATRIMONIAL',
+      tombamento: 'TOMB-001',
+    });
+
+    await esperarErro(
+      service.update(estoqueId, 'item-1', { tombamento: '' }, gestorId),
+      AppException,
+      'Tombamento já preenchido não pode ser apagado',
+      HttpStatus.BAD_REQUEST,
+    );
+    expect(prisma.item.update).not.toHaveBeenCalled();
+  });
+
+  it('S3-19 CA5: listagem aplica filtro pendente=true e marca tombamentoPendente nos itens', async () => {
+    prisma.item.findMany.mockResolvedValue([
+      { id: 'i1', tipo: 'PATRIMONIAL', tombamento: null },
+    ]);
+    prisma.item.count.mockResolvedValue(1);
+
+    const res: any = await service.findAllByEstoque(estoqueId, {
+      page: 1,
+      limit: 10,
+      pendente: true,
+    } as any);
+
+    expect(prisma.item.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { estoqueId, tipo: 'PATRIMONIAL', tombamento: null },
+      }),
+    );
+    expect(res.items[0].tombamentoPendente).toBe(true);
+  });
+
+  it('S3-19 CA2 (Controller): delega completarTombamento ao service com estoqueId, id, dto e userId', async () => {
+    const itensServiceMock = {
+      create: vi.fn(),
+      findAllByEstoque: vi.fn(),
+      update: vi.fn(),
+      completarTombamento: vi.fn().mockResolvedValue({ id: 'item-1', tombamento: 'TOMB-900' }),
+    };
+    const controller = new ItensController(itensServiceMock as any);
+    const dto = { tombamento: 'TOMB-900' } as any;
+
+    await controller.completarTombamento(estoqueId, 'item-1', dto, { userId: gestorId } as any);
+
+    expect(itensServiceMock.completarTombamento).toHaveBeenCalledWith(
+      estoqueId,
+      'item-1',
+      dto,
+      gestorId,
     );
   });
 });

@@ -19,8 +19,9 @@ export interface ItemEstoque {
   nome: string;
   tipo: TipoItem;
   tombamento: string | null;
+  tombamentoPendente?: boolean;
   numeroSerie: string | null;
-  semTombamento: boolean;
+  semTombamento?: boolean;
   status: StatusItem;
 }
 

@@ -6,9 +6,10 @@ import { ErrorCode } from '../../common/exceptions/error-code.enum';
 import { ResourceConflictException } from '../../common/exceptions/resource-conflict.exception';
 import { ResourceNotFoundException } from '../../common/exceptions/resource-not-found.exception';
 import { PaginatedResponseDto } from '../../common/pagination/paginated-response.dto';
-import type { PaginationQueryDto } from '../../common/pagination/pagination-query.dto';
 import { PrismaService } from '../../database/prisma.service';
+import type { CompletarTombamentoDto } from './dto/completar-tombamento.dto';
 import type { CreateItemDto } from './dto/create-item.dto';
+import type { ListItensQueryDto } from './dto/list-itens-query.dto';
 import type { UpdateItemDto } from './dto/update-item.dto';
 
 @Injectable()
@@ -28,7 +29,7 @@ export class ItensService {
     await this.assertCategoriaExiste(dto.categoriaId);
 
     try {
-      return await this.prisma.item.create({
+      const item = await this.prisma.item.create({
         data: {
           tipo: dto.tipo,
           nome: dto.nome,
@@ -41,15 +42,23 @@ export class ItensService {
         },
         include: { categoria: true },
       });
+      return this.comTombamentoPendente(item);
     } catch (error) {
       this.traduzirErroDeUnicidade(error);
     }
   }
 
-  async findAllByEstoque(estoqueId: string, query: PaginationQueryDto) {
+  async findAllByEstoque(estoqueId: string, query: ListItensQueryDto) {
     await this.findEstoqueOrFail(estoqueId);
 
-    const where = { estoqueId };
+    const where: Prisma.ItemWhereInput = { estoqueId };
+    if (query.pendente === true) {
+      where.tipo = 'PATRIMONIAL';
+      where.tombamento = null;
+    } else if (query.pendente === false) {
+      where.OR = [{ tipo: { not: 'PATRIMONIAL' } }, { tombamento: { not: null } }];
+    }
+
     const skip = (query.page - 1) * query.limit;
 
     const [items, total] = await Promise.all([
@@ -63,7 +72,8 @@ export class ItensService {
       this.prisma.item.count({ where }),
     ]);
 
-    return PaginatedResponseDto.of(items, total, query);
+    const itemsComStatus = items.map((item) => this.comTombamentoPendente(item));
+    return PaginatedResponseDto.of(itemsComStatus, total, query);
   }
 
   async update(estoqueId: string, itemId: string, dto: UpdateItemDto, userId?: string) {
@@ -85,19 +95,83 @@ export class ItensService {
       );
     }
 
+    if (
+      item.tombamento &&
+      dto.tombamento !== undefined &&
+      (dto.tombamento === null || dto.tombamento.trim() === '')
+    ) {
+      throw new AppException(
+        ErrorCode.VALIDATION_FAILED,
+        'Tombamento já preenchido não pode ser apagado',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
     if (dto.categoriaId) {
       await this.assertCategoriaExiste(dto.categoriaId);
     }
 
     try {
-      return await this.prisma.item.update({
+      const atualizado = await this.prisma.item.update({
         where: { id: itemId },
         data: dto,
         include: { categoria: true },
       });
+      return this.comTombamentoPendente(atualizado);
     } catch (error) {
       this.traduzirErroDeUnicidade(error);
     }
+  }
+
+  async completarTombamento(
+    estoqueId: string,
+    itemId: string,
+    dto: CompletarTombamentoDto,
+    userId?: string,
+  ) {
+    await this.findEstoqueOrFail(estoqueId);
+    await this.assertGestorDoEstoque(estoqueId, userId);
+
+    const item = await this.prisma.item.findFirst({
+      where: { id: itemId, estoqueId },
+    });
+    if (!item) {
+      throw new ResourceNotFoundException('Item', itemId);
+    }
+
+    if (item.tipo !== 'PATRIMONIAL') {
+      throw new AppException(
+        ErrorCode.VALIDATION_FAILED,
+        'Item de consumo não possui tombamento',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    if (item.tombamento) {
+      throw new AppException(
+        ErrorCode.VALIDATION_FAILED,
+        'Este item já possui tombamento cadastrado',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    try {
+      const atualizado = await this.prisma.item.update({
+        where: { id: itemId },
+        data: { tombamento: dto.tombamento },
+        include: { categoria: true },
+      });
+      return this.comTombamentoPendente(atualizado);
+    } catch (error) {
+      this.traduzirErroDeUnicidade(error);
+    }
+  }
+
+  private comTombamentoPendente<T extends { tipo?: string; tombamento?: string | null }>(item: T) {
+    return {
+      ...item,
+      tombamentoPendente: item.tipo === 'PATRIMONIAL' && !item.tombamento,
+    };
   }
 
   private async findEstoqueOrFail(estoqueId: string) {

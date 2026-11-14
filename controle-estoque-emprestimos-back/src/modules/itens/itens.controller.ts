@@ -3,8 +3,9 @@ import type { CurrentUser } from '../../common/auth/current-user.interface';
 import { GetCurrentUser } from '../../common/auth/decorators/current-user.decorator';
 import { AuthGuard } from '../../common/auth/guards/auth.guard';
 import { RolesGuard } from '../../common/auth/guards/roles.guard';
-import { PaginationQueryDto } from '../../common/pagination/pagination-query.dto';
+import { CompletarTombamentoDto } from './dto/completar-tombamento.dto';
 import { CreateItemDto } from './dto/create-item.dto';
+import { ListItensQueryDto } from './dto/list-itens-query.dto';
 import { UpdateItemDto } from './dto/update-item.dto';
 import { ItensService } from './itens.service';
 
@@ -25,7 +26,7 @@ export class ItensController {
 
   // Leitura: qualquer usuário autenticado
   @Get()
-  findAll(@Param('estoqueId') estoqueId: string, @Query() query: PaginationQueryDto) {
+  findAll(@Param('estoqueId') estoqueId: string, @Query() query: ListItensQueryDto) {
     return this.itensService.findAllByEstoque(estoqueId, query);
   }
 
@@ -37,5 +38,15 @@ export class ItensController {
     @GetCurrentUser() user?: CurrentUser,
   ) {
     return this.itensService.update(estoqueId, id, dto, user?.userId);
+  }
+
+  @Patch(':id/tombamento')
+  completarTombamento(
+    @Param('estoqueId') estoqueId: string,
+    @Param('id') id: string,
+    @Body() dto: CompletarTombamentoDto,
+    @GetCurrentUser() user?: CurrentUser,
+  ) {
+    return this.itensService.completarTombamento(estoqueId, id, dto, user?.userId);
   }
 }

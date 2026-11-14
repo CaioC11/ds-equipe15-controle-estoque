@@ -2,7 +2,16 @@ import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Package, ShieldAlert, PlusCircle, AlertCircle, CheckCircle2 } from 'lucide-react';
+import {
+  Package,
+  ShieldAlert,
+  PlusCircle,
+  AlertCircle,
+  CheckCircle2,
+  Clock,
+  Tag,
+} from 'lucide-react';
+import { FormModal } from './FormModal';
 import { useAsync } from '../hooks/useAsync';
 import { STATUS_ITEM_LABELS, TIPO_ITEM_LABELS } from '../modules/estoques/estoque.types';
 import type { Estoque } from '../modules/estoques/estoque.types';
@@ -10,28 +19,19 @@ import { ItemApiError, itemService } from '../modules/estoques/item.service';
 import type { CreateItemDto, ItemListado } from '../modules/estoques/item.service';
 import { categoriasService } from '../services/categoriaService';
 
-const itemSchema = z
-  .object({
-    estoqueId: z.string().min(1, 'Selecione um estoque'),
-    categoriaId: z.string().min(1, 'A categoria é obrigatória'),
-    nome: z.string().trim().min(1, 'O nome é obrigatório'),
-    tipo: z.enum(['PATRIMONIAL', 'CONSUMO']),
-    numeroSerie: z.string().optional(),
-    // string no formulário (vazio = sem alerta); convertida para número no envio
-    nivelMinimo: z.string().regex(/^\d*$/, 'Informe um número inteiro maior ou igual a 0'),
-    tombamento: z.string().optional(),
-  })
-  .superRefine((data, ctx) => {
-    if (data.tipo === 'PATRIMONIAL' && (!data.tombamento || data.tombamento.trim() === '')) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Tombamento é obrigatório para itens de tipo Patrimonial',
-        path: ['tombamento'],
-      });
-    }
-  });
+const itemSchema = z.object({
+  estoqueId: z.string().min(1, 'Selecione um estoque'),
+  categoriaId: z.string().min(1, 'A categoria é obrigatória'),
+  nome: z.string().trim().min(1, 'O nome é obrigatório'),
+  tipo: z.enum(['PATRIMONIAL', 'CONSUMO']),
+  numeroSerie: z.string().optional(),
+  // string no formulário (vazio = sem alerta); convertida para número no envio
+  nivelMinimo: z.string().regex(/^\d*$/, 'Informe um número inteiro maior ou igual a 0'),
+  tombamento: z.string().optional(),
+});
 
 type ItemFormData = z.infer<typeof itemSchema>;
+type FiltroPendencia = 'TODOS' | 'PENDENTES' | 'TOMBADOS';
 
 const valoresIniciais: ItemFormData = {
   estoqueId: '',
@@ -43,15 +43,25 @@ const valoresIniciais: ItemFormData = {
   tombamento: '',
 };
 
+function isItemPendente(item: ItemListado): boolean {
+  return item.tombamentoPendente ?? (item.tipo === 'PATRIMONIAL' && !item.tombamento);
+}
+
 interface Props {
   estoques: Estoque[];
   isGestor: boolean;
-  /** Chamado depois de criar um item (a página usa para recarregar os saldos). */
+  /** Chamado depois de criar ou atualizar um item (a página usa para recarregar os saldos). */
   onItemCriado?: () => void;
 }
 
 export const GerenciamentoEstoque: React.FC<Props> = ({ estoques, isGestor, onItemCriado }) => {
   const [sucessoMsg, setSucessoMsg] = useState<string | null>(null);
+  const [filtroPendencia, setFiltroPendencia] = useState<FiltroPendencia>('TODOS');
+  const [itemParaTombar, setItemParaTombar] = useState<ItemListado | null>(null);
+  const [novoTombamento, setNovoTombamento] = useState('');
+  const [erroTombamentoModal, setErroTombamentoModal] = useState<string | null>(null);
+  const [salvandoTombamento, setSalvandoTombamento] = useState(false);
+
   const estoquesAtivos = estoques.filter((estoque) => estoque.ativo);
 
   const {
@@ -74,14 +84,24 @@ export const GerenciamentoEstoque: React.FC<Props> = ({ estoques, isGestor, onIt
     [],
   );
 
+  const filtroApi =
+    filtroPendencia === 'PENDENTES'
+      ? { pendente: true }
+      : filtroPendencia === 'TOMBADOS'
+        ? { pendente: false }
+        : undefined;
+
   const {
     data: itens = [],
     isLoading: carregandoItens,
     error: erroItens,
     reload: recarregarItens,
   } = useAsync<ItemListado[]>(
-    () => (estoqueSelecionado ? itemService.listar(estoqueSelecionado) : Promise.resolve([])),
-    [estoqueSelecionado],
+    () =>
+      estoqueSelecionado
+        ? itemService.listar(estoqueSelecionado, filtroApi)
+        : Promise.resolve([]),
+    [estoqueSelecionado, filtroPendencia],
   );
 
   const nomeEstoque = estoquesAtivos.find((e) => e.id === estoqueSelecionado)?.nome;
@@ -93,7 +113,7 @@ export const GerenciamentoEstoque: React.FC<Props> = ({ estoques, isGestor, onIt
       tipo: data.tipo,
       nome: data.nome.trim(),
       categoriaId: data.categoriaId,
-      // o back recusa tombamento vazio e tombamento em item de consumo
+      // Patrimonial sem tombamento é enviado como undefined para ficar pendente
       tombamento: data.tipo === 'PATRIMONIAL' ? data.tombamento?.trim() || undefined : undefined,
       numeroSerie: data.numeroSerie?.trim() || undefined,
       nivelMinimo: data.nivelMinimo === '' ? undefined : Number(data.nivelMinimo),
@@ -116,11 +136,62 @@ export const GerenciamentoEstoque: React.FC<Props> = ({ estoques, isGestor, onIt
       return;
     }
 
-    setSucessoMsg('Item cadastrado com sucesso!');
+    setSucessoMsg(
+      dto.tipo === 'PATRIMONIAL' && !dto.tombamento
+        ? 'Item patrimonial cadastrado com tombamento pendente!'
+        : 'Item cadastrado com sucesso!',
+    );
     reset({ ...valoresIniciais, estoqueId: data.estoqueId });
     recarregarItens();
     onItemCriado?.();
   };
+
+  const abrirModalTombamento = (item: ItemListado) => {
+    setItemParaTombar(item);
+    setNovoTombamento('');
+    setErroTombamentoModal(null);
+  };
+
+  const fecharModalTombamento = () => {
+    if (salvandoTombamento) return;
+    setItemParaTombar(null);
+    setNovoTombamento('');
+    setErroTombamentoModal(null);
+  };
+
+  const handleConfirmarTombamento = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!itemParaTombar || !estoqueSelecionado) return;
+
+    const codigo = novoTombamento.trim();
+    if (!codigo) {
+      setErroTombamentoModal('Informe o código de tombamento.');
+      return;
+    }
+
+    setSalvandoTombamento(true);
+    setErroTombamentoModal(null);
+    setSucessoMsg(null);
+
+    try {
+      await itemService.completarTombamento(estoqueSelecionado, itemParaTombar.id, {
+        tombamento: codigo,
+      });
+      setItemParaTombar(null);
+      setNovoTombamento('');
+      setSucessoMsg('Tombamento informado com sucesso!');
+      recarregarItens();
+      onItemCriado?.();
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Não foi possível informar o tombamento.';
+      setErroTombamentoModal(message);
+    } finally {
+      setSalvandoTombamento(false);
+    }
+  };
+
+  const totalColunas = isGestor ? 8 : 7;
 
   return (
     <div className="w-full max-w-5xl mx-auto p-6 space-y-8">
@@ -131,19 +202,22 @@ export const GerenciamentoEstoque: React.FC<Props> = ({ estoques, isGestor, onIt
         </h1>
       </div>
 
+      {sucessoMsg && (
+        <div
+          role="status"
+          className="p-3 bg-green-50 border border-green-200 text-green-700 rounded-md text-sm flex items-center gap-2"
+        >
+          <CheckCircle2 className="h-4 w-4 shrink-0" />
+          {sucessoMsg}
+        </div>
+      )}
+
       {isGestor ? (
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
           <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
             <PlusCircle className="h-5 w-5 text-blue-600" />
             Cadastrar Novo Item
           </h2>
-
-          {sucessoMsg && (
-            <div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-700 rounded-md text-sm flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4" />
-              {sucessoMsg}
-            </div>
-          )}
 
           {errors.root && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-md text-sm flex items-center gap-2">
@@ -154,8 +228,11 @@ export const GerenciamentoEstoque: React.FC<Props> = ({ estoques, isGestor, onIt
 
           <form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Estoque *</label>
+              <label htmlFor="item-estoque" className="block text-sm font-medium text-gray-700 mb-1">
+                Estoque *
+              </label>
               <select
+                id="item-estoque"
                 {...register('estoqueId')}
                 className="w-full px-3 py-2 border rounded-md text-sm border-gray-300 focus:ring-2 focus:ring-blue-500"
               >
@@ -166,12 +243,20 @@ export const GerenciamentoEstoque: React.FC<Props> = ({ estoques, isGestor, onIt
                   </option>
                 ))}
               </select>
-              {errors.estoqueId && <p className="text-xs text-red-600 mt-1">{errors.estoqueId.message}</p>}
+              {errors.estoqueId && (
+                <p className="text-xs text-red-600 mt-1">{errors.estoqueId.message}</p>
+              )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Categoria *</label>
+              <label
+                htmlFor="item-categoria"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Categoria *
+              </label>
               <select
+                id="item-categoria"
                 {...register('categoriaId')}
                 className="w-full px-3 py-2 border rounded-md text-sm border-gray-300 focus:ring-2 focus:ring-blue-500"
               >
@@ -182,15 +267,20 @@ export const GerenciamentoEstoque: React.FC<Props> = ({ estoques, isGestor, onIt
                   </option>
                 ))}
               </select>
-              {errors.categoriaId && <p className="text-xs text-red-600 mt-1">{errors.categoriaId.message}</p>}
+              {errors.categoriaId && (
+                <p className="text-xs text-red-600 mt-1">{errors.categoriaId.message}</p>
+              )}
               {erroCategorias && (
                 <p className="text-xs text-red-600 mt-1">Não foi possível carregar as categorias.</p>
               )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nome *</label>
+              <label htmlFor="item-nome" className="block text-sm font-medium text-gray-700 mb-1">
+                Nome *
+              </label>
               <input
+                id="item-nome"
                 type="text"
                 {...register('nome')}
                 className="w-full px-3 py-2 border rounded-md text-sm border-gray-300 focus:ring-2 focus:ring-blue-500"
@@ -199,8 +289,11 @@ export const GerenciamentoEstoque: React.FC<Props> = ({ estoques, isGestor, onIt
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Tipo *</label>
+              <label htmlFor="item-tipo" className="block text-sm font-medium text-gray-700 mb-1">
+                Tipo *
+              </label>
               <select
+                id="item-tipo"
                 {...register('tipo')}
                 className="w-full px-3 py-2 border rounded-md text-sm border-gray-300 focus:ring-2 focus:ring-blue-500"
               >
@@ -210,33 +303,60 @@ export const GerenciamentoEstoque: React.FC<Props> = ({ estoques, isGestor, onIt
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nº de Série</label>
+              <label htmlFor="item-serie" className="block text-sm font-medium text-gray-700 mb-1">
+                Nº de Série
+              </label>
               <input
+                id="item-serie"
                 type="text"
                 {...register('numeroSerie')}
                 className="w-full px-3 py-2 border rounded-md text-sm border-gray-300 focus:ring-2 focus:ring-blue-500"
               />
-              {errors.numeroSerie && <p className="text-xs text-red-600 mt-1">{errors.numeroSerie.message}</p>}
+              {errors.numeroSerie && (
+                <p className="text-xs text-red-600 mt-1">{errors.numeroSerie.message}</p>
+              )}
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nível Mínimo</label>
+              <label
+                htmlFor="item-nivel-minimo"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Nível Mínimo
+              </label>
               <input
+                id="item-nivel-minimo"
                 type="number"
                 min="0"
                 step="1"
                 {...register('nivelMinimo')}
                 className="w-full px-3 py-2 border rounded-md text-sm border-gray-300 focus:ring-2 focus:ring-blue-500"
               />
-              {errors.nivelMinimo && <p className="text-xs text-red-600 mt-1">{errors.nivelMinimo.message}</p>}
+              {errors.nivelMinimo && (
+                <p className="text-xs text-red-600 mt-1">{errors.nivelMinimo.message}</p>
+              )}
             </div>
 
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Tombamento {tipoSelecionado === 'PATRIMONIAL' && <span className="text-red-500">*</span>}
+              <label
+                htmlFor="item-tombamento"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Tombamento{' '}
+                {tipoSelecionado === 'PATRIMONIAL' && (
+                  <span className="font-normal text-gray-500">
+                    (opcional — deixe em branco para cadastrar com tombamento pendente)
+                  </span>
+                )}
               </label>
               <input
+                id="item-tombamento"
                 type="text"
+                placeholder={
+                  tipoSelecionado === 'PATRIMONIAL'
+                    ? 'Ex.: PAT-2026-001 (ou deixe em branco)'
+                    : 'Não aplicável para item de consumo'
+                }
                 disabled={tipoSelecionado === 'CONSUMO'}
                 {...register('tombamento')}
                 className={`w-full px-3 py-2 border rounded-md text-sm border-gray-300 focus:ring-2 focus:ring-blue-500 ${
@@ -255,7 +375,7 @@ export const GerenciamentoEstoque: React.FC<Props> = ({ estoques, isGestor, onIt
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm transition-colors disabled:opacity-50"
+                className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm transition-colors disabled:opacity-50 cursor-pointer"
               >
                 {isSubmitting ? 'Salvando...' : 'Cadastrar Item'}
               </button>
@@ -270,9 +390,41 @@ export const GerenciamentoEstoque: React.FC<Props> = ({ estoques, isGestor, onIt
       )}
 
       <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b bg-gray-50">
+        <div className="px-6 py-4 border-b bg-gray-50 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-base font-semibold text-gray-800">Itens do Estoque</h2>
+
+          <div
+            role="group"
+            aria-label="Filtrar por status de tombamento"
+            className="inline-flex rounded-lg border border-gray-300 bg-white p-0.5 text-xs"
+          >
+            {(
+              [
+                { id: 'TODOS', label: 'Todos' },
+                { id: 'PENDENTES', label: 'Pendentes de tombamento' },
+                { id: 'TOMBADOS', label: 'Tombados' },
+              ] as const
+            ).map((opcao) => {
+              const ativo = filtroPendencia === opcao.id;
+              return (
+                <button
+                  key={opcao.id}
+                  type="button"
+                  aria-pressed={ativo}
+                  onClick={() => setFiltroPendencia(opcao.id)}
+                  className={`px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer ${
+                    ativo
+                      ? 'bg-blue-600 text-white'
+                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                  }`}
+                >
+                  {opcao.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
+
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-gray-600">
             <thead className="bg-gray-100 text-gray-700 uppercase text-xs font-medium">
@@ -284,44 +436,131 @@ export const GerenciamentoEstoque: React.FC<Props> = ({ estoques, isGestor, onIt
                 <th className="px-6 py-3">Tombamento</th>
                 <th className="px-6 py-3">Mínimo</th>
                 <th className="px-6 py-3">Status</th>
+                {isGestor && <th className="px-6 py-3 text-right">Ações</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {!estoqueSelecionado ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={totalColunas} className="px-6 py-8 text-center text-gray-500">
                     Selecione um estoque para ver os itens.
                   </td>
                 </tr>
               ) : carregandoItens ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-gray-500">Carregando itens...</td>
+                  <td colSpan={totalColunas} className="px-6 py-8 text-center text-gray-500">
+                    Carregando itens...
+                  </td>
                 </tr>
               ) : erroItens ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-red-600">{erroItens.message}</td>
+                  <td colSpan={totalColunas} className="px-6 py-8 text-center text-red-600">
+                    {erroItens.message}
+                  </td>
                 </tr>
               ) : itens.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-8 text-center text-gray-500">Nenhum item cadastrado.</td>
+                  <td colSpan={totalColunas} className="px-6 py-8 text-center text-gray-500">
+                    Nenhum item encontrado.
+                  </td>
                 </tr>
               ) : (
-                itens.map((item) => (
-                  <tr key={item.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4">{item.nome}</td>
-                    <td className="px-6 py-4">{item.categoria?.nome ?? '-'}</td>
-                    <td className="px-6 py-4">{TIPO_ITEM_LABELS[item.tipo]}</td>
-                    <td className="px-6 py-4 font-mono">{item.numeroSerie || '-'}</td>
-                    <td className="px-6 py-4 font-mono">{item.tombamento || '-'}</td>
-                    <td className="px-6 py-4">{item.nivelMinimo ?? '-'}</td>
-                    <td className="px-6 py-4">{STATUS_ITEM_LABELS[item.status]}</td>
-                  </tr>
-                ))
+                itens.map((item) => {
+                  const pendente = isItemPendente(item);
+                  return (
+                    <tr key={item.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 font-medium text-gray-900">{item.nome}</td>
+                      <td className="px-6 py-4">{item.categoria?.nome ?? '-'}</td>
+                      <td className="px-6 py-4">{TIPO_ITEM_LABELS[item.tipo]}</td>
+                      <td className="px-6 py-4 font-mono">{item.numeroSerie || '-'}</td>
+                      <td className="px-6 py-4">
+                        {item.tombamento ? (
+                          <span className="font-mono text-gray-900">{item.tombamento}</span>
+                        ) : pendente ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">
+                            <Clock className="h-3 w-3" />
+                            Tombamento pendente
+                          </span>
+                        ) : (
+                          '-'
+                        )}
+                      </td>
+                      <td className="px-6 py-4">{item.nivelMinimo ?? '-'}</td>
+                      <td className="px-6 py-4">{STATUS_ITEM_LABELS[item.status]}</td>
+                      {isGestor && (
+                        <td className="px-6 py-4 text-right">
+                          {pendente ? (
+                            <button
+                              type="button"
+                              onClick={() => abrirModalTombamento(item)}
+                              className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-900 hover:bg-amber-100 transition-colors cursor-pointer"
+                            >
+                              <Tag className="h-3.5 w-3.5" />
+                              Informar tombamento
+                            </button>
+                          ) : (
+                            <span className="text-xs text-gray-400">—</span>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
       </div>
+
+      <FormModal
+        isOpen={itemParaTombar !== null}
+        onClose={fecharModalTombamento}
+        onSubmit={handleConfirmarTombamento}
+        title="Informar Tombamento"
+        isSubmitting={salvandoTombamento}
+        submitLabel="Salvar Tombamento"
+      >
+        {itemParaTombar && (
+          <div className="space-y-4">
+            <div className="rounded-lg bg-gray-50 p-3 text-sm text-gray-700 border border-gray-200">
+              <p className="font-medium text-gray-900">{itemParaTombar.nome}</p>
+              {itemParaTombar.numeroSerie && (
+                <p className="mt-0.5 text-xs text-gray-500">
+                  Nº de série: <span className="font-mono">{itemParaTombar.numeroSerie}</span>
+                </p>
+              )}
+            </div>
+
+            {erroTombamentoModal && (
+              <div
+                role="alert"
+                className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-md text-sm flex items-center gap-2"
+              >
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                {erroTombamentoModal}
+              </div>
+            )}
+
+            <div>
+              <label
+                htmlFor="modal-novo-tombamento"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Código de Tombamento *
+              </label>
+              <input
+                id="modal-novo-tombamento"
+                type="text"
+                autoFocus
+                placeholder="Ex.: PAT-2026-001"
+                value={novoTombamento}
+                onChange={(e) => setNovoTombamento(e.target.value)}
+                className="w-full px-3 py-2 border rounded-md text-sm border-gray-300 focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+        )}
+      </FormModal>
     </div>
   );
 };
