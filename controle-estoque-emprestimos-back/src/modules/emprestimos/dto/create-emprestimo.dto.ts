@@ -28,7 +28,8 @@ export const ResponsavelInputSchema = z
 export const CreateEmprestimoSchema = z
   .object({
     itemId: texto('Item é obrigatório'),
-    responsavel: ResponsavelInputSchema,
+    responsavel: ResponsavelInputSchema.optional(),
+    responsavelId: texto('Selecione um responsável válido').optional(),
     // Omitida = agora
     dataRetirada: z.coerce.date({ invalid_type_error: 'Data de retirada inválida' }).optional(),
     // Omitido ou null = prazo "indefinido"
@@ -36,6 +37,13 @@ export const CreateEmprestimoSchema = z
     observacoes: z.string().trim().optional(),
   })
   .superRefine((data, ctx) => {
+    if (Boolean(data.responsavel) === Boolean(data.responsavelId)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['responsavel'],
+        message: 'Informe um responsável novo ou selecione um cadastrado, nunca ambos',
+      });
+    }
     if (data.dataRetirada && data.prazoDevolucao && data.prazoDevolucao < data.dataRetirada) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

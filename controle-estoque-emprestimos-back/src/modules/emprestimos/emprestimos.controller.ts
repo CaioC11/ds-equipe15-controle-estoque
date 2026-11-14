@@ -63,6 +63,30 @@ export class EmprestimosController {
     return this.emprestimosService.findPendentes(estoqueId, query, user);
   }
 
+  @Get('responsaveis')
+  @ApiOperation({ summary: 'Lista responsáveis cadastrados para seleção no empréstimo' })
+  @ApiResponse({ status: 403, description: 'Somente ADMIN ou gestor deste estoque' })
+  listarResponsaveis(
+    @Param('estoqueId') estoqueId: string,
+    @Query() query: PaginationQueryDto,
+    @GetCurrentUser() user?: CurrentUser,
+  ) {
+    return this.emprestimosService.listarResponsaveis(estoqueId, query, user);
+  }
+
+  @Get('responsaveis/:responsavelId/historico')
+  @ApiOperation({ summary: 'Histórico do responsável no estoque, incluindo devoluções' })
+  @ApiResponse({ status: 403, description: 'Somente ADMIN ou gestor deste estoque' })
+  @ApiResponse({ status: 404, description: 'Responsável não encontrado' })
+  historicoResponsavel(
+    @Param('estoqueId') estoqueId: string,
+    @Param('responsavelId') responsavelId: string,
+    @Query() query: PaginationQueryDto,
+    @GetCurrentUser() user?: CurrentUser,
+  ) {
+    return this.emprestimosService.historicoResponsavel(estoqueId, responsavelId, query, user);
+  }
+
   @Post(':id/devolucao')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Registra a devolução de um empréstimo ativo e libera o item' })

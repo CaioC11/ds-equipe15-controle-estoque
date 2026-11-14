@@ -42,7 +42,7 @@ function comFlagTermo<
   };
 }
 
-type ResponsavelInput = CreateEmprestimoDto['responsavel'];
+type ResponsavelInput = NonNullable<CreateEmprestimoDto['responsavel']>;
 
 // Atraso é derivado, não é status (premissa A5): empréstimo ATIVO com prazo vencido
 export function estaAtrasado(
@@ -117,7 +117,12 @@ export class EmprestimosService {
           );
         }
 
-        const responsavel = await this.obterResponsavel(tx, dto.responsavel);
+        const responsavel = dto.responsavelId
+          ? await tx.responsavel.findUnique({ where: { id: dto.responsavelId } })
+          : await this.obterResponsavel(tx, dto.responsavel as ResponsavelInput);
+        if (!responsavel) {
+          throw new ResourceNotFoundException('Responsável', dto.responsavelId);
+        }
         await this.assertSemAtraso(tx, responsavel);
 
         const emprestimo = await tx.emprestimo.create({
@@ -194,6 +199,56 @@ export class EmprestimosService {
         }
       }
       this.traduzirErroDeUnicidade(error);
+    }
+  }
+
+  // S3-21: cadastro global de responsáveis; autorização sempre no estoque solicitado.
+  async listarResponsaveis(estoqueId: string, query: PaginationQueryDto, user?: CurrentUser) {
+    await this.assertPodeConsultar(estoqueId, user);
+    const [items, total] = await Promise.all([
+      this.prisma.responsavel.findMany({
+        select: { id: true, nome: true, siape: true, cpf: true, lotacao: true, cargo: true },
+        orderBy: [{ nome: 'asc' }, { id: 'asc' }],
+        skip: query.skip,
+        take: query.take,
+      }),
+      this.prisma.responsavel.count(),
+    ]);
+    return PaginatedResponseDto.of(items, total, query);
+  }
+
+  // O histórico inclui todos os estados, restrito ao estoque autorizado.
+  async historicoResponsavel(
+    estoqueId: string,
+    responsavelId: string,
+    query: PaginationQueryDto,
+    user?: CurrentUser,
+  ) {
+    await this.assertPodeConsultar(estoqueId, user);
+    const responsavel = await this.prisma.responsavel.findUnique({ where: { id: responsavelId } });
+    if (!responsavel) throw new ResourceNotFoundException('Responsável', responsavelId);
+    const where = { responsavelId, item: { estoqueId } };
+    const [emprestimos, total] = await Promise.all([
+      this.prisma.emprestimo.findMany({
+        where,
+        include: INCLUDE_EMPRESTIMO,
+        orderBy: [{ dataRetirada: 'desc' }, { id: 'asc' }],
+        skip: query.skip,
+        take: query.take,
+      }),
+      this.prisma.emprestimo.count({ where }),
+    ]);
+    return PaginatedResponseDto.of(
+      emprestimos.map((e) => ({ ...comFlagTermo(e), atrasado: estaAtrasado(e) })),
+      total,
+      query,
+    );
+  }
+
+  private async assertPodeConsultar(estoqueId: string, user?: CurrentUser) {
+    await this.findEstoqueOrFail(estoqueId);
+    if (user?.role !== AccessRole.ADMIN) {
+      await this.assertGestorDoEstoque(estoqueId, user?.userId);
     }
   }
 

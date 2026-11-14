@@ -4,7 +4,7 @@
 // Convenção dos comentários:
 //   "v1"                     -> teste mantido da v1
 //   "[v2] Lacuna CT-04-xx"   -> teste novo ou corrigido; xx é o caso da matriz-rastreabilidade-us4.md
-// Casos que dependem de funcionalidade ainda ausente ficam como it.todo com o número da issue (S3-21 (#101)).
+// S3-21 (#101) implementada: CA-02 e CA-10 agora têm testes executáveis. Só PR-04 permanece como todo.
 import { HttpStatus } from '@nestjs/common';
 import { StatusEmprestimo, StatusItem, TipoItem, TipoMovimentacao } from '@prisma/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -15,7 +15,10 @@ import { ResourceConflictException } from '../../src/common/exceptions/resource-
 import { ResourceNotFoundException } from '../../src/common/exceptions/resource-not-found.exception';
 import { CreateEmprestimoSchema } from '../../src/modules/emprestimos/dto/create-emprestimo.dto';
 import { RegistrarJustificativaPermanenciaSchema } from '../../src/modules/emprestimos/dto/registrar-justificativa-permanencia.dto';
-import { EmprestimosService, estaAtrasado } from '../../src/modules/emprestimos/emprestimos.service';
+import {
+  EmprestimosService,
+  estaAtrasado,
+} from '../../src/modules/emprestimos/emprestimos.service';
 import {
   PDF_MAGIC,
   TERMO_ASSINADO_MAX_BYTES,
@@ -89,13 +92,24 @@ const emprestimoBase = (over: Record<string, unknown> = {}) => ({
   termoId: 'termo-1',
   item: ITEM,
   responsavel: RESPONSAVEL,
-  termo: { id: 'termo-1', numeroAno: '01/2026', arquivoPdf: '2026/a.pdf', arquivoAssinado: null as string | null },
+  termo: {
+    id: 'termo-1',
+    numeroAno: '01/2026',
+    arquivoPdf: '2026/a.pdf',
+    arquivoAssinado: null as string | null,
+  },
   ...over,
 });
 
 const arquivoPdf = (over: Record<string, unknown> = {}) => {
   const buffer = Buffer.concat([PDF_MAGIC, Buffer.from('-1.4 conteudo')]);
-  return { buffer, size: buffer.length, mimetype: TERMO_ASSINADO_MIME, originalname: 'termo.pdf', ...over } as any;
+  return {
+    buffer,
+    size: buffer.length,
+    mimetype: TERMO_ASSINADO_MIME,
+    originalname: 'termo.pdf',
+    ...over,
+  } as any;
 };
 
 async function erroDe(promessa: Promise<unknown>): Promise<any> {
@@ -112,7 +126,13 @@ function criarPrisma() {
     estoque: { findUnique: vi.fn() },
     estoqueGestor: { findUnique: vi.fn() },
     item: { findFirst: vi.fn(), update: vi.fn() },
-    responsavel: { findMany: vi.fn(), create: vi.fn(), update: vi.fn() },
+    responsavel: {
+      findMany: vi.fn(),
+      findUnique: vi.fn(),
+      count: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+    },
     emprestimo: {
       findFirst: vi.fn(),
       findMany: vi.fn(),
@@ -168,7 +188,8 @@ function configurarCaminhoFelizDeCreate(prisma: any, termoPdf: any, termoStorage
 // id, item, responsável, status, prazoDevolucao.lt e justificativaPermanencia nula.
 function simularEmprestimosExistentes(prisma: any, lista: any[]) {
   const statusOk = (e: any, st: any) =>
-    st === undefined || (typeof st === 'string' ? e.status === st : !st.in || st.in.includes(e.status));
+    st === undefined ||
+    (typeof st === 'string' ? e.status === st : !st.in || st.in.includes(e.status));
   const prazoOk = (e: any, p: any) =>
     p === undefined || p?.lt === undefined || (e.prazoDevolucao != null && e.prazoDevolucao < p.lt);
   const casa = (e: any, where: any) =>
@@ -179,14 +200,24 @@ function simularEmprestimosExistentes(prisma: any, lista: any[]) {
       statusOk(e, where.status) &&
       prazoOk(e, where.prazoDevolucao) &&
       (where.justificativaPermanencia !== null || e.justificativaPermanencia == null));
-  prisma.emprestimo.findFirst.mockImplementation(async ({ where }: any) => lista.find((e) => casa(e, where)) ?? null);
-  prisma.emprestimo.findMany.mockImplementation(async ({ where }: any) => lista.filter((e) => casa(e, where)));
-  prisma.emprestimo.count.mockImplementation(async ({ where }: any) => lista.filter((e) => casa(e, where)).length);
+  prisma.emprestimo.findFirst.mockImplementation(
+    async ({ where }: any) => lista.find((e) => casa(e, where)) ?? null,
+  );
+  prisma.emprestimo.findMany.mockImplementation(async ({ where }: any) =>
+    lista.filter((e) => casa(e, where)),
+  );
+  prisma.emprestimo.count.mockImplementation(
+    async ({ where }: any) => lista.filter((e) => casa(e, where)).length,
+  );
 }
 
 let prisma: any;
 let termoPdf: { gerar: ReturnType<typeof vi.fn> };
-let termoStorage: { write: ReturnType<typeof vi.fn>; read: ReturnType<typeof vi.fn>; remove: ReturnType<typeof vi.fn> };
+let termoStorage: {
+  write: ReturnType<typeof vi.fn>;
+  read: ReturnType<typeof vi.fn>;
+  remove: ReturnType<typeof vi.fn>;
+};
 let service: EmprestimosService;
 
 beforeEach(() => {
@@ -207,9 +238,18 @@ afterEach(() => {
 // DTO: CreateEmprestimoSchema
 // ---------------------------------------------------------------------------
 describe('CreateEmprestimoSchema (validação de entrada)', () => {
-  const entrada = (over: Record<string, unknown> = {}, responsavel: Record<string, unknown> = {}) => ({
+  const entrada = (
+    over: Record<string, unknown> = {},
+    responsavel: Record<string, unknown> = {},
+  ) => ({
     itemId: 'item-1',
-    responsavel: { nome: 'Maria Souza', siape: '1234567', lotacao: 'DCC', cargo: 'Docente', ...responsavel },
+    responsavel: {
+      nome: 'Maria Souza',
+      siape: '1234567',
+      lotacao: 'DCC',
+      cargo: 'Docente',
+      ...responsavel,
+    },
     ...over,
   });
   const caminhos = (r: any) => r.error.issues.map((i: any) => i.path.join('.'));
@@ -221,7 +261,9 @@ describe('CreateEmprestimoSchema (validação de entrada)', () => {
 
   it('aceita responsável identificado apenas por CPF', () => {
     // v1 | Técnica: partição (classe válida: só CPF) | Requisito: CA1, CA2
-    const r = CreateEmprestimoSchema.safeParse(entrada({}, { siape: undefined, cpf: '12345678901' }));
+    const r = CreateEmprestimoSchema.safeParse(
+      entrada({}, { siape: undefined, cpf: '12345678901' }),
+    );
     expect(r.success).toBe(true);
   });
 
@@ -233,7 +275,9 @@ describe('CreateEmprestimoSchema (validação de entrada)', () => {
 
   it('normaliza CPF com máscara para 11 dígitos', () => {
     // v1 | Técnica: partição (CPF mascarado válido) | Requisito: CA2
-    const r: any = CreateEmprestimoSchema.safeParse(entrada({}, { siape: undefined, cpf: '123.456.789-01' }));
+    const r: any = CreateEmprestimoSchema.safeParse(
+      entrada({}, { siape: undefined, cpf: '123.456.789-01' }),
+    );
     expect(r.success).toBe(true);
     expect(r.data.responsavel.cpf).toBe('12345678901');
   });
@@ -332,7 +376,9 @@ describe('CreateEmprestimoSchema (validação de entrada)', () => {
 
     it('converte prazo informado em Date', () => {
       // v1 | Técnica: partição (prazo válido) | Requisito: CA3
-      const r: any = CreateEmprestimoSchema.safeParse(entrada({ prazoDevolucao: '2026-12-31T00:00:00.000Z' }));
+      const r: any = CreateEmprestimoSchema.safeParse(
+        entrada({ prazoDevolucao: '2026-12-31T00:00:00.000Z' }),
+      );
       expect(r.success).toBe(true);
       expect(r.data.prazoDevolucao).toEqual(new Date('2026-12-31T00:00:00.000Z'));
     });
@@ -370,7 +416,10 @@ describe('CreateEmprestimoSchema (validação de entrada)', () => {
 // estaAtrasado (derivação do atraso)
 // ---------------------------------------------------------------------------
 describe('estaAtrasado', () => {
-  const ativo = (prazoDevolucao: Date | null) => ({ status: StatusEmprestimo.ATIVO, prazoDevolucao });
+  const ativo = (prazoDevolucao: Date | null) => ({
+    status: StatusEmprestimo.ATIVO,
+    prazoDevolucao,
+  });
 
   it('é atraso quando o prazo venceu 1 ms antes de agora', () => {
     // v1 | Técnica: valor-limite (prazo = agora - 1 ms) | Requisito: CA8 | CT-04-29
@@ -392,13 +441,15 @@ describe('estaAtrasado', () => {
     expect(estaAtrasado(ativo(null), AGORA)).toBe(false);
   });
 
-  it.each([StatusEmprestimo.AGUARDANDO_TERMO, StatusEmprestimo.DEVOLVIDO])(
-    'não é atraso para status %s mesmo com prazo vencido',
-    (status) => {
-      // v1 | Técnica: partição (status diferente de ATIVO) | Requisito: CA8 | CT-04-31, CT-04-32
-      expect(estaAtrasado({ status, prazoDevolucao: new Date(AGORA.getTime() - UM_DIA) }, AGORA)).toBe(false);
-    },
-  );
+  it.each([
+    StatusEmprestimo.AGUARDANDO_TERMO,
+    StatusEmprestimo.DEVOLVIDO,
+  ])('não é atraso para status %s mesmo com prazo vencido', (status) => {
+    // v1 | Técnica: partição (status diferente de ATIVO) | Requisito: CA8 | CT-04-31, CT-04-32
+    expect(
+      estaAtrasado({ status, prazoDevolucao: new Date(AGORA.getTime() - UM_DIA) }, AGORA),
+    ).toBe(false);
+  });
 
   it('usa a data atual quando "agora" não é informado', () => {
     // v1 | Técnica: partição (parâmetro padrão) | Requisito: CA8
@@ -414,7 +465,9 @@ describe('estaAtrasado', () => {
 
   // [v2] Lacuna CT-04-28 (PR-04, LM-02 lado "hoje"): a matriz espera que no dia do prazo ainda não haja atraso,
   // mas o código compara o instante (prazoDevolucao < agora). Aguarda a equipe confirmar a premissa PR-04.
-  it.todo('[v2] CT-04-28: prazo igual a hoje (qualquer horário do dia) não é atraso — depende de confirmar PR-04');
+  it.todo(
+    '[v2] CT-04-28: prazo igual a hoje (qualquer horário do dia) não é atraso — depende de confirmar PR-04',
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -434,7 +487,9 @@ describe('EmprestimosService.create', () => {
     const r: any = await service.create(ESTOQUE_ID, criarDto(), USER_ID);
 
     const { data } = prisma.emprestimo.create.mock.calls[0][0];
-    expect(data).toEqual(expect.objectContaining({ itemId: ITEM.id, responsavelId: RESPONSAVEL.id }));
+    expect(data).toEqual(
+      expect.objectContaining({ itemId: ITEM.id, responsavelId: RESPONSAVEL.id }),
+    );
     expect(data.status).toBeUndefined();
     expect(r.termoAssinadoAnexado).toBe(false);
     expect(r.termo).toEqual({ id: 'termo-1', numeroAno: '01/2026' });
@@ -452,7 +507,9 @@ describe('EmprestimosService.create', () => {
       expect.objectContaining({ data: expect.objectContaining({ itemId: ITEM.id }) }),
     );
     expect(termoPdf.gerar).toHaveBeenCalledWith(
-      expect.objectContaining({ item: expect.objectContaining({ tombamento: null, numeroSerie: 'SN-1' }) }),
+      expect.objectContaining({
+        item: expect.objectContaining({ tombamento: null, numeroSerie: 'SN-1' }),
+      }),
     );
   });
 
@@ -461,7 +518,12 @@ describe('EmprestimosService.create', () => {
     await service.create(ESTOQUE_ID, criarDto(), USER_ID);
 
     expect(prisma.responsavel.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ nome: 'Maria Souza', siape: '1234567', lotacao: 'DCC', cargo: 'Docente' }),
+      data: expect.objectContaining({
+        nome: 'Maria Souza',
+        siape: '1234567',
+        lotacao: 'DCC',
+        cargo: 'Docente',
+      }),
     });
     expect(prisma.responsavel.update).not.toHaveBeenCalled();
     expect(prisma.emprestimo.create).toHaveBeenCalledWith(
@@ -475,7 +537,9 @@ describe('EmprestimosService.create', () => {
 
     await service.create(ESTOQUE_ID, criarDto(), USER_ID);
 
-    expect(prisma.responsavel.findMany).toHaveBeenCalledWith({ where: { OR: [{ siape: '1234567' }] } });
+    expect(prisma.responsavel.findMany).toHaveBeenCalledWith({
+      where: { OR: [{ siape: '1234567' }] },
+    });
     expect(prisma.responsavel.create).not.toHaveBeenCalled();
     expect(prisma.responsavel.update).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: RESPONSAVEL.id } }),
@@ -494,13 +558,21 @@ describe('EmprestimosService.create', () => {
 
     await service.create(ESTOQUE_ID, dto, USER_ID);
 
-    expect(prisma.responsavel.findMany).toHaveBeenCalledWith({ where: { OR: [{ cpf: '12345678901' }] } });
+    expect(prisma.responsavel.findMany).toHaveBeenCalledWith({
+      where: { OR: [{ cpf: '12345678901' }] },
+    });
   });
 
   it('procura por Siape e CPF quando ambos são informados', async () => {
     // v1 | Técnica: partição (identificação por Siape e CPF) | Requisito: CA2
     const dto = criarDto({
-      responsavel: { nome: 'Maria', siape: '1234567', cpf: '12345678901', lotacao: 'DCC', cargo: 'Docente' },
+      responsavel: {
+        nome: 'Maria',
+        siape: '1234567',
+        cpf: '12345678901',
+        lotacao: 'DCC',
+        cargo: 'Docente',
+      },
     });
 
     await service.create(ESTOQUE_ID, dto, USER_ID);
@@ -514,18 +586,22 @@ describe('EmprestimosService.create', () => {
     // v1 | Técnica: partição (identificadores conflitantes) | Requisito: CA2
     prisma.responsavel.findMany.mockResolvedValue([RESPONSAVEL, { ...RESPONSAVEL, id: 'resp-2' }]);
     const dto = criarDto({
-      responsavel: { nome: 'Maria', siape: '1234567', cpf: '12345678901', lotacao: 'DCC', cargo: 'Docente' },
+      responsavel: {
+        nome: 'Maria',
+        siape: '1234567',
+        cpf: '12345678901',
+        lotacao: 'DCC',
+        cargo: 'Docente',
+      },
     });
 
-    await expect(service.create(ESTOQUE_ID, dto, USER_ID)).rejects.toBeInstanceOf(ResourceConflictException);
+    await expect(service.create(ESTOQUE_ID, dto, USER_ID)).rejects.toBeInstanceOf(
+      ResourceConflictException,
+    );
     expect(prisma.emprestimo.create).not.toHaveBeenCalled();
   });
 
-  // [v2] Lacunas CT-04-05 (PRO-04), CT-04-09 e CT-04-10 (PRO-01 sem reenviar dados): o módulo não tem seleção
-  // de responsável por identificador nem consulta de responsáveis. Dependem da S3-21 (#101).
-  it.todo('[v2] CT-04-05: registrar empréstimo com identificador de responsável inexistente é recusado (404) — S3-21 (#101)');
-  it.todo('[v2] CT-04-09: lista responsáveis cadastrados com nome e Siape/CPF para seleção — CA-02, S3-21 (#101)');
-  it.todo('[v2] CT-04-10: novo empréstimo com responsável selecionado na lista, sem reenviar seus dados — CA-02, S3-21 (#101)');
+  // [v2] CT-04-05, 09 e 10: executados no grupo S3-21 abaixo.
 
   it('guarda o prazo de devolução quando informado', async () => {
     // v1 | Técnica: partição (prazo informado) | Requisito: CA3 | CT-04-11
@@ -562,7 +638,10 @@ describe('EmprestimosService.create', () => {
   it('recusa prazo 1 ms anterior à retirada', async () => {
     // v1 | Técnica: valor-limite (prazo = retirada - 1 ms) | Requisito: CA3 | CT-04-13
     const retirada = new Date('2026-11-13T10:00:00.000Z');
-    const dto = criarDto({ dataRetirada: retirada, prazoDevolucao: new Date(retirada.getTime() - 1) });
+    const dto = criarDto({
+      dataRetirada: retirada,
+      prazoDevolucao: new Date(retirada.getTime() - 1),
+    });
 
     const erro = await erroDe(service.create(ESTOQUE_ID, dto, USER_ID));
 
@@ -579,7 +658,11 @@ describe('EmprestimosService.create', () => {
     const retirada = new Date('2026-11-13T10:00:00.000Z');
     const prazo = new Date(retirada.getTime() + delta);
 
-    await service.create(ESTOQUE_ID, criarDto({ dataRetirada: retirada, prazoDevolucao: prazo }), USER_ID);
+    await service.create(
+      ESTOQUE_ID,
+      criarDto({ dataRetirada: retirada, prazoDevolucao: prazo }),
+      USER_ID,
+    );
 
     expect(prisma.emprestimo.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ prazoDevolucao: prazo }) }),
@@ -650,7 +733,9 @@ describe('EmprestimosService.create', () => {
     await expect(service.create(ESTOQUE_ID, criarDto(), USER_ID)).rejects.toBeInstanceOf(
       ResourceNotFoundException,
     );
-    expect(prisma.item.findFirst).toHaveBeenCalledWith({ where: { id: ITEM.id, estoqueId: ESTOQUE_ID } });
+    expect(prisma.item.findFirst).toHaveBeenCalledWith({
+      where: { id: ITEM.id, estoqueId: ESTOQUE_ID },
+    });
     expect(prisma.emprestimo.create).not.toHaveBeenCalled();
   });
 
@@ -670,7 +755,9 @@ describe('EmprestimosService.create', () => {
     // v1 | Técnica: partição (permissão inválida) | Requisito: CA1 | CT-04-41
     prisma.estoqueGestor.findUnique.mockResolvedValue(vinculo);
 
-    await expect(service.create(ESTOQUE_ID, criarDto(), userId)).rejects.toBeInstanceOf(AccessDeniedException);
+    await expect(service.create(ESTOQUE_ID, criarDto(), userId)).rejects.toBeInstanceOf(
+      AccessDeniedException,
+    );
     expect(prisma.emprestimo.create).not.toHaveBeenCalled();
   });
 
@@ -718,7 +805,10 @@ describe('EmprestimosService.create', () => {
   it('remove o PDF já gravado e traduz P2002 em conflito quando a transação falha por unicidade', async () => {
     // v1 | Técnica: partição (falha de unicidade com arquivo criado) | Requisito: CA2
     const { Prisma } = await import('@prisma/client');
-    const p2002 = new Prisma.PrismaClientKnownRequestError('Unique', { code: 'P2002', clientVersion: '5' });
+    const p2002 = new Prisma.PrismaClientKnownRequestError('Unique', {
+      code: 'P2002',
+      clientVersion: '5',
+    });
     prisma.termo.create.mockRejectedValue(p2002);
 
     await expect(service.create(ESTOQUE_ID, criarDto(), USER_ID)).rejects.toBeInstanceOf(
@@ -741,7 +831,9 @@ describe('EmprestimosService.create', () => {
     prisma.termo.create.mockRejectedValue(new Error('banco caiu'));
     termoStorage.remove.mockRejectedValue(new Error('disco cheio'));
 
-    await expect(service.create(ESTOQUE_ID, criarDto(), USER_ID)).rejects.toBeInstanceOf(AggregateError);
+    await expect(service.create(ESTOQUE_ID, criarDto(), USER_ID)).rejects.toBeInstanceOf(
+      AggregateError,
+    );
   });
 
   it('não tenta remover PDF quando a falha ocorre antes da gravação', async () => {
@@ -788,14 +880,25 @@ describe('EmprestimosService.create', () => {
       prisma.responsavel.findMany.mockResolvedValue([responsavelCpf]);
       prisma.responsavel.update.mockResolvedValue(responsavelCpf);
       simularEmprestimosExistentes(prisma, [atrasado({ responsavelId: responsavelCpf.id })]);
-      const dto = criarDto({ responsavel: { nome: responsavelCpf.nome, cpf: responsavelCpf.cpf, lotacao: 'DCC', cargo: 'Docente' } });
+      const dto = criarDto({
+        responsavel: {
+          nome: responsavelCpf.nome,
+          cpf: responsavelCpf.cpf,
+          lotacao: 'DCC',
+          cargo: 'Docente',
+        },
+      });
 
       const erro = await erroDe(service.create(ESTOQUE_ID, dto, USER_ID));
 
-      expect(prisma.responsavel.findMany).toHaveBeenCalledWith({ where: { OR: [{ cpf: responsavelCpf.cpf }] } });
-      expect(prisma.emprestimo.findFirst).toHaveBeenCalledWith(expect.objectContaining({
-        where: expect.objectContaining({ responsavelId: responsavelCpf.id }),
-      }));
+      expect(prisma.responsavel.findMany).toHaveBeenCalledWith({
+        where: { OR: [{ cpf: responsavelCpf.cpf }] },
+      });
+      expect(prisma.emprestimo.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ responsavelId: responsavelCpf.id }),
+        }),
+      );
       expect(erro).toBeInstanceOf(ResourceConflictException);
       expect(erro.getStatus()).toBe(HttpStatus.CONFLICT);
       expect(erro.message).toMatch(/atras|pend/i);
@@ -846,7 +949,9 @@ describe('EmprestimosService.create', () => {
 
     it('[v2] impede quando o prazo venceu 1 ms antes de agora', async () => {
       // [v2] Lacuna LM-02/LM-03 (lado recusado, valor-limite) | Requisito: CA-09
-      simularEmprestimosExistentes(prisma, [atrasado({ prazoDevolucao: new Date(AGORA.getTime() - 1) })]);
+      simularEmprestimosExistentes(prisma, [
+        atrasado({ prazoDevolucao: new Date(AGORA.getTime() - 1) }),
+      ]);
 
       await expect(service.create(ESTOQUE_ID, criarDto(), USER_ID)).rejects.toBeInstanceOf(
         ResourceConflictException,
@@ -856,10 +961,16 @@ describe('EmprestimosService.create', () => {
     it.each([
       ['ativo ainda dentro do prazo', { prazoDevolucao: new Date(AGORA.getTime() + 5 * UM_DIA) }],
       ['ativo com prazo indefinido', { prazoDevolucao: null }],
-      ['ativo com prazo exatamente agora (limite: ainda sem atraso)', { prazoDevolucao: new Date(AGORA.getTime()) }],
+      [
+        'ativo com prazo exatamente agora (limite: ainda sem atraso)',
+        { prazoDevolucao: new Date(AGORA.getTime()) },
+      ],
       ['aguardando termo com prazo vencido', { status: StatusEmprestimo.AGUARDANDO_TERMO }],
       ['já devolvido', { status: StatusEmprestimo.DEVOLVIDO }],
-      ['em atraso, mas com justificativa de permanência registrada', { justificativaPermanencia: 'Item em uso no projeto' }],
+      [
+        'em atraso, mas com justificativa de permanência registrada',
+        { justificativaPermanencia: 'Item em uso no projeto' },
+      ],
     ])('[v2] aceita novo empréstimo quando o responsável tem empréstimo %s', async (_desc, over) => {
       // [v2] Lacuna CT-04-34 e CT-04-36 (PRS-04, PRS-05, LM-03 lado aceito) | Técnica: partição | Requisito: CA-09
       simularEmprestimosExistentes(prisma, [atrasado(over)]);
@@ -895,7 +1006,8 @@ describe('EmprestimosService.create', () => {
       const emAtraso = atrasado();
       simularEmprestimosExistentes(prisma, [emAtraso]);
       prisma.emprestimo.updateMany.mockImplementation(async ({ where, data }: any) => {
-        if (where.justificativaPermanencia === null && emAtraso.justificativaPermanencia != null) return { count: 0 };
+        if (where.justificativaPermanencia === null && emAtraso.justificativaPermanencia != null)
+          return { count: 0 };
         Object.assign(emAtraso, data);
         return { count: 1 };
       });
@@ -927,7 +1039,9 @@ describe('EmprestimosService.create', () => {
 
       await expect(service.create(ESTOQUE_ID, dto, USER_ID)).resolves.toBeDefined();
       expect(prisma.emprestimo.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ responsavelId: OUTRO_RESPONSAVEL.id }) }),
+        expect.objectContaining({
+          data: expect.objectContaining({ responsavelId: OUTRO_RESPONSAVEL.id }),
+        }),
       );
     });
   });
@@ -940,7 +1054,9 @@ describe('EmprestimosService.anexarTermoAssinado', () => {
   beforeEach(() => {
     prisma.emprestimo.findFirst.mockResolvedValue(emprestimoBase());
     prisma.emprestimo.findUniqueOrThrow.mockResolvedValue(
-      emprestimoBase({ termo: { id: 'termo-1', numeroAno: '01/2026', arquivoAssinado: 'novo.pdf' } }),
+      emprestimoBase({
+        termo: { id: 'termo-1', numeroAno: '01/2026', arquivoAssinado: 'novo.pdf' },
+      }),
     );
     prisma.termo.update.mockResolvedValue({});
     termoStorage.write.mockResolvedValue(undefined);
@@ -967,7 +1083,14 @@ describe('EmprestimosService.anexarTermoAssinado', () => {
   it('substitui o anexo anterior removendo o arquivo antigo', async () => {
     // v1 | Técnica: partição (já existe termo assinado) | Requisito: CA4
     prisma.emprestimo.findFirst.mockResolvedValue(
-      emprestimoBase({ termo: { id: 'termo-1', numeroAno: '01/2026', arquivoPdf: 'x.pdf', arquivoAssinado: 'velho.pdf' } }),
+      emprestimoBase({
+        termo: {
+          id: 'termo-1',
+          numeroAno: '01/2026',
+          arquivoPdf: 'x.pdf',
+          arquivoAssinado: 'velho.pdf',
+        },
+      }),
     );
 
     await service.anexarTermoAssinado(ESTOQUE_ID, 'emp-1', arquivoPdf(), USER_ID);
@@ -986,7 +1109,10 @@ describe('EmprestimosService.anexarTermoAssinado', () => {
     ['arquivo ausente', undefined],
     ['buffer vazio', arquivoPdf({ buffer: Buffer.alloc(0), size: 0 })],
     ['tipo não PDF', arquivoPdf({ mimetype: 'image/png' })],
-    ['conteúdo sem assinatura %PDF', arquivoPdf({ buffer: Buffer.from('nao e um pdf de verdade'), size: 24 })],
+    [
+      'conteúdo sem assinatura %PDF',
+      arquivoPdf({ buffer: Buffer.from('nao e um pdf de verdade'), size: 24 }),
+    ],
     ['tamanho 1 byte acima do limite', arquivoPdf({ size: TERMO_ASSINADO_MAX_BYTES + 1 })],
   ])('rejeita com 400: %s', async (_desc, arquivo) => {
     // v1 | Técnica: partição (arquivos inválidos) + valor-limite (limite + 1) | Requisito: CA4
@@ -1002,24 +1128,29 @@ describe('EmprestimosService.anexarTermoAssinado', () => {
     ['1 byte abaixo do limite', TERMO_ASSINADO_MAX_BYTES - 1],
   ])('[v2] aceita arquivo com tamanho %s e grava o anexo', async (_desc, size) => {
     // [v2] Lacuna (teste trivial da v1: só conferia toBeDefined) | Técnica: valor-limite (tamanho máximo) | Requisito: CA4
-    const r: any = await service.anexarTermoAssinado(ESTOQUE_ID, 'emp-1', arquivoPdf({ size }), USER_ID);
+    const r: any = await service.anexarTermoAssinado(
+      ESTOQUE_ID,
+      'emp-1',
+      arquivoPdf({ size }),
+      USER_ID,
+    );
 
     expect(termoStorage.write).toHaveBeenCalledTimes(1);
     expect(prisma.termo.update).toHaveBeenCalledTimes(1);
     expect(r.termoAssinadoAnexado).toBe(true);
   });
 
-  it.each([StatusEmprestimo.ATIVO, StatusEmprestimo.DEVOLVIDO])(
-    'recusa anexo quando o empréstimo está %s',
-    async (status) => {
-      // v1 | Técnica: partição (status inválido) | Requisito: CA4
-      prisma.emprestimo.findFirst.mockResolvedValue(emprestimoBase({ status }));
+  it.each([
+    StatusEmprestimo.ATIVO,
+    StatusEmprestimo.DEVOLVIDO,
+  ])('recusa anexo quando o empréstimo está %s', async (status) => {
+    // v1 | Técnica: partição (status inválido) | Requisito: CA4
+    prisma.emprestimo.findFirst.mockResolvedValue(emprestimoBase({ status }));
 
-      await expect(
-        service.anexarTermoAssinado(ESTOQUE_ID, 'emp-1', arquivoPdf(), USER_ID),
-      ).rejects.toBeInstanceOf(ResourceConflictException);
-    },
-  );
+    await expect(
+      service.anexarTermoAssinado(ESTOQUE_ID, 'emp-1', arquivoPdf(), USER_ID),
+    ).rejects.toBeInstanceOf(ResourceConflictException);
+  });
 
   it('responde 404 quando o empréstimo não existe neste estoque', async () => {
     // v1 | Técnica: partição (empréstimo inexistente) | Requisito: CA4
@@ -1053,7 +1184,9 @@ describe('EmprestimosService.anexarTermoAssinado', () => {
     const falha = new Error('banco caiu');
     prisma.termo.update.mockRejectedValue(falha);
 
-    await expect(service.anexarTermoAssinado(ESTOQUE_ID, 'emp-1', arquivoPdf(), USER_ID)).rejects.toBe(falha);
+    await expect(
+      service.anexarTermoAssinado(ESTOQUE_ID, 'emp-1', arquivoPdf(), USER_ID),
+    ).rejects.toBe(falha);
     expect(termoStorage.remove).toHaveBeenCalledWith(termoStorage.write.mock.calls[0][0]);
   });
 });
@@ -1064,7 +1197,12 @@ describe('EmprestimosService.anexarTermoAssinado', () => {
 describe('EmprestimosService.confirmarEntrega', () => {
   const comTermoAssinado = (over: Record<string, unknown> = {}) =>
     emprestimoBase({
-      termo: { id: 'termo-1', numeroAno: '01/2026', arquivoPdf: 'a.pdf', arquivoAssinado: 'assinado.pdf' },
+      termo: {
+        id: 'termo-1',
+        numeroAno: '01/2026',
+        arquivoPdf: 'a.pdf',
+        arquivoAssinado: 'assinado.pdf',
+      },
       ...over,
     });
 
@@ -1113,18 +1251,18 @@ describe('EmprestimosService.confirmarEntrega', () => {
     );
   });
 
-  it.each([StatusEmprestimo.ATIVO, StatusEmprestimo.DEVOLVIDO])(
-    'recusa confirmar entrega de empréstimo %s',
-    async (status) => {
-      // v1 | Técnica: partição (status inválido) | Requisito: CA4
-      prisma.emprestimo.findFirst.mockResolvedValue(comTermoAssinado({ status }));
+  it.each([
+    StatusEmprestimo.ATIVO,
+    StatusEmprestimo.DEVOLVIDO,
+  ])('recusa confirmar entrega de empréstimo %s', async (status) => {
+    // v1 | Técnica: partição (status inválido) | Requisito: CA4
+    prisma.emprestimo.findFirst.mockResolvedValue(comTermoAssinado({ status }));
 
-      await expect(service.confirmarEntrega(ESTOQUE_ID, 'emp-1', USER_ID)).rejects.toBeInstanceOf(
-        ResourceConflictException,
-      );
-      expect(prisma.item.update).not.toHaveBeenCalled();
-    },
-  );
+    await expect(service.confirmarEntrega(ESTOQUE_ID, 'emp-1', USER_ID)).rejects.toBeInstanceOf(
+      ResourceConflictException,
+    );
+    expect(prisma.item.update).not.toHaveBeenCalled();
+  });
 
   it('responde 404 para empréstimo inexistente neste estoque', async () => {
     // v1 | Técnica: partição (empréstimo inexistente) | Requisito: CA4
@@ -1203,25 +1341,27 @@ describe('EmprestimosService.devolver', () => {
 
   it('permite devolver empréstimo com prazo vencido', async () => {
     // v1 | Técnica: partição (ativo em atraso) | Requisito: CA7, CA8
-    prisma.emprestimo.findFirst.mockResolvedValue(ativo({ prazoDevolucao: new Date(AGORA.getTime() - UM_DIA) }));
+    prisma.emprestimo.findFirst.mockResolvedValue(
+      ativo({ prazoDevolucao: new Date(AGORA.getTime() - UM_DIA) }),
+    );
 
     await expect(service.devolver(ESTOQUE_ID, 'emp-1', USER_ID)).resolves.toBeDefined();
     expect(prisma.item.update).toHaveBeenCalledTimes(1);
   });
 
-  it.each([StatusEmprestimo.AGUARDANDO_TERMO, StatusEmprestimo.DEVOLVIDO])(
-    'recusa devolver empréstimo %s',
-    async (status) => {
-      // v1 | Técnica: partição (status inválido) | Requisito: CA7 | CT-04-24, CT-04-25
-      prisma.emprestimo.findFirst.mockResolvedValue(ativo({ status }));
+  it.each([
+    StatusEmprestimo.AGUARDANDO_TERMO,
+    StatusEmprestimo.DEVOLVIDO,
+  ])('recusa devolver empréstimo %s', async (status) => {
+    // v1 | Técnica: partição (status inválido) | Requisito: CA7 | CT-04-24, CT-04-25
+    prisma.emprestimo.findFirst.mockResolvedValue(ativo({ status }));
 
-      await expect(service.devolver(ESTOQUE_ID, 'emp-1', USER_ID)).rejects.toBeInstanceOf(
-        ResourceConflictException,
-      );
-      expect(prisma.item.update).not.toHaveBeenCalled();
-      expect(prisma.movimentacao.create).not.toHaveBeenCalled();
-    },
-  );
+    await expect(service.devolver(ESTOQUE_ID, 'emp-1', USER_ID)).rejects.toBeInstanceOf(
+      ResourceConflictException,
+    );
+    expect(prisma.item.update).not.toHaveBeenCalled();
+    expect(prisma.movimentacao.create).not.toHaveBeenCalled();
+  });
 
   it('responde 404 para empréstimo inexistente neste estoque', async () => {
     // v1 | Técnica: partição (empréstimo inexistente) | Requisito: CA7
@@ -1265,10 +1405,30 @@ describe('EmprestimosService.findPendentes', () => {
   const query = { page: 1, limit: 10 } as any;
 
   const lista = () => [
-    emprestimoBase({ id: 'e1', status: StatusEmprestimo.ATIVO, prazoDevolucao: new Date(AGORA.getTime() - UM_DIA), termo: termoComFlag }),
-    emprestimoBase({ id: 'e2', status: StatusEmprestimo.ATIVO, prazoDevolucao: new Date(AGORA.getTime() + UM_DIA), termo: termoComFlag }),
-    emprestimoBase({ id: 'e3', status: StatusEmprestimo.ATIVO, prazoDevolucao: null, termo: termoComFlag }),
-    emprestimoBase({ id: 'e4', status: StatusEmprestimo.AGUARDANDO_TERMO, prazoDevolucao: new Date(AGORA.getTime() - UM_DIA), termo: termoComFlag }),
+    emprestimoBase({
+      id: 'e1',
+      status: StatusEmprestimo.ATIVO,
+      prazoDevolucao: new Date(AGORA.getTime() - UM_DIA),
+      termo: termoComFlag,
+    }),
+    emprestimoBase({
+      id: 'e2',
+      status: StatusEmprestimo.ATIVO,
+      prazoDevolucao: new Date(AGORA.getTime() + UM_DIA),
+      termo: termoComFlag,
+    }),
+    emprestimoBase({
+      id: 'e3',
+      status: StatusEmprestimo.ATIVO,
+      prazoDevolucao: null,
+      termo: termoComFlag,
+    }),
+    emprestimoBase({
+      id: 'e4',
+      status: StatusEmprestimo.AGUARDANDO_TERMO,
+      prazoDevolucao: new Date(AGORA.getTime() - UM_DIA),
+      termo: termoComFlag,
+    }),
   ];
 
   beforeEach(() => {
@@ -1292,8 +1452,18 @@ describe('EmprestimosService.findPendentes', () => {
   it('[v2] destaca o atraso de empréstimo vencido há 5 dias e não destaca o que vence daqui a 5 dias', async () => {
     // [v2] Lacuna CT-04-26 e CT-04-27 (PAT-01, PAT-02): valores da matriz na listagem | Requisito: CA-08
     prisma.emprestimo.findMany.mockResolvedValue([
-      emprestimoBase({ id: 'v5', status: StatusEmprestimo.ATIVO, prazoDevolucao: new Date(AGORA.getTime() - 5 * UM_DIA), termo: termoComFlag }),
-      emprestimoBase({ id: 'f5', status: StatusEmprestimo.ATIVO, prazoDevolucao: new Date(AGORA.getTime() + 5 * UM_DIA), termo: termoComFlag }),
+      emprestimoBase({
+        id: 'v5',
+        status: StatusEmprestimo.ATIVO,
+        prazoDevolucao: new Date(AGORA.getTime() - 5 * UM_DIA),
+        termo: termoComFlag,
+      }),
+      emprestimoBase({
+        id: 'f5',
+        status: StatusEmprestimo.ATIVO,
+        prazoDevolucao: new Date(AGORA.getTime() + 5 * UM_DIA),
+        termo: termoComFlag,
+      }),
     ]);
 
     const r: any = await service.findPendentes(ESTOQUE_ID, query, gestor);
@@ -1307,7 +1477,12 @@ describe('EmprestimosService.findPendentes', () => {
   it('[v2] não destaca atraso de empréstimo devolvido, mesmo com prazo que já passou', async () => {
     // [v2] Lacuna CT-04-32 (PAT-05): confere o campo "atrasado" na listagem, e não só a função isolada | Requisito: CA-08
     prisma.emprestimo.findMany.mockResolvedValue([
-      emprestimoBase({ id: 'dev', status: StatusEmprestimo.DEVOLVIDO, prazoDevolucao: new Date(AGORA.getTime() - 5 * UM_DIA), termo: termoComFlag }),
+      emprestimoBase({
+        id: 'dev',
+        status: StatusEmprestimo.DEVOLVIDO,
+        prazoDevolucao: new Date(AGORA.getTime() - 5 * UM_DIA),
+        termo: termoComFlag,
+      }),
     ]);
 
     const r: any = await service.findPendentes(ESTOQUE_ID, query, gestor);
@@ -1319,7 +1494,10 @@ describe('EmprestimosService.findPendentes', () => {
     // v1 | Técnica: partição (status listados) | Requisito: CA8
     await service.findPendentes(ESTOQUE_ID, query, gestor);
 
-    const where = { status: { in: [StatusEmprestimo.AGUARDANDO_TERMO, StatusEmprestimo.ATIVO] }, item: { estoqueId: ESTOQUE_ID } };
+    const where = {
+      status: { in: [StatusEmprestimo.AGUARDANDO_TERMO, StatusEmprestimo.ATIVO] },
+      item: { estoqueId: ESTOQUE_ID },
+    };
     expect(prisma.emprestimo.findMany).toHaveBeenCalledWith(expect.objectContaining({ where }));
     expect(prisma.emprestimo.count).toHaveBeenCalledWith({ where });
   });
@@ -1343,7 +1521,9 @@ describe('EmprestimosService.findPendentes', () => {
     // v1 | Técnica: valor-limite (primeira página e páginas seguintes) | Requisito: CA8
     await service.findPendentes(ESTOQUE_ID, { page, limit } as any, gestor);
 
-    expect(prisma.emprestimo.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip, take: limit }));
+    expect(prisma.emprestimo.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ skip, take: limit }),
+    );
   });
 
   it('retorna lista vazia quando não há empréstimos pendentes', async () => {
@@ -1372,7 +1552,9 @@ describe('EmprestimosService.findPendentes', () => {
     // v1 | Técnica: partição (permissão inválida) | Requisito: CA8
     prisma.estoqueGestor.findUnique.mockResolvedValue(null);
 
-    await expect(service.findPendentes(ESTOQUE_ID, query, user)).rejects.toBeInstanceOf(AccessDeniedException);
+    await expect(service.findPendentes(ESTOQUE_ID, query, user)).rejects.toBeInstanceOf(
+      AccessDeniedException,
+    );
   });
 
   it('responde 404 quando o estoque não existe', async () => {
@@ -1406,7 +1588,9 @@ describe('EmprestimosService.obterPdf / obterPdfAssinado', () => {
   it('devolve o PDF assinado com sufixo "-assinado"', async () => {
     // v1 | Técnica: partição (termo assinado existente) | Requisito: CA4
     prisma.emprestimo.findFirst.mockResolvedValue(
-      emprestimoBase({ termo: { id: 't', numeroAno: '07/2026', arquivoPdf: 'a.pdf', arquivoAssinado: 's.pdf' } }),
+      emprestimoBase({
+        termo: { id: 't', numeroAno: '07/2026', arquivoPdf: 'a.pdf', arquivoAssinado: 's.pdf' },
+      }),
     );
     termoStorage.read.mockResolvedValue(Buffer.from('%PDF'));
 
@@ -1438,7 +1622,9 @@ describe('EmprestimosService.obterPdf / obterPdfAssinado', () => {
     // v1 | Técnica: partição (permissão inválida) | Requisito: CA1
     prisma.estoqueGestor.findUnique.mockResolvedValue(null);
 
-    await expect(service.obterPdf(ESTOQUE_ID, 'emp-1', gestor)).rejects.toBeInstanceOf(AccessDeniedException);
+    await expect(service.obterPdf(ESTOQUE_ID, 'emp-1', gestor)).rejects.toBeInstanceOf(
+      AccessDeniedException,
+    );
   });
 
   // [v2] Branches descobertos na v1 (service, linhas 196, 265 e 273) | Técnica: cobertura de decisão
@@ -1446,7 +1632,9 @@ describe('EmprestimosService.obterPdf / obterPdfAssinado', () => {
     // [v2] Branch linha 196 (empréstimo inexistente em obterPdf)
     prisma.emprestimo.findFirst.mockResolvedValue(null);
 
-    await expect(service.obterPdf(ESTOQUE_ID, 'emp-x', admin)).rejects.toBeInstanceOf(ResourceNotFoundException);
+    await expect(service.obterPdf(ESTOQUE_ID, 'emp-x', admin)).rejects.toBeInstanceOf(
+      ResourceNotFoundException,
+    );
   });
 
   it('[v2] obterPdfAssinado responde 404 quando o empréstimo não existe neste estoque', async () => {
@@ -1470,7 +1658,9 @@ describe('EmprestimosService.obterPdf / obterPdfAssinado', () => {
   it('[v2] obterPdfAssinado permite o gestor do estoque (não ADMIN)', async () => {
     // [v2] Branch linha 265 (usuário não ADMIN passa pela checagem de gestor) — o v1 só chamava com ADMIN
     prisma.emprestimo.findFirst.mockResolvedValue(
-      emprestimoBase({ termo: { id: 't', numeroAno: '07/2026', arquivoPdf: 'a.pdf', arquivoAssinado: 's.pdf' } }),
+      emprestimoBase({
+        termo: { id: 't', numeroAno: '07/2026', arquivoPdf: 'a.pdf', arquivoAssinado: 's.pdf' },
+      }),
     );
     termoStorage.read.mockResolvedValue(Buffer.from('%PDF'));
 
@@ -1507,7 +1697,9 @@ describe('[v2] Acesso por perfil no registro e na devolução (CA-11)', () => {
   ] as const;
 
   beforeEach(async () => {
-    const { EmprestimosController } = await import('../../src/modules/emprestimos/emprestimos.controller');
+    const { EmprestimosController } = await import(
+      '../../src/modules/emprestimos/emprestimos.controller'
+    );
     controller = new EmprestimosController(service as any);
     configurarCaminhoFelizDeCreate(prisma, termoPdf, termoStorage);
     prisma.estoqueGestor.findUnique.mockImplementation(async ({ where }: any) =>
@@ -1517,7 +1709,9 @@ describe('[v2] Acesso por perfil no registro e na devolução (CA-11)', () => {
     );
   });
 
-  it.each(perfis)('[v2] registro de empréstimo: %s recebe 403 e nada é criado', async (_perfil, usuario) => {
+  it.each(
+    perfis,
+  )('[v2] registro de empréstimo: %s recebe 403 e nada é criado', async (_perfil, usuario) => {
     // [v2] Lacuna CT-04-40, CT-04-41, CT-04-42 (PPF-02, PPF-03, PPF-04) | Técnica: partição (perfil inválido) | Requisito: CA-11
     const erro = await erroDe(controller.create(ESTOQUE_ID, criarDto(), usuario));
 
@@ -1527,9 +1721,13 @@ describe('[v2] Acesso por perfil no registro e na devolução (CA-11)', () => {
     expect(prisma.movimentacao.create).not.toHaveBeenCalled();
   });
 
-  it.each(perfis)('[v2] devolução: %s recebe 403 e o empréstimo continua ativo', async (_perfil, usuario) => {
+  it.each(
+    perfis,
+  )('[v2] devolução: %s recebe 403 e o empréstimo continua ativo', async (_perfil, usuario) => {
     // [v2] Lacuna CT-04-43, CT-04-44, CT-04-45 (PPF-02, PPF-03, PPF-04 com PED-01) | Requisito: CA-11
-    prisma.emprestimo.findFirst.mockResolvedValue(emprestimoBase({ status: StatusEmprestimo.ATIVO }));
+    prisma.emprestimo.findFirst.mockResolvedValue(
+      emprestimoBase({ status: StatusEmprestimo.ATIVO }),
+    );
 
     const erro = await erroDe(controller.devolver(ESTOQUE_ID, 'emp-1', usuario));
 
@@ -1539,14 +1737,25 @@ describe('[v2] Acesso por perfil no registro e na devolução (CA-11)', () => {
     expect(prisma.item.update).not.toHaveBeenCalled();
   });
 
-  it.each(perfis)('[v2] justificativa de permanência: %s recebe 403 e nada é gravado', async (_perfil, usuario) => {
+  it.each(
+    perfis,
+  )('[v2] justificativa de permanência: %s recebe 403 e nada é gravado', async (_perfil, usuario) => {
     // [v2] Lacuna CT-04-36 + CA-11 (PPF-02, PPF-03, PPF-04 na ação nova) | Técnica: partição (perfil inválido) | Requisito: CA-11
     prisma.emprestimo.findFirst.mockResolvedValue(
-      emprestimoBase({ status: StatusEmprestimo.ATIVO, prazoDevolucao: new Date(AGORA.getTime() - UM_DIA), justificativaPermanencia: null }),
+      emprestimoBase({
+        status: StatusEmprestimo.ATIVO,
+        prazoDevolucao: new Date(AGORA.getTime() - UM_DIA),
+        justificativaPermanencia: null,
+      }),
     );
 
     const erro = await erroDe(
-      controller.registrarJustificativaPermanencia(ESTOQUE_ID, 'emp-1', { justificativa: 'Em uso' }, usuario),
+      controller.registrarJustificativaPermanencia(
+        ESTOQUE_ID,
+        'emp-1',
+        { justificativa: 'Em uso' },
+        usuario,
+      ),
     );
 
     expect(erro).toBeInstanceOf(AccessDeniedException);
@@ -1590,12 +1799,16 @@ describe('[v2] RegistrarJustificativaPermanenciaSchema', () => {
     ['1001 caracteres (acima do limite)', 'a'.repeat(1001), false],
   ])('[v2] justificativa com %s', (_desc, justificativa, valido) => {
     // [v2] Lacuna CT-04-36 (PR-06) | Técnica: valor-limite (1 a 1000 caracteres) | Requisito: CA-09
-    expect(RegistrarJustificativaPermanenciaSchema.safeParse({ justificativa }).success).toBe(valido);
+    expect(RegistrarJustificativaPermanenciaSchema.safeParse({ justificativa }).success).toBe(
+      valido,
+    );
   });
 
   it('[v2] remove espaços nas pontas da justificativa', () => {
     // [v2] Lacuna CT-04-36 | Técnica: partição (texto com espaços nas pontas) | Requisito: CA-09
-    const r: any = RegistrarJustificativaPermanenciaSchema.safeParse({ justificativa: '  em uso  ' });
+    const r: any = RegistrarJustificativaPermanenciaSchema.safeParse({
+      justificativa: '  em uso  ',
+    });
     expect(r.success).toBe(true);
     expect(r.data.justificativa).toBe('em uso');
   });
@@ -1621,7 +1834,12 @@ describe('[v2] EmprestimosService.registrarJustificativaPermanencia', () => {
 
   it('[v2] grava a justificativa e mantém o empréstimo ativo e o item emprestado', async () => {
     // [v2] Lacuna CT-04-36 (PR-06) | Técnica: critério de aceitação (caminho feliz) | Requisito: CA-09
-    const r: any = await service.registrarJustificativaPermanencia(ESTOQUE_ID, 'emp-1', dto, USER_ID);
+    const r: any = await service.registrarJustificativaPermanencia(
+      ESTOQUE_ID,
+      'emp-1',
+      dto,
+      USER_ID,
+    );
 
     expect(prisma.emprestimo.updateMany).toHaveBeenCalledWith({
       where: { id: 'emp-1', justificativaPermanencia: null },
@@ -1634,13 +1852,20 @@ describe('[v2] EmprestimosService.registrarJustificativaPermanencia', () => {
 
   it('[v2] aceita quando o prazo venceu 1 ms antes de agora', async () => {
     // [v2] Lacuna LM-02 (limite do atraso na justificativa) | Técnica: valor-limite (prazo = agora - 1 ms) | Requisito: CA-09
-    prisma.emprestimo.findFirst.mockResolvedValue(ativoVencido({ prazoDevolucao: new Date(AGORA.getTime() - 1) }));
+    prisma.emprestimo.findFirst.mockResolvedValue(
+      ativoVencido({ prazoDevolucao: new Date(AGORA.getTime() - 1) }),
+    );
 
-    await expect(service.registrarJustificativaPermanencia(ESTOQUE_ID, 'emp-1', dto, USER_ID)).resolves.toBeDefined();
+    await expect(
+      service.registrarJustificativaPermanencia(ESTOQUE_ID, 'emp-1', dto, USER_ID),
+    ).resolves.toBeDefined();
   });
 
   it.each([
-    ['ativo com prazo exatamente agora (limite: sem atraso)', { prazoDevolucao: new Date(AGORA.getTime()) }],
+    [
+      'ativo com prazo exatamente agora (limite: sem atraso)',
+      { prazoDevolucao: new Date(AGORA.getTime()) },
+    ],
     ['ativo ainda dentro do prazo', { prazoDevolucao: new Date(AGORA.getTime() + UM_DIA) }],
     ['ativo com prazo indefinido', { prazoDevolucao: null }],
     ['aguardando termo com prazo vencido', { status: StatusEmprestimo.AGUARDANDO_TERMO }],
@@ -1657,7 +1882,9 @@ describe('[v2] EmprestimosService.registrarJustificativaPermanencia', () => {
 
   it('[v2] recusa (409) uma segunda justificativa para o mesmo empréstimo', async () => {
     // [v2] Lacuna CT-04-36 (uma justificativa por empréstimo) | Técnica: partição | Requisito: CA-09
-    prisma.emprestimo.findFirst.mockResolvedValue(ativoVencido({ justificativaPermanencia: 'já registrada' }));
+    prisma.emprestimo.findFirst.mockResolvedValue(
+      ativoVencido({ justificativaPermanencia: 'já registrada' }),
+    );
 
     await expect(
       service.registrarJustificativaPermanencia(ESTOQUE_ID, 'emp-1', dto, USER_ID),
@@ -1721,15 +1948,29 @@ describe('[v2] Fluxo completo do empréstimo', () => {
     const prazo = new Date('2026-12-20T00:00:00.000Z');
 
     prisma.item.findFirst.mockImplementation(async () => ({ ...ITEM, status: statusDoItem }));
-    prisma.emprestimo.findFirst.mockImplementation(async ({ where }: any) => (where?.itemId ? null : emp));
+    prisma.emprestimo.findFirst.mockImplementation(async ({ where }: any) =>
+      where?.itemId ? null : emp,
+    );
     prisma.emprestimo.create.mockImplementation(async ({ data }: any) => {
       // O banco aplica o default AGUARDANDO_TERMO, que o service não envia
-      emp = { id: 'emp-1', ...data, status: StatusEmprestimo.AGUARDANDO_TERMO, dataDevolucaoEfetiva: null, item: ITEM, responsavel: RESPONSAVEL, termo: null };
+      emp = {
+        id: 'emp-1',
+        ...data,
+        status: StatusEmprestimo.AGUARDANDO_TERMO,
+        dataDevolucaoEfetiva: null,
+        item: ITEM,
+        responsavel: RESPONSAVEL,
+        termo: null,
+      };
       return emp;
     });
     prisma.termo.create.mockImplementation(async ({ data }: any) => ({ id: 'termo-1', ...data }));
     prisma.emprestimo.update.mockImplementation(async ({ data }: any) => {
-      emp = { ...emp, ...data, termo: { id: 'termo-1', numeroAno: '01/2026', arquivoPdf: 'x.pdf', arquivoAssinado: null } };
+      emp = {
+        ...emp,
+        ...data,
+        termo: { id: 'termo-1', numeroAno: '01/2026', arquivoPdf: 'x.pdf', arquivoAssinado: null },
+      };
       return emp;
     });
     prisma.termo.update.mockImplementation(async ({ data }: any) => {
@@ -1777,12 +2018,8 @@ describe('[v2] Fluxo completo do empréstimo', () => {
 });
 
 // ---------------------------------------------------------------------------
-// [v2] Histórico do responsável (CA-10): a consulta não existe no módulo (S3-21 (#101))
+// [v2] Histórico do responsável (CA-10): coberto pelo grupo S3-21 abaixo
 // ---------------------------------------------------------------------------
-describe('[v2] Histórico do responsável (CA-10)', () => {
-  it.todo('[v2] CT-04-38: responsável com um empréstimo ativo e um devolvido vê os dois no histórico — S3-21 (#101)');
-  it.todo('[v2] CT-04-39: responsável sem nenhum empréstimo recebe histórico vazio, sem erro — S3-21 (#101)');
-});
 
 // ---------------------------------------------------------------------------
 // EmprestimosController (delegação ao service)
@@ -1793,7 +2030,9 @@ describe('EmprestimosController', () => {
 
   beforeEach(async () => {
     // Import dinâmico: falha de guards/decorators não derruba os testes do service
-    const { EmprestimosController } = await import('../../src/modules/emprestimos/emprestimos.controller');
+    const { EmprestimosController } = await import(
+      '../../src/modules/emprestimos/emprestimos.controller'
+    );
     svc = {
       create: vi.fn().mockResolvedValue({ id: 'emp-1' }),
       findPendentes: vi.fn().mockResolvedValue({ items: [] }),
@@ -1801,7 +2040,9 @@ describe('EmprestimosController', () => {
       anexarTermoAssinado: vi.fn().mockResolvedValue({ id: 'emp-1' }),
       confirmarEntrega: vi.fn().mockResolvedValue({ id: 'emp-1' }),
       registrarJustificativaPermanencia: vi.fn().mockResolvedValue({ id: 'emp-1' }),
-      obterPdf: vi.fn().mockResolvedValue({ pdf: Buffer.from('%PDF'), nomeArquivo: 'termo-01-2026.pdf' }),
+      obterPdf: vi
+        .fn()
+        .mockResolvedValue({ pdf: Buffer.from('%PDF'), nomeArquivo: 'termo-01-2026.pdf' }),
       obterPdfAssinado: vi
         .fn()
         .mockResolvedValue({ pdf: Buffer.from('%PDF'), nomeArquivo: 'termo-01-2026-assinado.pdf' }),
@@ -1856,7 +2097,12 @@ describe('EmprestimosController', () => {
 
     await controller.registrarJustificativaPermanencia(ESTOQUE_ID, 'emp-1', dto, user);
 
-    expect(svc.registrarJustificativaPermanencia).toHaveBeenCalledWith(ESTOQUE_ID, 'emp-1', dto, USER_ID);
+    expect(svc.registrarJustificativaPermanencia).toHaveBeenCalledWith(
+      ESTOQUE_ID,
+      'emp-1',
+      dto,
+      USER_ID,
+    );
   });
 
   it('anexarTermoAssinado repassa o arquivo enviado', async () => {
@@ -1894,25 +2140,268 @@ describe('EmprestimosController', () => {
     expect(svc.obterPdfAssinado).toHaveBeenCalledWith(ESTOQUE_ID, 'emp-1', user);
   });
 });
-// [v2] Lacunas de permissão das consultas ainda ausentes: S3-21 (#101).
-// Requisitos: CA-02, CA-10, RNF01 e docs/permissoes.md (ADMIN consulta;
-// gestor consulta seu estoque; requisitante e gestor de outro estoque recebem 403).
-// Sem inventar métodos de API: converter em testes executáveis quando S3-21 for implementada.
-describe('[v2] Permissões das consultas de responsáveis e histórico — S3-21', () => {
-  // [v2] Lacuna CT-04-47 | Requisito: CA-02, RNF01 | S3-21 (#101)
-  it.todo('[v2] CT-04-47: lista de responsáveis — gestor do estoque consulta com sucesso — S3-21 (#101)');
-  // [v2] Lacuna CT-04-48 | Requisito: CA-02, RNF01 | S3-21 (#101)
-  it.todo('[v2] CT-04-48: lista de responsáveis — ADMIN sem vínculo consulta com sucesso — S3-21 (#101)');
-  // [v2] Lacuna CT-04-49 | Requisito: CA-02, RNF01 | S3-21 (#101)
-  it.todo('[v2] CT-04-49: lista de responsáveis — requisitante recebe 403 sem expor dados — S3-21 (#101)');
-  // [v2] Lacuna CT-04-50 | Requisito: CA-02, RNF01 | S3-21 (#101)
-  it.todo('[v2] CT-04-50: lista de responsáveis — gestor de outro estoque recebe 403 sem expor dados — S3-21 (#101)');
-  // [v2] Lacuna CT-04-51 | Requisito: CA-10, RNF01 | S3-21 (#101)
-  it.todo('[v2] CT-04-51: histórico do responsável — gestor do estoque consulta com sucesso — S3-21 (#101)');
-  // [v2] Lacuna CT-04-52 | Requisito: CA-10, RNF01 | S3-21 (#101)
-  it.todo('[v2] CT-04-52: histórico do responsável — ADMIN sem vínculo consulta com sucesso — S3-21 (#101)');
-  // [v2] Lacuna CT-04-53 | Requisito: CA-10, RNF01 | S3-21 (#101)
-  it.todo('[v2] CT-04-53: histórico do responsável — requisitante recebe 403 sem expor dados — S3-21 (#101)');
-  // [v2] Lacuna CT-04-54 | Requisito: CA-10, RNF01 | S3-21 (#101)
-  it.todo('[v2] CT-04-54: histórico do responsável — gestor de outro estoque recebe 403 sem expor dados — S3-21 (#101)');
+
+// ---------------------------------------------------------------------------
+// [v2] S3-21 (#101): seleção, cadastro global e histórico por estoque autorizado.
+// ---------------------------------------------------------------------------
+describe('[v2] S3-21 — seleção de responsável (CA-02)', () => {
+  beforeEach(() => configurarCaminhoFelizDeCreate(prisma, termoPdf, termoStorage));
+
+  it('[v2] CT-04-10: seleciona cadastro existente sem reenviar dados nem duplicar ou editar o cadastro', async () => {
+    // [v2] Lacuna CT-04-10 (PRO-01) | Requisito: CA-02, S3-21
+    prisma.responsavel.findUnique.mockResolvedValue(RESPONSAVEL);
+    const dto = CreateEmprestimoSchema.parse({ itemId: ITEM.id, responsavelId: RESPONSAVEL.id });
+    await service.create(ESTOQUE_ID, dto, USER_ID);
+    expect(prisma.responsavel.findUnique).toHaveBeenCalledWith({ where: { id: RESPONSAVEL.id } });
+    expect(prisma.responsavel.findMany).not.toHaveBeenCalled();
+    expect(prisma.responsavel.create).not.toHaveBeenCalled();
+    expect(prisma.responsavel.update).not.toHaveBeenCalled();
+    expect(prisma.emprestimo.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ responsavelId: RESPONSAVEL.id, itemId: ITEM.id }),
+      }),
+    );
+    expect(termoPdf.gerar).toHaveBeenCalledWith(
+      expect.objectContaining({
+        responsavel: expect.objectContaining({ nome: RESPONSAVEL.nome, siape: RESPONSAVEL.siape }),
+      }),
+    );
+  });
+
+  it('[v2] CT-04-05: identificador inexistente retorna 404 sem criar empréstimo ou PDF', async () => {
+    // [v2] Lacuna CT-04-05 (PRO-04, PR-01) | Requisito: CA-01, S3-21
+    prisma.responsavel.findUnique.mockResolvedValue(null);
+    const erro = await erroDe(
+      service.create(ESTOQUE_ID, { itemId: ITEM.id, responsavelId: 'inexistente' }, USER_ID),
+    );
+    expect(erro).toBeInstanceOf(ResourceNotFoundException);
+    expect(erro.getStatus()).toBe(HttpStatus.NOT_FOUND);
+    expect(prisma.emprestimo.create).not.toHaveBeenCalled();
+    expect(prisma.movimentacao.create).not.toHaveBeenCalled();
+    expect(termoStorage.write).not.toHaveBeenCalled();
+  });
+
+  it('[v2] CT-04-33: selecionar cadastro existente não contorna o bloqueio por atraso', async () => {
+    // [v2] Lacuna CT-04-10 + CT-04-33 | Requisito: CA-02, CA-09, S3-20/S3-21
+    prisma.responsavel.findUnique.mockResolvedValue(RESPONSAVEL);
+    simularEmprestimosExistentes(prisma, [
+      emprestimoBase({
+        itemId: 'outro-item',
+        status: StatusEmprestimo.ATIVO,
+        prazoDevolucao: new Date(AGORA.getTime() - UM_DIA),
+      }),
+    ]);
+    await expect(
+      service.create(ESTOQUE_ID, { itemId: ITEM.id, responsavelId: RESPONSAVEL.id }, USER_ID),
+    ).rejects.toBeInstanceOf(ResourceConflictException);
+    expect(prisma.emprestimo.create).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['nenhum responsável', { itemId: ITEM.id }],
+    ['identificador vazio', { itemId: ITEM.id, responsavelId: '   ' }],
+    ['identificador nulo', { itemId: ITEM.id, responsavelId: null }],
+    ['dados e identificador juntos', { ...criarDto(), responsavelId: RESPONSAVEL.id }],
+  ])('[v2] CT-04-04/10: rejeita %s', (_desc, dto) => {
+    // [v2] Lacuna CT-04-04/10 | Requisito: CA-01, CA-02, S3-21 (entrada sem ambiguidade)
+    expect(CreateEmprestimoSchema.safeParse(dto).success).toBe(false);
+  });
+});
+
+describe('[v2] S3-21 — consultas e permissões (CA-02 e CA-10)', () => {
+  const query = { page: 1, limit: 20, skip: 0, take: 20 } as any;
+  const gestor = { userId: USER_ID, role: AccessRole.USER };
+  const admin = { userId: 'admin-1', role: AccessRole.ADMIN };
+  let controller: any;
+
+  beforeEach(async () => {
+    const { EmprestimosController } = await import(
+      '../../src/modules/emprestimos/emprestimos.controller'
+    );
+    controller = new EmprestimosController(service);
+    prisma.estoqueGestor.findUnique.mockImplementation(async ({ where }: any) =>
+      where.estoqueId_usuarioId.usuarioId === USER_ID
+        ? { estoqueId: ESTOQUE_ID, usuarioId: USER_ID }
+        : null,
+    );
+    prisma.responsavel.findMany.mockResolvedValue([RESPONSAVEL]);
+    prisma.responsavel.count.mockResolvedValue(1);
+    prisma.responsavel.findUnique.mockResolvedValue(RESPONSAVEL);
+    prisma.emprestimo.findMany.mockResolvedValue([]);
+    prisma.emprestimo.count.mockResolvedValue(0);
+  });
+
+  it('[v2] CT-04-09: cadastro feito no empréstimo fica disponível na lista com nome e identificação', async () => {
+    // [v2] Lacuna CT-04-09 (PRO-01, PRO-02) | Requisito: CA-02, S3-21
+    configurarCaminhoFelizDeCreate(prisma, termoPdf, termoStorage);
+    const cadastros: any[] = [];
+    prisma.responsavel.findMany.mockImplementation(async () => [...cadastros]);
+    prisma.responsavel.create.mockImplementation(async ({ data }: any) => {
+      const novo = { id: RESPONSAVEL.id, ...data };
+      cadastros.push(novo);
+      return novo;
+    });
+    prisma.responsavel.count.mockImplementation(async () => cadastros.length);
+    await service.create(ESTOQUE_ID, criarDto(), USER_ID);
+    const result = await controller.listarResponsaveis(ESTOQUE_ID, query, gestor);
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        id: RESPONSAVEL.id,
+        nome: RESPONSAVEL.nome,
+        siape: RESPONSAVEL.siape,
+      }),
+    ]);
+    expect(result.total).toBe(1);
+  });
+
+  it.each([
+    ['CT-04-47', 'gestor do estoque', gestor],
+    ['CT-04-48', 'ADMIN', admin],
+  ])('[v2] %s: %s consulta responsáveis com nome e Siape ou CPF', async (_ct, _perfil, user) => {
+    // [v2] Lacuna CT-04-47/48 (PPF-01/02 na consulta) | Requisito: CA-02, RNF01
+    const porCpf = { ...OUTRO_RESPONSAVEL, siape: null, cpf: '12345678901' };
+    prisma.responsavel.findMany.mockResolvedValue([RESPONSAVEL, porCpf]);
+    prisma.responsavel.count.mockResolvedValue(2);
+    const result = await controller.listarResponsaveis(ESTOQUE_ID, query, user);
+    expect(result.items).toEqual([
+      expect.objectContaining({ nome: RESPONSAVEL.nome, siape: RESPONSAVEL.siape }),
+      expect.objectContaining({ nome: porCpf.nome, cpf: porCpf.cpf }),
+    ]);
+    expect(result.total).toBe(2);
+    expect(prisma.responsavel.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: expect.objectContaining({ id: true, nome: true, siape: true, cpf: true }),
+        skip: 0,
+        take: 20,
+      }),
+    );
+  });
+
+  it.each([
+    ['CT-04-51', 'gestor do estoque', gestor],
+    ['CT-04-52', 'ADMIN', admin],
+  ])('[v2] %s: %s consulta histórico com empréstimo ativo e devolvido', async (_ct, _perfil, user) => {
+    // [v2] Lacuna CT-04-38/51/52 (PHR-01) | Requisito: CA-10, RNF01
+    prisma.emprestimo.findMany.mockResolvedValue([
+      emprestimoBase({
+        status: StatusEmprestimo.ATIVO,
+        prazoDevolucao: new Date(AGORA.getTime() - UM_DIA),
+      }),
+      emprestimoBase({
+        id: 'devolvido',
+        status: StatusEmprestimo.DEVOLVIDO,
+        dataDevolucaoEfetiva: AGORA,
+        termo: null,
+      }),
+    ]);
+    prisma.emprestimo.count.mockResolvedValue(2);
+    const result = await controller.historicoResponsavel(ESTOQUE_ID, RESPONSAVEL.id, query, user);
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        status: StatusEmprestimo.ATIVO,
+        item: expect.objectContaining({ nome: ITEM.nome }),
+        atrasado: true,
+      }),
+      expect.objectContaining({
+        status: StatusEmprestimo.DEVOLVIDO,
+        dataDevolucaoEfetiva: AGORA,
+        atrasado: false,
+        termo: null,
+        termoAssinadoAnexado: false,
+      }),
+    ]);
+    expect(result.total).toBe(2);
+    const where = { responsavelId: RESPONSAVEL.id, item: { estoqueId: ESTOQUE_ID } };
+    expect(prisma.emprestimo.findMany).toHaveBeenCalledWith(expect.objectContaining({ where }));
+    expect(prisma.emprestimo.count).toHaveBeenCalledWith({ where });
+    expect(where).not.toHaveProperty('status');
+  });
+
+  it.each([
+    ['CT-04-49/53', { userId: 'requisitante', role: AccessRole.USER }],
+    ['CT-04-50/54', { userId: 'gestor-outro', role: AccessRole.USER }],
+    ['sem autenticação', undefined],
+  ])('[v2] %s: consultas retornam 403 antes de ler cadastros ou histórico', async (_ct, user) => {
+    // [v2] Lacuna CT-04-49/50/53/54 | Requisito: CA-02, CA-10, RNF01
+    for (const promessa of [
+      () => controller.listarResponsaveis(ESTOQUE_ID, query, user),
+      () => controller.historicoResponsavel(ESTOQUE_ID, RESPONSAVEL.id, query, user),
+    ]) {
+      const erro = await erroDe(promessa());
+      expect(erro).toBeInstanceOf(AccessDeniedException);
+      expect(erro.getStatus()).toBe(HttpStatus.FORBIDDEN);
+    }
+    expect(prisma.responsavel.findMany).not.toHaveBeenCalled();
+    expect(prisma.responsavel.findUnique).not.toHaveBeenCalled();
+    expect(prisma.responsavel.count).not.toHaveBeenCalled();
+    expect(prisma.emprestimo.findMany).not.toHaveBeenCalled();
+    expect(prisma.emprestimo.count).not.toHaveBeenCalled();
+  });
+
+  it('[v2] CT-04-39: responsável sem empréstimos tem histórico vazio', async () => {
+    // [v2] Lacuna CT-04-39 (PHR-02, PR-10) | Requisito: CA-10
+    const result = await controller.historicoResponsavel(ESTOQUE_ID, RESPONSAVEL.id, query, gestor);
+    expect(result.items).toEqual([]);
+    expect(result.total).toBe(0);
+  });
+
+  it('[v2] CT-04-09: lista vazia não é erro', async () => {
+    // [v2] Lacuna CT-04-09 | Requisito: CA-02
+    prisma.responsavel.findMany.mockResolvedValue([]);
+    prisma.responsavel.count.mockResolvedValue(0);
+    expect((await service.listarResponsaveis(ESTOQUE_ID, query, gestor)).items).toEqual([]);
+  });
+
+  it('[v2] CT-04-38: responsável inexistente retorna 404 após autorização', async () => {
+    // [v2] Lacuna CT-04-38 | Requisito: CA-10, PR-01
+    prisma.responsavel.findUnique.mockResolvedValue(null);
+    const erro = await erroDe(service.historicoResponsavel(ESTOQUE_ID, 'ausente', query, admin));
+    expect(erro.getStatus()).toBe(HttpStatus.NOT_FOUND);
+    expect(prisma.emprestimo.findMany).not.toHaveBeenCalled();
+  });
+
+  it('[v2] CT-04-38: filtra empréstimos de outro responsável e de outro estoque', async () => {
+    // [v2] Lacuna CT-04-38/51 | Requisito: CA-10, RNF01 (isolamento de dados)
+    const outros = [
+      emprestimoBase({ id: 'permitido', item: { ...ITEM, estoqueId: ESTOQUE_ID } }),
+      emprestimoBase({ id: 'outro-responsavel', responsavelId: OUTRO_RESPONSAVEL.id, item: ITEM }),
+      emprestimoBase({ id: 'outro-estoque', item: { ...ITEM, estoqueId: 'est-2' } }),
+    ];
+    const filtro = ({ where }: any) =>
+      outros.filter(
+        (e) =>
+          e.responsavelId === where.responsavelId &&
+          (!where.item?.estoqueId || e.item.estoqueId === where.item.estoqueId),
+      );
+    prisma.emprestimo.findMany.mockImplementation(async (args: any) => filtro(args));
+    prisma.emprestimo.count.mockImplementation(async (args: any) => filtro(args).length);
+    const result = await service.historicoResponsavel(ESTOQUE_ID, RESPONSAVEL.id, query, gestor);
+    expect(result.items.map((e: any) => e.id)).toEqual(['permitido']);
+    expect(result.meta.total).toBe(1);
+  });
+
+  it('[v2] CT-04-09/38: aplica paginação nas duas consultas', async () => {
+    // [v2] Lacuna CT-04-09/38 | Requisito: CA-02, CA-10 (todos os registros consultáveis)
+    const pagina2 = { page: 2, limit: 5, skip: 5, take: 5 } as any;
+    await service.listarResponsaveis(ESTOQUE_ID, pagina2, admin);
+    await service.historicoResponsavel(ESTOQUE_ID, RESPONSAVEL.id, pagina2, admin);
+    expect(prisma.responsavel.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ skip: 5, take: 5 }),
+    );
+    expect(prisma.emprestimo.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ skip: 5, take: 5 }),
+    );
+  });
+
+  it('[v2] CT-04-09/38: estoque inexistente retorna 404 sem consultar dados', async () => {
+    // [v2] Lacuna CT-04-09/38 | Requisito: CA-02, CA-10, PR-01
+    prisma.estoque.findUnique.mockResolvedValue(null);
+    for (const chamada of [
+      () => service.listarResponsaveis('ausente', query, admin),
+      () => service.historicoResponsavel('ausente', RESPONSAVEL.id, query, admin),
+    ])
+      expect((await erroDe(chamada())).getStatus()).toBe(HttpStatus.NOT_FOUND);
+    expect(prisma.responsavel.findMany).not.toHaveBeenCalled();
+    expect(prisma.responsavel.findUnique).not.toHaveBeenCalled();
+  });
 });

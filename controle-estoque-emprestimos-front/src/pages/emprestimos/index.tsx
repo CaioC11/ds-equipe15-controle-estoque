@@ -16,6 +16,7 @@ import {
   toast,
 } from '@cincoders/cinnamon';
 import { EmprestimoModal } from '../../modules/emprestimos/components/EmprestimoModal';
+import { ResponsaveisPanel } from '../../modules/emprestimos/components/ResponsaveisPanel';
 import { EmprestimoRow } from '../../modules/emprestimos/components/EmprestimoRow';
 import { HttpError } from '../../modules/emprestimos/emprestimo.service';
 import type { CreateEmprestimoDto, Emprestimo } from '../../modules/emprestimos/emprestimo.types';
@@ -23,6 +24,7 @@ import {
   useEmprestimos,
   useEstoques,
   useItensEmprestaveis,
+  useResponsaveis,
 } from '../../modules/emprestimos/useEmprestimos';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { EmptyState } from '../../components/EmptyState';
@@ -51,6 +53,12 @@ export default function EmprestimosPage() {
 
   const { emprestimos, isLoading, error, reload, registrar, devolver } = useEmprestimos(estoqueId);
   const { itens } = useItensEmprestaveis(estoqueId);
+  const {
+    responsaveis,
+    isLoading: carregandoResponsaveis,
+    error: erroResponsaveis,
+    reload: recarregarResponsaveis,
+  } = useResponsaveis(estoqueId);
 
   // O backend recusa item que já tem empréstimo aguardando termo ou ativo;
   // aqui só deixamos de oferecê-lo no formulário.
@@ -65,6 +73,7 @@ export default function EmprestimosPage() {
   const handleRegistrar = async (dto: CreateEmprestimoDto) => {
     try {
       await registrar(dto);
+      recarregarResponsaveis();
       toast.success('Empréstimo registrado. Aguardando o termo assinado.');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Falha ao registrar empréstimo.');
@@ -96,6 +105,7 @@ export default function EmprestimosPage() {
   const recarregarTudo = () => {
     recarregarEstoques();
     reload();
+    recarregarResponsaveis();
   };
 
   const renderCorpo = () => {
@@ -117,7 +127,11 @@ export default function EmprestimosPage() {
                 Tentar novamente
               </button>
               <a
-                href={buildSupportMailto((erroEstoques ?? error) as Error, SUPPORT_EMAIL, 'projeto-base')}
+                href={buildSupportMailto(
+                  (erroEstoques ?? error) as Error,
+                  SUPPORT_EMAIL,
+                  'projeto-base',
+                )}
                 className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
               >
                 Contatar suporte
@@ -146,7 +160,7 @@ export default function EmprestimosPage() {
           <EmptyState
             icon={Lock}
             title="Sem acesso aos empréstimos deste estoque"
-            description="Somente os gestores do estoque e os administradores podem consultar e registrar empréstimos."
+            description="Gestores do estoque e administradores podem consultar. Somente o gestor daquele estoque registra empréstimos."
           />
         </TableMessageRow>
       );
@@ -190,7 +204,9 @@ export default function EmprestimosPage() {
             Quem não é gestor recebe 403 e vê a mensagem de acesso negado. */}
         <button
           onClick={handleAbrirNovo}
-          disabled={!estoqueId || semPermissao}
+          disabled={
+            !estoqueId || semPermissao || carregandoResponsaveis || Boolean(erroResponsaveis)
+          }
           className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white shadow-xs transition hover:bg-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:outline-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Plus className="h-4 w-4" />
@@ -233,12 +249,24 @@ export default function EmprestimosPage() {
         </Table>
       </Frame>
 
+      {estoqueId && !semPermissao && (
+        <ResponsaveisPanel
+          key={estoqueId}
+          estoqueId={estoqueId}
+          responsaveis={responsaveis}
+          isLoading={carregandoResponsaveis}
+          error={erroResponsaveis}
+          reload={recarregarResponsaveis}
+        />
+      )}
+
       <EmprestimoModal
-        key={modalKey}
+        key={`${estoqueId}:${modalKey}`}
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSubmit={handleRegistrar}
         itens={itensDisponiveis}
+        responsaveis={responsaveis}
       />
 
       <ConfirmDialog
