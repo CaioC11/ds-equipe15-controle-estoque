@@ -2,6 +2,8 @@
 
 Responsável: Randell · Issue: S3B-09 (#68) · Suíte: `controle-estoque-emprestimos-back/tests/v1-llm/us05-termo.spec.ts` · Commit medido: `24954a2` (`main`).
 
+As linhas de emprestimos.service.ts e termo-pdf.service.ts citadas valem para o commit 24954a2; os PRs #104 e #105, mergeados, as deslocam.
+
 Medição feita só com o spec da US05, com `vitest.us05.config.ts` (escopo: os 5 arquivos de `src/modules/emprestimos/` que o termo usa):
 
 ```
