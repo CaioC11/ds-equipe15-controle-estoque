@@ -26,23 +26,23 @@ Total: **12 achados** e **9 falsos positivos** (seção 4). A meta do time era c
 ### Grupo 1 — Propriedades de projeto
 
 #### ACH-01 — O empréstimo escreve direto na tabela de movimentações e pula a regra de saldo
-- **Onde:** `back/src/modules/emprestimos/emprestimos.service.ts`, métodos `create` (L119-127) e `devolver` (L412-420). Relacionados: `itens.service.ts` `create` (L18-47) e `movimentacoes.service.ts` `registrarNaTransacao` (L173-177).
+- **Onde:** `back/src/modules/emprestimos/emprestimos.service.ts`, métodos `create` (L134-142) e `devolver` (L475-483). Relacionados: `itens.service.ts` `create` (a partir da L18) e `movimentacoes.service.ts` `registrarNaTransacao` (L161-196, com a checagem de saldo nas L173-177).
 - **Categoria:** information hiding e acoplamento. Quem decide o saldo é o `MovimentacoesService`, mas o `EmprestimosService` conhece o formato da tabela `movimentacao` e grava nela por conta própria.
-- **Problema:** `create` grava uma `SAIDA` de quantidade 1 sem consultar o saldo. A regra "saldo insuficiente" só existe em `MovimentacoesService.registrarNaTransacao`. Além disso, `ItensService.create` não grava `ENTRADA` ao cadastrar o item, e o `seed.mjs` não cria movimentações.
-- **Por que atrapalha:** um item patrimonial recém-cadastrado, sem `ENTRADA` registrada à mão, vai a saldo **-1** ao primeiro empréstimo. A tela de saldo passa a mostrar valor negativo e `abaixoDoMinimo` fica verdadeiro, mesmo com o item na prateleira. Qualquer mudança na regra de saldo precisa ser repetida no módulo de empréstimos.
-- **Como foi encontrado:** leitura manual do fluxo de `create`; `grep` por `movimentacao` mostrou escrita fora do módulo dono (`grep -rn "movimentacao\." src`).
-- **Confirmação:** leitura. O saldo -1 é dedução do código e **a confirmar** com um teste de integração (criar item, emprestar, consultar `/movimentacoes/saldo/item/:id`).
-- **Confirmado por:** ______ em __/__
+- **Problema:** `create` grava uma `SAIDA` de quantidade 1 sem consultar o saldo, e `devolver` grava uma `DEVOLUCAO` de quantidade 1 do mesmo jeito, ambos direto com `tx.movimentacao.create`. A regra "saldo insuficiente" só existe em `MovimentacoesService.registrarNaTransacao`; o `emprestimos.service.ts` não tem nenhuma referência a saldo. Além disso, `ItensService.create` não grava `ENTRADA` ao cadastrar o item, e o `seed.mjs` não cria movimentações. Em `back/src` (fora dos specs), `ENTRADA` só aparece na lista de tipos que somam (`movimentacoes.service.ts` L14) e numa mensagem de erro (`emprestimos.service.ts` L91).
+- **Por que atrapalha:** um item patrimonial recém-cadastrado, sem `ENTRADA` registrada à mão, vai a saldo **-1** ao primeiro empréstimo (o saldo vem de `calcularSaldoItem`, L40-51, que soma `ENTRADA` e `DEVOLUCAO` e subtrai `SAIDA`). A tela de saldo passa a mostrar valor negativo e, se o item tiver nível mínimo, `abaixoDoMinimo` fica verdadeiro, mesmo com o item na prateleira. Qualquer mudança na regra de saldo precisa ser repetida no módulo de empréstimos.
+- **Como foi encontrado:** leitura manual do fluxo de `create` e `devolver`; `Select-String` por `movimentacao`, por `ENTRADA` e por `saldo|calcularSaldo|insuficiente` (seção 5).
+- **Confirmação:** leitura, no commit `b9b67c5`. O saldo -1 é dedução do código e continua **a confirmar** com um teste de integração (criar item, emprestar, consultar `/movimentacoes/saldo/item/:id`).
+- **Confirmado por:** Mateus em 14/11 (commit `b9b67c5`)
 - **Ideia de correção:** o `EmprestimosService` chamar um método do `MovimentacoesService` (ou um serviço de saldo) em vez de gravar na tabela, e `ItensService.create` registrar a `ENTRADA` inicial do item patrimonial.
 
 #### ACH-02 — "Saldo" significa duas coisas diferentes
 - **Onde:** `estoques.service.ts` `formatEstoqueComSaldo` (L142-157) contra `movimentacoes.service.ts` `calcularSaldoItem` (L40-51) e `consultarSaldoEstoque` (L98-128).
 - **Categoria:** integridade conceitual.
 - **Problema:** na listagem de estoques, `saldo` é uma contagem de itens por status (`totalItens`, `disponiveis`, `emprestados`). No módulo de movimentações, `saldo` é a soma de entradas menos saídas de cada item. O mesmo termo vale para conceitos distintos, em endpoints diferentes (`/estoques` e `/movimentacoes/saldo/...`).
-- **Por que atrapalha:** os dois valores divergem em situações normais. Entre o registro do empréstimo e a confirmação da entrega (estado `AGUARDANDO_TERMO`), a `SAIDA` já foi gravada (saldo cai) mas o status do item continua `DISPONIVEL` (L81 verifica, L317-320 só muda na confirmação). A tela de estoques mostra o item disponível enquanto a de movimentações mostra saldo 0.
-- **Como foi encontrado:** leitura cruzada dos dois services ao procurar quem calcula "saldo" (`grep -rn "saldo" src`).
-- **Confirmação:** leitura.
-- **Confirmado por:** ______ em __/__
+- **Por que atrapalha:** os dois valores divergem em situações normais. Entre o registro do empréstimo e a confirmação da entrega (estado `AGUARDANDO_TERMO`), o `create` já gravou a `SAIDA` (`emprestimos.service.ts` L134), mas o status do item continua `DISPONIVEL`: o `create` só confere o status (L95) e quem muda o item para `EMPRESTADO` é a confirmação da entrega (L334). A tela de estoques conta o item como disponível enquanto a de movimentações já o desconta do saldo.
+- **Como foi encontrado:** leitura cruzada dos dois services ao procurar quem calcula "saldo"; `Select-String` por `saldo|disponiveis|emprestados|totalItens`, por `calcularSaldoItem|consultarSaldoEstoque` e por `StatusItem|AGUARDANDO_TERMO` (seção 5).
+- **Confirmação:** leitura, no commit `b9b67c5`. As duas telas não foram comparadas rodando a API.
+- **Confirmado por:** Mateus em 14/11 (commit `b9b67c5`)
 - **Ideia de correção:** nomear os conceitos (`contagemPorStatus` e `saldo`) ou calcular o resumo do estoque a partir de uma única fonte.
 
 #### ACH-03 — O front não entende o formato de erro do back
