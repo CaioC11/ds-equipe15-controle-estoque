@@ -4,7 +4,7 @@
 
 | Indicador | Resultado v1 | Observações e Evidências |
 | :--- | :--- | :--- |
-| **Testes gerados** | **106** | 104 blocos `it` + 1 `it.each` com 3 valores em `tests/v1-llm/us03-itens.spec.ts`. |
+| **Testes gerados** | **106** | 103 chamadas de `it` + 1 `it.each` com 3 valores (nível mínimo -1, 0 e 1), em `tests/v1-llm/us03-itens.spec.ts`. |
 | **Testes passando** | **105 (99,06%)** | Todos os testes de `ItensService`, `ItensController` e 57/58 testes dos schemas Zod passaram. |
 | **Testes falhando** | **1 (0,94%)** | Linha 95 (`rejeita tipo fora do enum`): falha por **oráculo errado** da LLM, não por bug no código. |
 | **Testes que não compilam** | **0 (0%)** | Arquivo compilou e executou integralmente sob Vitest v4.1.8. |
@@ -25,11 +25,12 @@
 ### 4a. O que a LLM perdeu, inventou e acertou a mais
 
 * **O que a LLM perdeu (lacunas frente à matriz):**
-  * **Critério inteiro descoberto (`CA-07` / `CT-03-14`):** nenhum teste verificou que itens de consumo possuem saldo inicial igual a `1` após o cadastro.
-  * **Controle de saldo em consumo (`CA-03` / `CT-03-13`):** embora tenha testado o cadastro de item `CONSUMO` sem tombamento, não verificou o controle por saldo.
-  * **Distinção de papéis de permissão (`PPF-03`, `PPF-04`, `CT-03-16`, `CT-03-17`):** a suíte testou apenas a ausência genérica de vínculo de gestor (`userId` indefinido ou `findUnique` retornando `null`), sem cenários explícitos para usuário com papel `REQUISITANTE` ou `ADMIN` sem vínculo no estoque.
-  * **Fronteira de listagem e isolamento entre estoques (`LM-04`, `PLI-01`, `PLI-02`, `CT-03-15`, `CT-03-27`):** não houve teste com exatamente `1` item retornado (`LM-04` válido), o teste de listagem vazia (`0` itens) usou asserção trivial (`toBeDefined()`) e não houve verificação de que itens de outro estoque não vazam na listagem.
-  * **Edição preservando o próprio tombamento (`CT-03-37`):** nenhum teste cobriu a atualização de um item patrimonial mantendo o mesmo `tombamento` sem disparar falso conflito de unicidade.
+  * **Saldo do patrimonial (`CA-07` / `CT-03-17`):** nenhum teste verificou que o item patrimonial recém-cadastrado tem saldo 1. É o único critério sem nenhum teste.
+  * **Controle por saldo do consumo (`CA-03` / `CT-03-16`):** o cadastro de item `CONSUMO` sem tombamento foi testado, mas nenhum teste verificou o controle por saldo (entrada de 10 unidades resulta em saldo 10).
+  * **Papéis de permissão (`CA-06` / `CT-03-32`, `CT-03-33`, `CT-03-34`):** a suíte só testou a ausência genérica de vínculo de gestor (`userId` indefinido ou `findUnique` retornando `null`). Não há cenário explícito de `REQUISITANTE` nem de `ADMIN` sem vínculo no estoque.
+  * **Listagem (`CA-05` / `CT-03-24` a `CT-03-27`):** não houve teste com exatamente 1 item (`CT-03-27`); o estoque vazio usou asserção trivial (`toBeDefined()`, `CT-03-26`); o teste de 3 itens ficou com 2 vindos do mock (`CT-03-24`); e o isolamento entre estoques só conferiu o argumento `where { estoqueId }`, sem dois estoques com itens (`CT-03-25`).
+  * **Unicidade e criação múltipla (`CA-02` e `CA-03` / `CT-03-13`, `CT-03-14`, `CT-03-15`):** nenhum teste com tombamento já usado em outro estoque, com dois patrimoniais de tombamentos distintos ou com dois consumos sem tombamento, porque o mock não modela a unicidade.
+  * **Edição de tombamento (`CA-02` / `CT-03-35`, `CT-03-37`):** nenhum teste de editar mantendo o próprio tombamento sem falso conflito (`CT-03-37`), e a remoção do tombamento na edição só foi testada no schema, sem verificar que o valor anterior permanece (`CT-03-35`).
 
 * **O que a LLM inventou (oráculos incorretos ou regras sem lastro nos CAs):**
   * **Oráculo errado na validação de enum (linha 95):** no teste `rejeita tipo fora do enum`, a LLM assumiu que enviar `'OUTRO'` dispararia `'Tipo deve ser PATRIMONIAL ou CONSUMO'`. No Zod, `invalid_type_error` aplica-se apenas quando o tipo primitivo não é string (ex.: número/null), enquanto strings fora do enum geram a mensagem padrão do `z.enum(...)`, fazendo o teste falhar.
@@ -51,12 +52,15 @@
 
 ### 4c. Trecho com linha coberta e branch não coberto (Linhas vs. Branches)
 
-**Trecho em `src/modules/itens/itens.service.ts` (linhas 14–16):**
+Em `src/modules/itens/itens.service.ts`, a linha 14 aparece como coberta (executada 1x), mas o relatório marca 1 branch não coberto nela (29/30 branches no service). A marca está dentro dos parênteses do decorator:
 
 ```ts
-@Injectable() // Linha 14: executada 1x (coberta), mas branch-0 marcado como não coberto pelo V8
-export class ItensService {
+@Injectable()                  // linha 14: linha executada, branch não coberto
+export class ItensService {    // linha 15
   constructor(private readonly prisma: PrismaService) {}
+```
+
+A linha roda uma vez, quando o módulo é carregado, então conta como coberta. O branch descoberto está ligado ao decorator, e não a uma decisão do código de negócio: é um artefato do código gerado na transpilação, e nenhum teste consegue exercitar o outro caminho. Isso mostra a diferença entre os indicadores: cobertura de linhas só diz que a linha rodou; cobertura de branches diz se os dois lados de cada decisão rodaram. Todos os branches de decisão do service (`if`, ternário e `??`) foram exercitados.
 
 ---
 
