@@ -107,7 +107,7 @@ Pontos que os critérios da US04 não definem. Se a resposta for diferente, ajus
 | PR-03 | Prazo anterior à data de retirada é inválido; prazo no mesmo dia da retirada é válido; valor que não é data é inválido | Os critérios dizem só que o prazo é guardado ou fica "indefinido" |
 | PR-04 | Atraso: o empréstimo está atrasado quando a data atual é posterior ao dia do prazo (no dia do prazo ainda não há atraso). Empréstimo ativo com prazo indefinido nunca fica em atraso | O fluxo diz "ativo com prazo vencido", sem definir o dia exato do vencimento nem o caso do prazo indefinido |
 | PR-05 | O bloqueio por atraso (A5) está em vigor. Se ele ficar para a Sprint 3 (P1), CT-04-33, CT-04-36 e CT-04-37 passam a esperar só o aviso, sem impedir o registro | A5 diz que, se não der tempo, vale só o aviso |
-| PR-06 | A justificativa de permanência libera novo empréstimo ao responsável, e seus campos não são testados | O critério cita a justificativa, mas não diz o que ela contém |
+| PR-06 | A justificativa de permanência libera novo empréstimo ao responsável, e seus campos não são testados | O critério cita a justificativa, mas não diz o que ela contém. **Implementada na Issue 1 (ver seção 8):** texto livre obrigatório, uma por empréstimo |
 | PR-07 | Novo responsável cadastrado no ato exige ao menos nome e Siape ou CPF; sem eles o registro é recusado | O critério lista nome e Siape ou CPF para a seleção, mas não diz o que é obrigatório |
 | PR-08 | Anexar o termo sem confirmar a entrega mantém o empréstimo "aguardando termo assinado" | O critério descreve anexar e confirmar juntos |
 | PR-09 | Devolver um empréstimo que não está ativo (aguardando termo ou já devolvido) é recusado e o estado fica como estava | Os critérios só descrevem a devolução de empréstimo ativo |
@@ -184,3 +184,28 @@ Resumo dos 46 casos: **27 Sim** (5 Sim e 22 Sim\*, 58,70%), **6 Parcial** (13,04
 | Partições de equivalência | 43 |
 | Fronteiras de valor-limite | 5 (10 valores) |
 | Casos de teste esperados | 46 (18 dependem de premissa: CT-04-05, 06, 07, 08, 13, 14, 15, 18, 20, 24, 25, 28, 29, 30, 33, 36, 37, 39) |
+
+## 8. Atualização após a Issue 1 (bloqueio por atraso, A5)
+
+As seções 1 a 7 e a coluna "Coberto pela v1?" registram a medição de 13/11/2026 e **não foram alteradas**. Esta seção registra o efeito da correção.
+
+**O que mudou no código**
+
+- `EmprestimosService.create` recusa (409) o empréstimo quando o responsável (mesmo Siape ou CPF) tem empréstimo ATIVO com prazo vencido e sem justificativa. A mensagem informa o item, o vencimento e como regularizar. Prazo indefinido, ativo no prazo, devolvido e aguardando termo não bloqueiam.
+- Nova ação `POST /estoques/:estoqueId/emprestimos/:id/justificativa-permanencia`, só para o gestor do estoque (403 para os demais, inclusive ADMIN). Corpo: `justificativa` (texto, 1 a 1000 caracteres). Só vale para empréstimo ativo em atraso (409 nos demais casos) e uma única vez por empréstimo (409 se repetida). O empréstimo continua ativo e "atrasado" na listagem, e o responsável passa a poder receber novo empréstimo.
+- O campo `justificativaPermanencia` já existia no schema: não há migração.
+
+**Decisões que a Issue deixou em aberto** (PR-06 e PR-05): o bloqueio entra completo, sem a alternativa de só avisar; a justificativa é texto livre obrigatório, sem anexo nem prazo de validade.
+
+**Efeito nos casos desta matriz**
+
+| Caso | Situação | Onde está coberto |
+|------|----------|-------------------|
+| CT-04-33 | Os 2 testes da v1 que falhavam ('impede novo empréstimo...' e 'informa a pendência...') passam a ter a regra implementada | `tests/v1-llm/us04-emprestimos.spec.ts` (não alterado) e `emprestimos.service.spec.ts` |
+| CT-04-34 | Prazo vigente, indefinido ou devolvido não bloqueia | `emprestimos.service.spec.ts`: 'aceita quando não há empréstimo em atraso' e a consulta só considera ATIVO e vencido |
+| CT-04-35 | Devolução regulariza: a consulta exige status ATIVO | Parcial: confere o filtro da consulta, sem o fluxo devolver e emprestar de novo |
+| CT-04-36 | Justificativa registrada libera: a consulta exige `justificativaPermanencia` nula | `emprestimos.service.spec.ts` (consulta) e `registrarJustificativaPermanencia` (grava, 403, 404, 409) |
+| CT-04-37 | Atraso de outro responsável não bloqueia: a consulta filtra por `responsavelId` | Parcial: confere o filtro da consulta |
+
+Os testes novos usam Prisma simulado, como os demais do módulo, então valem como "Sim\*" pela legenda da seção 6. O fluxo encadeado (CT-04-35 completo e CT-04-46) segue dependendo de teste com banco real.
+

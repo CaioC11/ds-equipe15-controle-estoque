@@ -12,6 +12,7 @@ import { PaginatedResponseDto } from '../../common/pagination/paginated-response
 import type { PaginationQueryDto } from '../../common/pagination/pagination-query.dto';
 import { PrismaService } from '../../database/prisma.service';
 import type { CreateEmprestimoDto } from './dto/create-emprestimo.dto';
+import type { RegistrarJustificativaPermanenciaDto } from './dto/registrar-justificativa-permanencia.dto';
 import {
   type ArquivoUpload,
   PDF_MAGIC,
@@ -30,9 +31,9 @@ const INCLUDE_EMPRESTIMO = {
   termo: { select: { id: true, numeroAno: true, arquivoAssinado: true } },
 } as const;
 
-function comFlagTermo<T extends { termo: { id: string; numeroAno: string; arquivoAssinado: string | null } | null }>(
-  emprestimo: T,
-) {
+function comFlagTermo<
+  T extends { termo: { id: string; numeroAno: string; arquivoAssinado: string | null } | null },
+>(emprestimo: T) {
   const { termo, ...resto } = emprestimo;
   return {
     ...resto,
@@ -54,6 +55,19 @@ export function estaAtrasado(
     emprestimo.prazoDevolucao < agora
   );
 }
+
+// Filtro do banco equivalente a estaAtrasado() para quem ainda não tem justificativa de permanência:
+// ATIVO com prazo vencido (prazo nulo = indefinido nunca entra, pois "lt" ignora null).
+function filtroAtrasoSemJustificativa(agora: Date): Prisma.EmprestimoWhereInput {
+  return {
+    status: StatusEmprestimo.ATIVO,
+    prazoDevolucao: { lt: agora },
+    justificativaPermanencia: null,
+  };
+}
+
+const formatarData = (data: Date) =>
+  data.toLocaleDateString('pt-BR', { timeZone: 'America/Recife' });
 
 @Injectable()
 export class EmprestimosService {
@@ -104,6 +118,7 @@ export class EmprestimosService {
         }
 
         const responsavel = await this.obterResponsavel(tx, dto.responsavel);
+        await this.assertSemAtraso(tx, responsavel);
 
         const emprestimo = await tx.emprestimo.create({
           data: {
@@ -328,6 +343,54 @@ export class EmprestimosService {
     });
   }
 
+  // Regra A5: o gestor registra por que o item segue com o responsável após o prazo, o que libera
+  // novos empréstimos para ele sem exigir a devolução. O empréstimo continua ATIVO (e "atrasado").
+  async registrarJustificativaPermanencia(
+    estoqueId: string,
+    emprestimoId: string,
+    dto: RegistrarJustificativaPermanenciaDto,
+    userId?: string,
+  ) {
+    await this.findEstoqueOrFail(estoqueId);
+    await this.assertGestorDoEstoque(estoqueId, userId);
+
+    return this.prisma.$transaction(async (tx) => {
+      const emprestimo = await tx.emprestimo.findFirst({
+        where: { id: emprestimoId, item: { estoqueId } },
+      });
+      if (!emprestimo) {
+        throw new ResourceNotFoundException('Empréstimo', emprestimoId);
+      }
+      if (!estaAtrasado(emprestimo)) {
+        throw new ResourceConflictException(
+          'Só é possível registrar justificativa de permanência para empréstimo ativo em atraso.',
+        );
+      }
+      if (emprestimo.justificativaPermanencia) {
+        throw new ResourceConflictException(
+          'Este empréstimo já possui justificativa de permanência registrada.',
+        );
+      }
+
+      const { count } = await tx.emprestimo.updateMany({
+        where: { id: emprestimoId, justificativaPermanencia: null },
+        data: { justificativaPermanencia: dto.justificativa },
+      });
+      if (count === 0) {
+        throw new ResourceConflictException(
+          'Este empréstimo já possui justificativa de permanência registrada.',
+        );
+      }
+
+      const resultado = await tx.emprestimo.findUniqueOrThrow({
+        where: { id: emprestimoId },
+        include: INCLUDE_EMPRESTIMO,
+      });
+
+      return comFlagTermo(resultado);
+    });
+  }
+
   // Valida tipo, tamanho e assinatura real do arquivo (não confia só no mimetype do cliente)
   private validarPdf(arquivo: ArquivoUpload | undefined): asserts arquivo is ArquivoUpload {
     const invalido = (mensagem: string) =>
@@ -455,6 +518,31 @@ export class EmprestimosService {
       return tx.responsavel.update({ where: { id: existentes[0].id }, data });
     }
     return tx.responsavel.create({ data });
+  }
+
+  // Atraso impede novo empréstimo até a devolução ou a justificativa de permanência (A5)
+  private async assertSemAtraso(
+    tx: Prisma.TransactionClient,
+    responsavel: { id: string; nome: string },
+  ) {
+    const emAtraso = await tx.emprestimo.findFirst({
+      where: { responsavelId: responsavel.id, ...filtroAtrasoSemJustificativa(new Date()) },
+      include: { item: true },
+      orderBy: { prazoDevolucao: 'asc' },
+    });
+    if (!emAtraso) return;
+
+    const item = emAtraso.item;
+    const descricaoItem = item
+      ? `${item.nome}${item.tombamento ? ` (tombamento ${item.tombamento})` : ''}`
+      : 'um item';
+    const vencimento = emAtraso.prazoDevolucao
+      ? ` desde ${formatarData(emAtraso.prazoDevolucao)}`
+      : '';
+    throw new ResourceConflictException(
+      `${responsavel.nome} está com ${descricaoItem} em atraso${vencimento}. ` +
+        'Registre a devolução ou uma justificativa de permanência para liberar novo empréstimo.',
+    );
   }
 
   private async findEstoqueOrFail(estoqueId: string) {

@@ -26,6 +26,7 @@ O **responsável pelo empréstimo** não é um papel do sistema: é um cadastro 
 | Cadastrar e editar item (tombamento, nº de série, nível mínimo) | Não | Sim, no seu estoque | Não |
 | Registrar entrada e saída | Não | Sim, no seu estoque | Não |
 | Cadastrar responsável e registrar empréstimo e devolução | Não | Sim, no seu estoque | Não |
+| Registrar justificativa de permanência (empréstimo em atraso) | Não | Sim, no seu estoque | Não |
 | Gerar e baixar o termo (PDF) | Sim, leitura | Sim, do seu estoque | Não |
 | Anexar o termo assinado | Não | Sim, do seu estoque | Não |
 | Ver histórico de movimentações | Sim, todos | Sim, do seu estoque | Não |

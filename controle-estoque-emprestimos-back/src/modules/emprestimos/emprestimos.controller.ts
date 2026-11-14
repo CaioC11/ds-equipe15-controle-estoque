@@ -20,6 +20,7 @@ import { AuthGuard } from '../../common/auth/guards/auth.guard';
 import { RolesGuard } from '../../common/auth/guards/roles.guard';
 import { PaginationQueryDto } from '../../common/pagination/pagination-query.dto';
 import { CreateEmprestimoDto } from './dto/create-emprestimo.dto';
+import { RegistrarJustificativaPermanenciaDto } from './dto/registrar-justificativa-permanencia.dto';
 import { EmprestimosService } from './emprestimos.service';
 import { type ArquivoUpload, TERMO_ASSINADO_MAX_BYTES } from './termo-assinado.constants';
 
@@ -35,7 +36,11 @@ export class EmprestimosController {
   @ApiResponse({ status: 201, description: 'Empréstimo registrado' })
   @ApiResponse({ status: 403, description: 'Usuário não é gestor do estoque' })
   @ApiResponse({ status: 404, description: 'Estoque ou item não encontrado' })
-  @ApiResponse({ status: 409, description: 'Item já emprestado ou indisponível' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'Item já emprestado ou indisponível, ou responsável com item em atraso (sem devolução nem justificativa de permanência)',
+  })
   create(
     @Param('estoqueId') estoqueId: string,
     @Body() dto: CreateEmprestimoDto,
@@ -70,6 +75,35 @@ export class EmprestimosController {
     @GetCurrentUser() user?: CurrentUser,
   ) {
     return this.emprestimosService.devolver(estoqueId, id, user?.userId);
+  }
+
+  // Só o gestor do estoque registra a justificativa (403 para os demais, inclusive ADMIN)
+  @Post(':id/justificativa-permanencia')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Registra a justificativa de permanência de um empréstimo em atraso (libera novo empréstimo)',
+  })
+  @ApiResponse({ status: 200, description: 'Justificativa registrada' })
+  @ApiResponse({ status: 400, description: 'Justificativa ausente ou acima de 1000 caracteres' })
+  @ApiResponse({ status: 403, description: 'Usuário não é gestor do estoque' })
+  @ApiResponse({ status: 404, description: 'Empréstimo não encontrado neste estoque' })
+  @ApiResponse({
+    status: 409,
+    description: 'Empréstimo não está em atraso ou já possui justificativa',
+  })
+  registrarJustificativaPermanencia(
+    @Param('estoqueId') estoqueId: string,
+    @Param('id') id: string,
+    @Body() dto: RegistrarJustificativaPermanenciaDto,
+    @GetCurrentUser() user?: CurrentUser,
+  ) {
+    return this.emprestimosService.registrarJustificativaPermanencia(
+      estoqueId,
+      id,
+      dto,
+      user?.userId,
+    );
   }
 
   @Post(':id/termo/assinado')

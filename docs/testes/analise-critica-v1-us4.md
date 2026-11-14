@@ -32,42 +32,58 @@ Falhas investigadas (detalhe em `docs/testes/llm-log.md`):
 
 ## 2. Análise Crítica (Etapa 4)
 
-### 4a. O que a LLM perdeu, inventou e acertou a mais
+As quatro perguntas seguem o roteiro da Sprint 3 (Etapa 4). Os números vêm da execução de 13/11/2026, do `coverage-summary.json` e da matriz `matriz-rastreabilidade-us4.md`.
 
-* **O que a LLM perdeu (lacunas frente à matriz):**
-  * **Liberação depois do atraso (`CT-04-34`, `35`, `36`, `37`; `PRS-03`, `PRS-04`, `PRS-05`):** só existem os dois testes do lado que bloqueia (e eles falham). Nenhum teste cobre responsável com empréstimo dentro do prazo, atraso regularizado pela devolução, justificativa de permanência ou atraso de outro responsável. O `simularResponsavelComAtraso` devolve o empréstimo atrasado para qualquer consulta que não seja por `itemId`, então nem distingue um responsável de outro.
-  * **Item patrimonial sem tombamento (`CT-04-02`, `PIT-02`):** a fixture `ITEM` sempre tem `tombamento: '123456'`.
-  * **Responsável não informado e identificador inexistente (`CT-04-04`, `CT-04-05`, `PRO-03`, `PRO-04`):** o helper `entrada()` sempre envia o objeto `responsavel`, e o service não tem seleção por identificador.
-  * **Item devolvido que volta a ser emprestado (`CT-04-21`, `PIS-04`):** nenhum teste usa um item que já teve empréstimo `DEVOLVIDO`; o mock de `findFirst` retorna `null` e não simula o histórico.
-  * **Perfis de acesso (`CT-04-40`, `42`, `43`, `45`):** os services recebem só `userId`, então a suíte testa "sem vínculo de gestor" (403) e não os papéis ADMIN e requisitante, que são decididos nos guards. O prompt enviado para esta story trazia CA1 a CA10 e não incluía o CA-11 nem os guards. Essa lacuna vem do prompt, e não de erro da LLM.
-  * **Fluxo completo (`CT-04-46`):** só há testes por método, sem encadeamento registrar → anexar → confirmar → devolver.
+### Pergunta 1. Técnicas funcionais: a LLM identificou as mesmas partições e limites que a equipe?
 
-* **O que a LLM inventou (oráculos incorretos ou regras sem lastro nos CAs):**
-  * **Oráculo errado no retorno do prazo indefinido (linha 470):** a LLM leu `r.prazoDevolucao` do valor devolvido pelo mock, achando que ele refletia o que o service gravou.
-  * **Asserções circulares:** `r.status` igual a `AGUARDANDO_TERMO` em `create`, `ATIVO` em `confirmarEntrega` e `DEVOLVIDO` em `devolver` vêm do próprio mock (`emprestimo.create`, `findUniqueOrThrow`), então não provam o comportamento do service. Esses 3 testes passam por outras asserções válidas (chamadas ao `updateMany`, `item.update` etc.).
-  * **Classe da exceção do bloqueio por atraso:** o CA-09 pede impedir e informar a pendência, sem dizer o tipo de erro. A LLM fixou `ResourceConflictException` e a regex `/atras|pend/i`. Se a correção usar outro tipo de erro, o primeiro teste falha de novo sem que haja defeito.
-  * **Regras da implementação tratadas como requisito:** ordenação por prazo crescente com indefinidos por último (`nulls: 'last'`), `where` e `orderBy` exatos do Prisma, numeração do termo (`01/2026`, `123/2026`) e `AggregateError` quando a limpeza do PDF também falha. Os critérios da US04 não pedem nenhuma dessas.
+Das 43 partições da matriz, a v1 exercitou 30 (69,77%), deixou 4 `Parcial` e perdeu 9. Dos 10 valores-limite, cobriu 8 (80,00%).
 
-* **O que a LLM acertou a mais (cenários válidos não previstos na matriz):**
-  * **Formato de CPF, Siape e e-mail (`PR-11` declara fora da matriz):** 4 testes de CPF com 10, 11, 12 e 0 dígitos, 1 de normalização da máscara e 4 de e-mail. Há também 1 teste para Siape e CPF de responsáveis diferentes (conflito).
-  * **Concorrência:** `updateMany` com `count: 0` em `confirmarEntrega` e `devolver` vira conflito, nos dois casos.
-  * **Anexo do termo e PDFs:** 16 testes de `anexarTermoAssinado` (tipo, assinatura `%PDF`, limite de tamanho, substituição do arquivo anterior, desfazer a gravação) e 8 de `obterPdf`, `obterPdfAssinado` e controller. A matriz da US04 deixa o formato do arquivo e o PDF para a US05.
-  * **Paginação e vazio na listagem:** 3 testes de `skip`/`take` e 1 de lista vazia (`CA-08`, sem requisito de paginação).
+* **O que a LLM perdeu:**
+  * **Liberação depois do atraso (`PRS-03`, `PRS-04`, `PRS-05`; `CT-04-34`, `35`, `36`, `37`):** só existem os 2 testes do lado que bloqueia, e eles falham. Nenhum teste cobre responsável com empréstimo dentro do prazo, atraso regularizado pela devolução, justificativa de permanência ou atraso de outro responsável. O helper `simularResponsavelComAtraso` devolve o empréstimo atrasado para qualquer consulta que não seja por `itemId`, então nem distingue um responsável de outro.
+  * **Item patrimonial sem tombamento (`PIT-02`, `CT-04-02`):** a fixture `ITEM` sempre tem `tombamento: '123456'`.
+  * **Responsável não informado e identificador inexistente (`PRO-03`, `PRO-04`; `CT-04-04`, `05`):** o helper `entrada()` sempre envia o objeto `responsavel`, e o service não tem seleção por identificador.
+  * **Histórico do responsável (`PHR-01`, `PHR-02`; `CT-04-38`, `39`):** só `it.todo`.
+  * **Perfis de acesso (`PPF-02`; `CT-04-40`, `43`; `PPF-04` `Parcial`):** os services recebem só `userId`, então a suíte testa "sem vínculo de gestor" (403) e não ADMIN nem requisitante, que são decididos nos guards. O prompt desta story trazia CA1 a CA10 e não incluía o CA-11 nem os guards: essa lacuna vem do prompt.
+  * **Item devolvido que volta a ser emprestado (`PIS-04`, `CT-04-21`):** o mock de `findFirst` retorna `null` e nunca simula um empréstimo `DEVOLVIDO`.
+  * **Fronteira do atraso no dia do prazo (`LM-02`, lado "hoje") e `0 em atraso` (`LM-03`):** ficaram `Parcial`.
+* **O que a LLM inventou (partições e limites que a matriz não tem):**
+  * **Tamanho do CPF com 10, 11, 12 e 0 dígitos, máscara do CPF e formato do e-mail:** 9 testes que a matriz declara fora do escopo (`PR-11`).
+  * **Campos `lotacao` e `cargo` obrigatórios:** 8 testes (`describe.each`), a partir do DTO, sem partição na matriz.
+  * **Limite de 5 MB do anexo:** 3 testes em torno de `TERMO_ASSINADO_MAX_BYTES`, que pertencem à matriz da US05.
+* **O que a LLM acertou que a equipe não tinha previsto:**
+  * **Conflito de Siape e CPF de responsáveis diferentes:** 1 teste.
+  * **Concorrência:** `updateMany` com `count: 0` em `confirmarEntrega` e `devolver` vira conflito (2 testes).
+  * **Falha na gravação do termo:** o PDF é removido e o erro é traduzido (4 testes).
   * **`it.todo` correto:** a LLM percebeu que o módulo não tem consulta de responsáveis nem de histórico e registrou isso, em vez de inventar um teste que passaria com mock.
 
----
+### Pergunta 2. Requisitos: algum critério ficou sem teste? Algum teste não corresponde a requisito nenhum?
 
-### 4b. Como o texto dos critérios de aceitação e da matriz influenciou falhas e lacunas
+| CA | Situação na v1 | Casos da matriz |
+| :--- | :--- | :--- |
+| CA-01 | Coberto, com lacunas | `CT-04-03`, `06`, `07`, `08` cobertos; `CT-04-01` `Parcial`; `CT-04-02`, `04`, `05` sem teste |
+| CA-02 | Parcial | `CT-04-10` `Parcial`; `CT-04-09` sem teste (`it.todo`) |
+| CA-03 | Coberto | `CT-04-11` a `15` |
+| CA-04 | Coberto | `CT-04-16` a `18` |
+| CA-05 | Coberto | `CT-04-19`, `20`; `CT-04-21` `Parcial` |
+| CA-06 | Coberto | `CT-04-22` |
+| CA-07 | Coberto | `CT-04-23` a `25`; `CT-04-21` `Parcial` |
+| CA-08 | Coberto | `CT-04-26` a `32`; `CT-04-28` `Parcial` |
+| CA-09 | Testes existem e falham | `CT-04-33` falha por defeito real; `CT-04-34` a `37` sem teste |
+| CA-10 | **Sem teste** | `CT-04-38`, `39` só como `it.todo` |
+| CA-11 | Parcial | `CT-04-41`, `44` cobertos; `CT-04-42`, `45` `Parcial`; `CT-04-40`, `43` sem teste |
 
-* **CA-09 sem contrato de erro:** o critério diz "impede o registro e informa a pendência", sem fixar tipo de erro nem mensagem. Os 2 testes que falham (linhas 679 e 689) falham hoje por causa do defeito real, mas a escolha de `ResourceConflictException` e da regex da mensagem é palpite da LLM, e a matriz avisa que "recusado" não fixa código HTTP nem texto. Quando a Issue 1 for corrigida, a suíte pode continuar falhando por esse palpite.
-* **CA-03 não define como o prazo "indefinido" é representado:** a LLM assumiu `null` no dado gravado e no retorno. O dado gravado estava certo (linha 468 passa), mas a leitura do retorno falhou no mock (linha 470). O texto do critério abriu espaço para a falha de oráculo.
-* **CA-02 e CA-10 não dizem onde a consulta mora:** "selecionar na lista" e "histórico do responsável" não apontam operação nem rota. Como o controller só tem criar, listar pendentes, devolver, termo e confirmar entrega, a LLM concluiu que a funcionalidade não existe e gerou `it.todo`. O texto do critério só vira teste executável quando a funcionalidade existe no código enviado.
-* **PR-04 (atraso por dia) não chegou à LLM e diverge do código:** o critério diz "prazo vencido" sem definir o dia. A LLM leu `estaAtrasado` (`prazoDevolucao < agora`) e testou o instante (agora, agora −1 ms, agora +1 ms). A matriz espera que no dia do prazo ainda não haja atraso (`LM-02`). Por isso `CT-04-28` ficou `Parcial`. Se o prazo for gravado à meia-noite, o código marca atraso a partir das 00:00:01 do próprio dia. É um ponto a confirmar com a equipe, não um defeito confirmado.
-* **CA-11 e guards fora do prompt:** o prompt enviado listava até o CA10 e os arquivos do módulo, sem `roles.guard` nem `auth.guard`. A LLM escreveu testes de acesso negado em 6 métodos do service a partir de `assertGestorDoEstoque`, mas não pôde distinguir ADMIN de requisitante.
+Resultado: 10 de 11 CAs com ao menos um teste (90,91%). Com o critério estrito (todos os casos do CA em `Sim`/`Sim*`), só `CA-03`, `CA-04` e `CA-06`: 27,27%.
 
----
+**Testes sem correspondência na matriz:** pelo menos 39 dos 138 testes (28,26%) exercitam comportamentos que nenhum CA da US04 pede, e todos trazem no comentário um `Requisito: CA...` que não corresponde a eles:
+* 9 de formato de CPF e e-mail (`PR-11`) e 1 de conflito Siape × CPF;
+* 4 de paginação e lista vazia (`CA-08` não fala em paginação);
+* 4 de numeração do termo e 4 de remoção do PDF quando a transação falha (US05);
+* 2 de concorrência;
+* 7 de validação do arquivo anexado (tipo, `%PDF`, tamanho) e 8 de `obterPdf`, `obterPdfAssinado` e controller de PDF (US05).
 
-### 4c. Trecho com linha coberta e branch não coberto (Linhas vs. Branches)
+São testes válidos, mas não rastreáveis à matriz da US04.
+
+### Pergunta 3. Linhas versus branches
 
 **Trecho em `src/modules/emprestimos/emprestimos.service.ts` (linhas 262–266, método `obterPdfAssinado`):**
 
@@ -79,15 +95,30 @@ async obterPdfAssinado(estoqueId: string, emprestimoId: string, user?: CurrentUs
   }
 ```
 
-Os 2 testes que chamam `obterPdfAssinado` ("devolve o PDF assinado com sufixo -assinado" e "responde 404 quando não há termo assinado anexado") passam `role: ADMIN`. A linha 264 conta como coberta, porque o `if` foi avaliado. Só o ramo "não é ADMIN" nunca foi tomado, e por isso a linha 265 aparece como descoberta e o branch correspondente também. Um teste com o gestor do estoque fecha o ramo, e um com usuário sem vínculo confere o 403.
+Os 2 testes que chamam `obterPdfAssinado` ("devolve o PDF assinado com sufixo -assinado" e "responde 404 quando não há termo assinado anexado") passam `role: ADMIN`. A linha 264 conta como coberta, porque o `if` foi avaliado, e só o ramo "não é ADMIN" nunca foi tomado. Por isso a linha 265 e o branch correspondente aparecem como descobertos. Um teste com o gestor do estoque fecha o ramo, e um com usuário sem vínculo confere o 403.
 
-O mesmo desencontro aparece nos números do service: **98,03% de linhas (150/153) contra 95,34% de branches (82/86)**. Há 3 linhas descobertas (196, 265 e 273: o 404 de empréstimo inexistente em `obterPdf` e em `obterPdfAssinado`, e o ramo não-ADMIN) e 4 branches descobertos. Não consegui identificar o quarto branch sem abrir o relatório HTML.
+O mesmo desencontro aparece nos números do service: **98,03% de linhas (150/153) contra 95,34% de branches (82/86)**. Há 3 linhas descobertas (196, 265 e 273: o 404 de empréstimo inexistente em `obterPdf` e em `obterPdfAssinado`, e o ramo não-ADMIN) e 4 branches descobertos. Não identifiquei o quarto branch sem abrir o relatório HTML.
 
-Mais importante: o `create` tem 100% das linhas cobertas e mesmo assim o CA-09 (bloqueio por atraso) não existe nele. A cobertura mede o código que está escrito, e não detecta regra que falta. Quem achou o defeito foram os testes derivados dos critérios, e não a métrica.
+Mais importante: o `create` tem 100% das linhas cobertas e mesmo assim o CA-09 (bloqueio por atraso) não existe nele. A cobertura mede o código que está escrito e não detecta regra que falta. Quem achou o defeito foram os testes derivados dos critérios, e não a métrica.
+
+### Pergunta 4. Oráculos: a LLM assumiu o comportamento do código em vez do requisito?
+
+* **Testes que seguem o código quando o requisito é omisso ou diverge: 16 de 138 (11,59%).**
+  * **Atraso por instante (3 testes de `estaAtrasado`):** os de 1 ms antes, exato e 1 ms depois seguem `prazoDevolucao < agora`. O critério diz só "prazo vencido", e a matriz (`PR-04`) espera que no dia do prazo ainda não haja atraso.
+  * **Ordem e filtro exatos do Prisma (2 testes):** `findPendentes` assere `orderBy` com `nulls: 'last'` e o `where` literal. Nenhum critério define ordem.
+  * **Limite do anexo (3 testes):** os testes de tamanho usam `TERMO_ASSINADO_MAX_BYTES`, que vale 5 MB. Conforme o doc de critérios da US05, o limite seria de cerca de 10 MB.
+  * **`lotacao` e `cargo` obrigatórios (8 testes):** vêm do DTO. O critério A3 lista os campos, mas não diz que são obrigatórios, e a matriz (`PR-07`) exige só nome e Siape ou CPF.
+* **Algum teste passou validando um defeito?** Nenhum confirmado. Os 6 testes dos grupos de atraso e de limite do anexo passam hoje e passariam a validar um defeito se a equipe confirmar que o requisito é "no dia do prazo ainda não há atraso" e "limite de 10 MB". Ficam como pontos a confirmar.
+* **Oráculos que a LLM inventou (não vêm do código nem do requisito):**
+  * **Retorno do prazo indefinido (linha 470):** as 2 falhas do `create` leem `r.prazoDevolucao` do retorno do mock, que não traz o campo. É erro do teste, e a asserção do dado gravado (linha 468) passa.
+  * **Classe do erro do bloqueio por atraso:** o CA-09 pede impedir e informar a pendência, sem fixar o erro. A LLM escolheu `ResourceConflictException` e a regex `/atras|pend/i`. Hoje os testes falham pelo defeito real, mas depois da correção da Issue 1 podem falhar de novo só por esse palpite.
+* **Testes sem asserção ou triviais:**
+  * **Sem asserção:** 0. Todo `it` tem `expect` ou usa o helper `erroDe`, que lança se a promessa não for rejeitada.
+  * **Triviais:** 4, só com `resolves.toBeDefined()` ("aceita prazo igual à retirada" e "1 ms depois da retirada", e "aceita arquivo com tamanho exatamente no limite" e "1 byte abaixo do limite").
+  * **Asserções circulares:** 3. O `r.status` de `AGUARDANDO_TERMO` em `create`, `ATIVO` em `confirmarEntrega` e `DEVOLVIDO` em `devolver` vêm do próprio mock. Esses testes passam por outras asserções válidas.
 
 ---
 
 ### Observações adicionais
 
-* **Divergência de tamanho do anexo (US05):** o doc de critérios fala em cerca de 10 MB, e a constante `TERMO_ASSINADO_MAX_BYTES` vale 5 MB. A LLM seguiu o código. Vale conferir na matriz da US05.
 * **Nome do arquivo:** o comando e o log usam `us04-emprestimos.spec.ts`. Se o arquivo ainda estiver como `us04-itens.spec.ts`, renomeie antes do commit.

@@ -132,10 +132,7 @@ export class TermoPdfService {
     drawField('Cargo', data.responsavel.cargo);
     drawField('Unidade de Acautelamento', data.unidade);
     drawField('Data de Abertura', date(data.dataAbertura));
-    drawField(
-      'Data Prevista para Fechamento',
-      formatarData(data.dataFechamento),
-    );
+    drawField('Data Prevista para Fechamento', formatarData(data.dataFechamento));
 
     drawSection('BENS ACAUTELADOS');
     drawField(

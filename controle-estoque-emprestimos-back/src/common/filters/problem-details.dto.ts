@@ -2,7 +2,9 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 /** Corpo de erro no formato RFC 7807 (Problem Details for HTTP APIs). */
 export class ProblemDetails {
-  @ApiProperty({ example: 'https://controle-estoque-emprestimos.example/problems/validation-failed' })
+  @ApiProperty({
+    example: 'https://controle-estoque-emprestimos.example/problems/validation-failed',
+  })
   type!: string;
 
   @ApiProperty({ example: 'Dados inválidos' })
