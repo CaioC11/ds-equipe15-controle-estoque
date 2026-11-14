@@ -8,16 +8,16 @@ Issue de tech-debt. Prazo: 12/11. Escopo: `controle-estoque-emprestimos-back/src
 |---|---|
 | Propriedades de projeto (integridade conceitual, information hiding, acoplamento) | ACH-01, ACH-02, ACH-03, ACH-04, ACH-15 |
 | SOLID e coesão | ACH-05, ACH-06 |
-| Code smells | ACH-07, ACH-08, ACH-09, ACH-10, ACH-13 |
+| Code smells | ACH-07, ACH-08, ACH-09, ACH-10, ACH-11, ACH-12, ACH-13 |
 
-Total: **12 achados** e **9 falsos positivos** (seção 4). A meta do time era cerca de 8.
+Total: **14 achados** e **14 falsos positivos** (seção 4). A meta do time era cerca de 8.
 
 **Como ler o campo "Confirmação":**
 - **Leitura**: o trecho foi lido e o problema aparece no código.
 - **Executado**: reproduzi o comportamento rodando um script (os scripts estão em `docs/ferramentas-analise/` e a saída na seção 5).
 - **A confirmar**: depende de rodar a API com banco, que não estava disponível nesta análise.
 
-> **Pendência de quem assina a issue.** A primeira passada foi feita por LLM (Claude) com leitura dos arquivos e dois scripts. O critério da issue pede que **uma pessoa** confirme cada achado olhando o código. Cada achado tem a linha "Confirmado por" para isso. A tabela da seção 6 sugere uma divisão de 2 achados por pessoa.
+> **Pendência de quem assina a issue.** Mateus confirmou ACH-01 a ACH-04, ACH-11 e ACH-12 lendo o código local no commit `b9b67c5`. Permanecem pendentes as confirmações humanas de outros achados com "Confirmado por" em branco e as verificações marcadas **a confirmar**, que ainda dependem de execução. A divisão sugerida da seção 6 é apenas uma proposta de distribuição.
 
 ---
 
@@ -26,42 +26,43 @@ Total: **12 achados** e **9 falsos positivos** (seção 4). A meta do time era c
 ### Grupo 1 — Propriedades de projeto
 
 #### ACH-01 — O empréstimo escreve direto na tabela de movimentações e pula a regra de saldo
-- **Onde:** `back/src/modules/emprestimos/emprestimos.service.ts`, métodos `create` (L139-147, `SAIDA`) e `devolver` (L530, `DEVOLUCAO`). Relacionados: `itens.service.ts` `create` e `movimentacoes.service.ts` `registrarNaTransacao` (L161-176, regra de saldo insuficiente).
+- **Onde:** `back/src/modules/emprestimos/emprestimos.service.ts`, métodos `create` (L134-142) e `devolver` (L475-483). Relacionados: `itens.service.ts` `create` (a partir da L18) e `movimentacoes.service.ts` `registrarNaTransacao` (L161-196, com a checagem de saldo nas L173-177).
 - **Categoria:** information hiding e acoplamento. Quem decide o saldo é o `MovimentacoesService`, mas o `EmprestimosService` conhece o formato da tabela `movimentacao` e grava nela por conta própria.
-- **Problema:** `create` grava uma `SAIDA` de quantidade 1 sem consultar o saldo. Antes da gravação, a única checagem sobre o item é o `status` (`DISPONIVEL`), não o saldo. A regra "Saldo insuficiente" só existe em `MovimentacoesService.registrarNaTransacao`, método `private`, chamado apenas por `registrar`. A devolução também grava direto, com `DEVOLUCAO`. Além disso, `ItensService.create` não grava `ENTRADA` ao cadastrar o item (nenhuma ocorrência de `movimentacao`, `ENTRADA` ou `TipoMovimentacao` no arquivo).
-- **Por que atrapalha:** um item patrimonial recém-cadastrado, sem `ENTRADA` registrada à mão, tende a ir a saldo **-1** ao primeiro empréstimo. A tela de saldo passa a mostrar valor negativo e `abaixoDoMinimo` fica verdadeiro, mesmo com o item na prateleira. Qualquer mudança na regra de saldo precisa ser repetida no módulo de empréstimos.
-- **Como foi encontrado:** leitura manual do fluxo de `create`; `Select-String` por `movimentacao` em `emprestimos.service.ts` (2 gravações diretas: L139 e L530); `Select-String` por `saldo|insuficiente|registrarNaTransacao` em `movimentacoes.service.ts` (regra só nas L173-176); `Select-String` por `movimentacao|ENTRADA|TipoMovimentacao` em `itens.service.ts` (sem resultado); busca por `movimentacao.create` em todo o back, fora dos testes (só `emprestimos.service.ts` e `movimentacoes.service.ts`).
-- **Confirmação:** leitura (e `Select-String`). O saldo -1 é dedução do código e continua **a confirmar** com um teste de integração (criar item, emprestar, consultar `/movimentacoes/saldo/item/:id`). Os testes unitários existentes mockam o Prisma e não exercitam o saldo real.
-- **Confirmado por:** Caio em 14/11 (commit `4fa5aa4`)
-- **Ideia de correção:** o `EmprestimosService` chamar um método do `MovimentacoesService` (ou um serviço de saldo; `calcularSaldoItem(itemId, tx)` já aceita a transação) em vez de gravar na tabela, e `ItensService.create` registrar a `ENTRADA` inicial do item patrimonial.
+- **Problema:** `create` grava uma `SAIDA` de quantidade 1 sem consultar o saldo, e `devolver` grava uma `DEVOLUCAO` de quantidade 1 do mesmo jeito, ambos direto com `tx.movimentacao.create`. A regra "saldo insuficiente" só existe em `MovimentacoesService.registrarNaTransacao`; o `emprestimos.service.ts` não tem nenhuma referência a saldo. Além disso, `ItensService.create` não grava `ENTRADA` ao cadastrar o item, e o `seed.mjs` não cria movimentações. Em `back/src` (fora dos specs), `ENTRADA` só aparece na lista de tipos que somam (`movimentacoes.service.ts` L14) e numa mensagem de erro (`emprestimos.service.ts` L91).
+- **Por que atrapalha:** um item patrimonial recém-cadastrado, sem `ENTRADA` registrada à mão, vai a saldo **-1** ao primeiro empréstimo (o saldo vem de `calcularSaldoItem`, L40-51, que soma `ENTRADA` e `DEVOLUCAO` e subtrai `SAIDA`). A tela de saldo passa a mostrar valor negativo e, se o item tiver nível mínimo, `abaixoDoMinimo` fica verdadeiro, mesmo com o item na prateleira. Qualquer mudança na regra de saldo precisa ser repetida no módulo de empréstimos.
+- **Como foi encontrado:** leitura manual do fluxo de `create` e `devolver`; `Select-String` por `movimentacao`, por `ENTRADA` e por `saldo|calcularSaldo|insuficiente` (seção 5).
+- **Confirmação:** leitura, no commit `b9b67c5`. O saldo -1 é dedução do código e continua **a confirmar** com um teste de integração (criar item, emprestar, consultar `/movimentacoes/saldo/item/:id`).
+- **Confirmado por:** Mateus em 14/11 (commit `b9b67c5`)
+- **Ideia de correção:** o `EmprestimosService` chamar um método do `MovimentacoesService` (ou um serviço de saldo) em vez de gravar na tabela, e `ItensService.create` registrar a `ENTRADA` inicial do item patrimonial.
+
 #### ACH-02 — "Saldo" significa duas coisas diferentes
 - **Onde:** `estoques.service.ts` `formatEstoqueComSaldo` (L142-157, usado na listagem L46 e no detalhe L62) contra `movimentacoes.service.ts` `calcularSaldoItem` (L40-51) e `consultarSaldoEstoque` (L98-128).
 - **Categoria:** integridade conceitual.
-- **Problema:** na listagem de estoques, `saldo` é uma contagem de itens por status (`totalItens`, `disponiveis`, `emprestados`). No módulo de movimentações, `saldo` é a soma de entradas e devoluções menos saídas de cada item (`aplicarSinal`). O mesmo termo vale para conceitos distintos, em endpoints diferentes (`/estoques` e `/movimentacoes/saldo/...`).
-- **Por que atrapalha:** os dois valores divergem em situações normais. Em `EmprestimosService.create`, a `SAIDA` é gravada na L139, mas o status do item só muda para `EMPRESTADO` na confirmação da entrega (L389). Entre o registro (`AGUARDANDO_TERMO`) e a confirmação, a contagem por status ainda mostra o item como disponível, enquanto o saldo de movimentações já diminuiu.
-- **Como foi encontrado:** leitura cruzada dos dois services; `Select-String` por `saldo|totalItens|disponiveis|emprestados|DISPONIVEL|EMPRESTADO` em `estoques.service.ts` e por `StatusItem\.|AGUARDANDO_TERMO` em `emprestimos.service.ts` (mudança de status só nas L389 e L527).
-- **Confirmação:** leitura. O efeito visto na tela não foi executado.
-- **Confirmado por:** Caio em 14/11 (commit `4fa5aa4`)
+- **Problema:** na listagem de estoques, `saldo` é uma contagem de itens por status (`totalItens`, `disponiveis`, `emprestados`). No módulo de movimentações, `saldo` é a soma de entradas menos saídas de cada item. O mesmo termo vale para conceitos distintos, em endpoints diferentes (`/estoques` e `/movimentacoes/saldo/...`).
+- **Por que atrapalha:** os dois valores divergem em situações normais. Entre o registro do empréstimo e a confirmação da entrega (estado `AGUARDANDO_TERMO`), o `create` já gravou a `SAIDA` (`emprestimos.service.ts` L134), mas o status do item continua `DISPONIVEL`: o `create` só confere o status (L95) e quem muda o item para `EMPRESTADO` é a confirmação da entrega (L334). A tela de estoques conta o item como disponível enquanto a de movimentações já o desconta do saldo.
+- **Como foi encontrado:** leitura cruzada dos dois services ao procurar quem calcula "saldo"; `Select-String` por `saldo|disponiveis|emprestados|totalItens`, por `calcularSaldoItem|consultarSaldoEstoque` e por `StatusItem|AGUARDANDO_TERMO` (seção 5).
+- **Confirmação:** leitura, no commit `b9b67c5`. As duas telas não foram comparadas rodando a API.
+- **Confirmado por:** Mateus em 14/11 (commit `b9b67c5`)
 - **Ideia de correção:** nomear os conceitos (`contagemPorStatus` e `saldo`) ou calcular o resumo do estoque a partir de uma única fonte.
 
 #### ACH-03 — O front não entende o formato de erro do back
-- **Onde:** `back/src/common/filters/http-exception.filter.ts` (L45-56, corpo `application/problem+json` com `detail`) e `front/src/services/api.ts` `getApiErrorMessage` (L135-156, lê `message` ou `error`). Efeitos em `front/src/modules/estoques/item.service.ts` `failFrom` (L46-56) e `front/src/components/GerenciamentoEstoque.tsx` (L105-115).
+- **Onde:** `back/src/common/filters/http-exception.filter.ts` (L45-54, corpo `application/problem+json` com `detail`; `resolve` L59-93; `fromZodError` L95-108) e `front/src/services/api.ts` `getApiErrorMessage` (L135-156, lê `message` ou `error`). Efeitos em `front/src/modules/estoques/item.service.ts` `failFrom` (L46-56) e `front/src/components/GerenciamentoEstoque.tsx` (L105-115).
 - **Categoria:** acoplamento por contrato implícito e integridade conceitual entre as duas partes.
-- **Problema:** o filtro global devolve `{type, title, status, detail, code, ...}` e a mensagem vai em `detail`. O front espera o formato padrão do Nest (`{message}`, como diz o comentário da L132). Como não acha `message` nem `error`, cai na leitura do corpo como texto (L149) e **devolve o JSON inteiro como mensagem**. Além disso, o back responde 422 para erro de Zod (L103) e 400 para `AppException` de validação; que o front só trate o 400 como "dados inválidos" está **a confirmar**.
-- **Por que atrapalha:** o usuário que tenta cadastrar um tombamento duplicado vê na tela o JSON bruto (`{"type":"https://controle-estoque-emprestimos.example/problems/conflict",...,"detail":"Já existe um item com este tombamento."}`) em vez da frase. A tela de itens só marca o campo certo porque a regex `/tombamento/i` casa com o texto cru do JSON, o que funciona por acaso.
-- **Como foi encontrado:** leitura da cadeia de erro nos dois lados (`Select-String` por `problem\+json|detail|message|title|status:` no filtro e por `getApiErrorMessage|message|detail|\.error|text\(\)|json\(` em `api.ts`); depois, um script em Node (`docs/ferramentas-analise/erro.mjs`, recriado em 14/11 com a cópia de `getApiErrorMessage` e um corpo montado a partir dos campos do filtro) que alimenta a função com esse corpo.
-- **Confirmação:** executado (saída na seção 5).
-- **Confirmado por:** Caio em 14/11 (commit `4fa5aa4`)
-- **Ideia de correção:** `getApiErrorMessage` ler `detail` (e `errors` por campo), e o back/front concordarem em um único código de status para validação.
+- **Problema:** o filtro global (registrado em `main.ts` L22) devolve `{type, title, status, detail, code, ...}`. O front espera o formato padrão do Nest (`{message}`, como diz o comentário das L130-134 de `api.ts`). Como não acha `message`, cai na leitura do corpo como texto e **devolve o JSON inteiro como mensagem**. Além disso, o back responde **422** para erro de Zod (`fromZodError`, L103) e **400** para `BadRequestException` do Nest (mapeado para `VALIDATION_FAILED` em `mapStatusToErrorCode`), e o `failFrom` só trata o 400 como "dados inválidos" (L51-53); um 422 cai no ramo genérico da L55.
+- **Por que atrapalha:** o usuário que tenta cadastrar um tombamento duplicado vê na tela o JSON bruto (`{"type":"https://controle-estoque-emprestimos.example/problems/conflict",...,"detail":"Já existe um item com este tombamento."}`) em vez da frase. A tela de itens só marca o campo certo porque a regex `/tombamento/i` (L109 do componente) casa com o texto cru do JSON, o que funciona por acaso. Os erros por campo (`errors`) nunca chegam à tela.
+- **Como foi encontrado:** leitura da cadeia de erro nos dois lados; `Select-String` por `\.detail|problem\+json` em `front/src` (sem resultados) e por `detail|problem` em `api.test.ts` (sem resultados); teste `docs/ferramentas-analise/erro.test.ts` (vitest) que alimenta `getApiErrorMessage` com o corpo que o filtro gera, para 409 e 422 (seção 5).
+- **Confirmação:** executado em 14/11 no commit `b9b67c5`; os dois casos imprimiram o JSON cru como mensagem.
+- **Confirmado por:** Mateus em 14/11 (commit `b9b67c5`)
+- **Ideia de correção:** `getApiErrorMessage` ler `detail` (e `errors` por campo), e o back e o front concordarem em um único código de status para validação.
 
 #### ACH-04 — Dois estilos para o mesmo problema: exceções e validação de entrada
-- **Onde:** exceções nativas do Nest em `movimentacoes.service.ts` (9), `estoques.service.ts` (3), `categorias.service.ts` (3) e `gestor.guard.ts` (2), 17 no total; família própria (`AppException`, `ResourceNotFoundException`, `ResourceConflictException`, `AccessDeniedException`) em `emprestimos.service.ts` (31), `itens.service.ts` (13), `estoques.service.ts` (3), `keycloak.identity-source.ts` (2) e `roles.guard.ts` (1). Validação: Zod (`createZodDto`) em 11 DTOs, entre eles `create-item.dto.ts`, `create-emprestimo.dto.ts` e `create-estoque.dto.ts`; `class-validator` em `categorias/dto/create-categoria.dto.ts` e `movimentacoes/dto/registrar-movimentacao.dto.ts`.
+- **Onde:** exceções nativas do Nest em `movimentacoes.service.ts` (9 usos), `estoques.service.ts` (3), `categorias.service.ts` (3) e `gestor.guard.ts` (2): 17 no total. Família própria (`AppException`, `ResourceNotFoundException`, `ResourceConflictException`, `AccessDeniedException`) em `emprestimos.service.ts` (29), `itens.service.ts` (9), `estoques.service.ts` (3), `keycloak.identity-source.ts` (2) e `roles.guard.ts` (1): 44 no total. Validação: Zod em 8 DTOs (`create-item`, `update-item`, `create-emprestimo`, `create-estoque`, `update-estoque`, `autorizar-gestor`, `registrar-justificativa-permanencia`, `pagination-query`); `class-validator` em 2 (`categorias/dto/create-categoria.dto.ts` e `movimentacoes/dto/registrar-movimentacao.dto.ts`).
 - **Categoria:** integridade conceitual (o sistema não parece desenhado por uma única cabeça).
-- **Problema:** o `estoques.service.ts` usa os dois estilos no mesmo arquivo, inclusive para o mesmo conceito: `NotFoundException('Estoque não encontrado')` na L59 contra `ResourceNotFoundException('Estoque', estoqueId)` na L138; e `ConflictException` nas L23 e L80 contra `ResourceConflictException` na L113. Até os guards divergem (`gestor.guard.ts` usa as nativas, `roles.guard.ts` usa a família própria). Só o `ZodValidationPipe` está registrado como pipe global (`app.module.ts` L36-37), e não há `ValidationPipe` nem `UsePipes` em `src` (nem em `main.ts`, que só registra o filtro na L22).
-- **Por que atrapalha:** o `ErrorCode` e a redação do erro dependem do módulo que lançou (o filtro trata os dois estilos, mas a nativa passa por `mapStatusToErrorCode`). Quem mexe em um módulo copia o estilo errado. Os dois DTOs com `class-validator` **podem não estar sendo validados**, porque as anotações (`@IsEnum`, `@IsInt`, `@Min`, `@IsString`) só têm efeito com um `ValidationPipe`.
-- **Como foi encontrado:** `Select-String` por `new (BadRequest|Conflict|Forbidden|NotFound)Exception` contra `new (AppException|ResourceNotFound|ResourceConflict|AccessDenied)Exception` com contagem por arquivo (fora dos `.spec.ts`; no segundo comando, `ResourceConflictException` foi incluída, então a contagem pode diferir da do log); `Select-String` por `Exception` em `estoques.service.ts`; `Select-String` por `ValidationPipe|UsePipes|class-validator|from 'nestjs-zod'` em `src`.
-- **Confirmação:** leitura para os dois estilos de exceção e para os pipes registrados. O efeito de "DTO sem validação" está **a confirmar** rodando `POST /movimentacoes` com `tipo` inválido e `POST /categorias` com `nome` numérico.
-- **Confirmado por:** Caio em 14/11 (commit `4fa5aa4`)
+- **Problema:** o `estoques.service.ts` usa os dois estilos no mesmo arquivo, inclusive para o **mesmo conceito**: "estoque não encontrado" é `NotFoundException('Estoque não encontrado')` na L59 e `ResourceNotFoundException('Estoque', estoqueId)` na L138; o conflito é `ConflictException` nas L23 e L80 e `ResourceConflictException` na L113. Só o `ZodValidationPipe` está registrado como pipe global (`app.module.ts` L36-37); `main.ts` não registra `ValidationPipe` e nenhum arquivo de `src` usa `@UsePipes` ou `ValidationPipe`.
+- **Por que atrapalha:** o formato do erro e o `ErrorCode` dependem do módulo que lançou. Quem mexe em um módulo copia o estilo errado. Os dois DTOs com `class-validator` **não são validados**: no teste, o pipe global deixou passar `{tipo: 'INVALIDO', quantidade: -5}` sem erro, enquanto o `class-validator` executado à mão apontou 2 erros. Isso é compatível com a checagem manual de quantidade em `registrarMovimentacao` (L58-60), que repete o `@IsInt` e o `@Min(1)` do DTO.
+- **Como foi encontrado:** `Select-String` por `new (BadRequest|Conflict|Forbidden|NotFound)Exception` contra `new (AppException|ResourceNotFoundException|ResourceConflictException|AccessDeniedException)`, com contagem por arquivo; por `Pipe` em `main.ts` e `app.module.ts`; por `ValidationPipe|UsePipes|ZodValidationPipe` em `src`; por `class-validator|nestjs-zod|from 'zod'` nos `*.dto.ts`; teste `docs/ferramentas-analise/ach04.test.ts` (vitest) (seção 5).
+- **Confirmação:** leitura para os dois estilos e para o pipe; executado em teste do pipe global contra `RegistrarMovimentacaoDto` no commit `b9b67c5`. Não foi feito por HTTP (`POST /movimentacoes`), e `create-categoria.dto.ts` está confirmado só por leitura e grep.
+- **Confirmado por:** Mateus em 14/11 (commit `b9b67c5`)
 - **Ideia de correção:** migrar os dois DTOs para Zod e padronizar as exceções na família `AppException`.
 
 ### Grupo 2 — SOLID e coesão
@@ -128,6 +129,26 @@ Total: **12 achados** e **9 falsos positivos** (seção 4). A meta do time era c
 - **Confirmado por:** Randell em 13/11
 - **Ideia de correção:** remover `todos`/`team` (ou esconder da navegação), redirecionar para `/estoques`, ligar `isGestor` à role real e decidir o destino de `CANCELADO` e `semTombamento`.
 
+#### ACH-11 — O hook do termo mantém no estado uma URL de PDF já revogada
+- **Onde:** `controle-estoque-emprestimos-front/src/modules/emprestimos/useTermo.ts`, estado e efeito de `pdfUrl` (`L33-52`); consumido em `controle-estoque-emprestimos-front/src/pages/emprestimos/TermoPage.tsx` (`L52-56` e `L96-106`), rota parametrizada em `controle-estoque-emprestimos-front/src/routes.tsx` (`L137`).
+- **Categoria:** code smell (estado de recurso assíncrono fica obsoleto ao trocar a entidade).
+- **Problema:** quando `estoqueId` ou `emprestimoId` muda, a limpeza do efeito marca a requisição anterior como cancelada e revoga sua URL (`URL.revokeObjectURL`), mas não limpa `pdfUrl` nem `erroPdf`. O novo `obterTermoBlob` roda em paralelo com a busca do empréstimo do `useAsync`. Se a busca do empréstimo terminar primeiro, `TermoPage` deixa o loading e renderiza o iframe/link com a URL antiga, já revogada, até o novo blob chegar.
+- **Por que atrapalha:** ao navegar diretamente entre termos sem desmontar a página, o documento pode ficar temporariamente em branco ou indisponível; se a nova carga falhar, o estado antigo continua apontando para a URL revogada. O estado local e a limpeza estão no código; a sequência temporal descrita é dedução e não foi reproduzida no navegador.
+- **Como foi encontrado:** leitura de `useTermo` e do ponto de renderização do iframe/link em `TermoPage`, além da rota parametrizada que mantém o mesmo elemento de página.
+- **Confirmação:** leitura; efeito visual da troca ainda **a confirmar** em execução no navegador.
+- **Confirmado por:** Mateus em 14/11 (commit `b9b67c5`)
+- **Ideia de correção:** limpar `pdfUrl` e `erroPdf` ao iniciar a carga de novos IDs, revogando a URL anterior, e só renderizar o documento correspondente aos parâmetros atuais.
+
+#### ACH-12 — A validação de audiência do token é desativada se faltar configuração
+- **Onde:** `controle-estoque-emprestimos-back/src/config/keycloak.config.ts` (`clientId`, L6-7); `controle-estoque-emprestimos-back/src/common/auth/identity/keycloak.identity-source.ts` (leitura do valor L52-55 e `hasValidAudience`, L110-120); `controle-estoque-emprestimos-back/src/common/auth/guards/auth.guard.ts` (L39-47). A documentação descreve o client backend como esperado em `controle-estoque-emprestimos-back/docs-site/content/docs/architecture/authentication.mdx` (L89).
+- **Categoria:** code smell de segurança (validação fail-open condicionada à configuração).
+- **Problema:** `KEYCLOAK_CLIENT_ID` assume string vazia e é convertido para `undefined`. Nessa condição, `hasValidAudience` retorna `true` sem verificar `aud` ou `azp`; o `AuthGuard` aceita o `CurrentUser` retornado pelo identity source. Assinatura, issuer, expiração e papel continuam sendo verificados, mas não há restrição ao client emissor/consumidor esperado. O comentário do código (`keycloak.config.ts` L6 e `hasValidAudience`, L112) indica que a validação é opcional por decisão; o risco está no padrão aberto, não em um erro acidental.
+- **Por que atrapalha:** se a variável ficar ausente, um token válido do mesmo realm, emitido para outro client e com uma role reconhecida, pode autenticar na API. O valor padrão e o desvio estão no código; não foi feito teste HTTP com token de outro client.
+- **Como foi encontrado:** leitura da configuração, do ramo `if (!this.clientId) return true`, do retorno de identidade e do `AuthGuard`; `controle-estoque-emprestimos-back/docs-site/content/docs/architecture/authentication.mdx` (L89) descreve a validação da audiência contra `KEYCLOAK_CLIENT_ID`.
+- **Confirmação:** leitura; aceitação ponta a ponta de token de outro client **a confirmar** com configuração e token de teste.
+- **Confirmado por:** Mateus em 14/11 (commit `b9b67c5`)
+- **Ideia de correção:** exigir `KEYCLOAK_CLIENT_ID` na validação de configuração e falhar o bootstrap ou rejeitar o token quando a audiência esperada não estiver configurada.
+
 #### ACH-13 — Permissão do formulário de itens fixada em `true` no front (stub esquecido)
 - **Onde:** `front/src/pages/estoques/index.tsx`, `EstoquesPage`: `const usuarioLogadoEhGestor = true;` (L49), passada em `<GerenciamentoEstoque isGestor={usuarioLogadoEhGestor} />`. O componente usa essa prop para exibir o formulário (L134) ou o aviso de restrição (L268).
 - **Categoria:** code smell (valor fixo/stub esquecido, generalidade especulativa). Mesmo padrão do `isGestor = true` de `categorias/index.tsx` L9 (ACH-10), mas em outro arquivo e com efeito sobre o cadastro de itens do estoque.
@@ -172,6 +193,11 @@ Pontos vistos durante a leitura que são defeitos ou lacunas funcionais, não de
 | FP-07 | "Blocos de `import` repetidos em 5 páginas do front" (`docs/ferramentas-analise/dup.py`) | Conferido por Caio em 14/11 (commit `4fa5aa4`). A ferramenta casou listas de `import` (`Table`, `TableBody`, `ErrorScreen`). Contagem por `Select-String` nas 5 páginas (`emprestimos`, `estoques`, `movimentacoes`, `team`, `todos`): 2 ocorrências de `import` e de 2 a 4 de uso em cada uma, ou seja, reaproveitamento de componentes compartilhados, sem lógica duplicada. O `dup.py` não estava no clone usado na conferência, então a contagem é por leitura. |
 | FP-08 | "`eslint-disable react-hooks/exhaustive-deps` em `useAsync.ts` L59" (grep) | Conferido por Caio em 14/11 (commit `4fa5aa4`). Desabilitação deliberada: o hook recebe a lista de dependências do chamador (`deps`) e usa `[...deps, reloadToken]` (L60), que o linter não consegue analisar. O JSDoc do hook documenta `deps` e a flag `cancelled`, mas a linha do `eslint-disable` não tem comentário próprio. Melhoria barata, não é defeito: acrescentar uma linha explicando o motivo. |
 | FP-09 | "`TERMO_ASSINADO_MAX_BYTES` é número mágico" (heurística) | Conferido por Randell em 13/11. É uma constante nomeada, com comentário, em `termo-assinado.constants.ts`, e compartilhada pelo controller e pelo service. |
+| FP-10 | `noGlobalIsNan` em `termo-pdf.service.ts` (Biome) | `isNaN` recebe `d.getTime()`, que retorna número; não há coerção de entrada heterogênea neste ponto. O alerta não demonstra defeito concreto no fluxo atual. |
+| FP-11 | `useConsistentArrayType` (Biome) | Só recomenda padronização de sintaxe de tipo; é estilo e não evidencia problema de comportamento ou manutenção neste caso. |
+| FP-12 | `react-hooks/incompatible-library` em `GerenciamentoEstoque.tsx` (ESLint) | O aviso trata da otimização pelo React Compiler; a configuração Vite atual não habilita o React Compiler. Não há efeito de runtime demonstrado nesta configuração. |
+| FP-13 | `set-state-in-effect` em `categorias/index.tsx` (ESLint), usado no antigo ACH-11 | A regra aponta a chamada do helper que atualiza estado; a repetição da consulta citada decorre do replay esperado de efeitos pelo React StrictMode em desenvolvimento. A possível corrida não foi reproduzida, então esse sinal não basta para sustentar smell independente. |
+| FP-14 | `eslint .` inclui `docs-site` (antigo ACH-12) | A execução de fato falha com nove erros nessa pasta, mas trata-se exclusivamente de configuração/escopo do lint; o critério desta issue exclui configuração de ferramenta como achado. |
 
 ## 5. Ferramentas, comandos e prompts (para o log)
 
@@ -183,7 +209,7 @@ Pontos vistos durante a leitura que são defeitos ou lacunas funcionais, não de
 | `wc -l`, contagem de métodos por classe | tamanho e coesão | `EmprestimosService`: 491 linhas e 13 métodos |
 | `grep`/ripgrep | `any`, `as string`, literais de enum, exceções nativas × próprias, `class-validator` × `nestjs-zod`, `CANCELADO`/`semTombamento` | ACH-04, ACH-09, ACH-10 |
 | `docs/ferramentas-analise/dup.py` (script próprio, janelas de 6 e 7 linhas normalizadas) | duplicação | achou `assertGestorDoEstoque` e `request<T>`; 1 resultado era falso (FP-07) |
-| `docs/ferramentas-analise/erro.mjs` (Node 22) | alimenta a cópia de `getApiErrorMessage` com o corpo do filtro do back | reproduziu o JSON cru como mensagem (ACH-03) |
+| `docs/ferramentas-analise/erro.test.ts` (vitest, front) | alimenta `getApiErrorMessage` com o corpo do filtro do back, em 409 e 422 | devolveu o JSON cru como mensagem nos dois casos (ACH-03) |
 | `docs/ferramentas-analise/data.mjs` (Node 22, `TZ=UTC` e `TZ=America/Sao_Paulo`) | formatadores de data do PDF | `20/11/2026` em UTC e `19/11/2026` em São Paulo (ACH-09) |
 | `docs/ferramentas-analise/data-fuso-pdf.mjs` (Node 22, `TZ=UTC` e `TZ=America/Recife`) | formatadores de data do PDF, com a entrada real do front (`fimDoDiaISO`) | prazo de 20/11 sai `21/11/2026` em UTC e `20/11/2026` em Recife; data pura sai `20/11` em UTC e `19/11` em Recife (ACH-09) |
 | `grep -rnE "ENOENT\|termoStorage\.read" back/src` | tratamento de arquivo ausente no storage | 2 usos de `read`, nenhum tratamento (ACH-15) |
@@ -197,16 +223,30 @@ Pontos vistos durante a leitura que são defeitos ou lacunas funcionais, não de
 | `Select-String` e leitura manual (PowerShell, back) | `movimentacao` em `emprestimos.service.ts`, `saldo\|insuficiente\|registrarNaTransacao` em `movimentacoes.service.ts`, `movimentacao\|ENTRADA\|TipoMovimentacao` em `itens.service.ts`, e `movimentacao\.create` em todo o back | 2 gravações diretas no empréstimo (L139 e L530), regra de saldo só em `registrarNaTransacao`, nenhuma `ENTRADA` no cadastro do item (ACH-01) |
 | `Select-String` (PowerShell, back) | `saldo\|totalItens\|disponiveis\|emprestados` em `estoques.service.ts` e `StatusItem\.\|AGUARDANDO_TERMO` em `emprestimos.service.ts` | `saldo` como contagem por status; status do item só muda nas L389 e L527 (ACH-02) |
 | `Select-String` (PowerShell, back e front) | `problem\+json\|detail\|message` no filtro e `getApiErrorMessage\|message\|detail` em `api.ts` | mensagem em `detail` no back; front lê só `message` ou `error` (ACH-03) |
-| `docs/ferramentas-analise/erro.mjs` (Node, recriado em 14/11) | cópia de `getApiErrorMessage` alimentada com um corpo montado a partir dos campos do filtro | reproduziu o JSON cru como mensagem (ACH-03) |
 | `Get-ChildItem` + `Select-String` (PowerShell, back) | contagem por arquivo de `new (BadRequest\|Conflict\|Forbidden\|NotFound)Exception` e de `new (AppException\|ResourceNotFound\|ResourceConflict\|AccessDenied)Exception`; `ValidationPipe\|UsePipes\|class-validator\|nestjs-zod` | 17 exceções nativas (4 arquivos) e 50 da família própria (5 arquivos); nenhum `ValidationPipe` em `src` (ACH-04) |
 | `Select-String`, `Get-Content` e leitura de `docs/permissoes.md` | conferência de FP-01, FP-02, FP-04, FP-07 e FP-08 | descartes mantidos, com ressalvas anotadas na seção 4 |
+| `git rev-parse --short HEAD` | commit analisado | `b9b67c5` |
+| `Select-String` (PowerShell, back) | `movimentacao`, `ENTRADA`, `saldo\|calcularSaldo\|insuficiente`, `saldo\|disponiveis\|emprestados\|totalItens`, `calcularSaldoItem\|consultarSaldoEstoque`, `StatusItem\|AGUARDANDO_TERMO` | sustentou ACH-01 e ACH-02 |
+| `Get-Content -Encoding UTF8` + numeração (função `Num`, PowerShell) | leitura de trechos com número de linha | linhas citadas nos achados |
+| `Select-String` + `Group-Object` (PowerShell, back) | exceções nativas × família `AppException`, `Pipe`, `class-validator\|nestjs-zod\|from 'zod'` | 17 contra 44 usos; só o `ZodValidationPipe` global (ACH-04) |
+| `Select-String` (PowerShell, front) | `\.detail\|problem\+json` em `front/src` e em `api.test.ts` | sem resultados (ACH-03) |
+| `docs/ferramentas-analise/ach04.test.ts` (vitest, back) | pipe global contra `RegistrarMovimentacaoDto` | pipe não lançou erro; `class-validator` apontaria 2 erros (ACH-04) |
+| Biome 2.4.16 (back) | `npx biome ci src/ test/` (sem `--write`) | 74 arquivos; 32 erros de formatação, 6 avisos (4 `noExplicitAny`, já cobertos no ACH-09; 1 `noGlobalIsNan`, FP-10; 1 `useConsistentArrayType`, FP-11). Os erros de formatação são apenas estilo; nenhum foi aplicado. |
+| ESLint 9.39.5 (front) | `npm --prefix controle-estoque-emprestimos-front run lint` (`eslint .`, sem `--fix`) | 14 erros e 1 aviso: quatro `@typescript-eslint/no-explicit-any` (ACH-09), `react-hooks/set-state-in-effect` em categorias L36 e no docs-site (FP-13), seis `react-refresh/only-export-components` e duas regras não definidas no docs-site (FP-14); um aviso `react-hooks/incompatible-library` (FP-12). Nesta auditoria, saída salva em `%TEMP%\ach11-12-eslint-audit.txt`; exit code 1. |
 
-**Ferramentas que não rodaram:** Biome (back) e ESLint (front), `tsc --noEmit` e os testes, porque o ambiente não tinha `node_modules` do projeto nem acesso à rede para instalar. Rodar `npm run lint` nos dois pacotes e comparar com esta lista é um passo que ainda falta.
 
-**Saídas dos dois scripts:**
+**Ferramentas que não rodaram:** `tsc --noEmit` e as suítes de testes nesta etapa.
+
+**Saídas dos scripts e testes:**
 ```
-$ node docs/ferramentas-analise/erro.mjs
-mensagem exibida ao usuário => {"type":"https://controle-estoque-emprestimos.example/problems/conflict","title":"Conflito de dados","status":409,"detail":"Já existe um item com este tombamento.", ...}
+$ npx vitest run src/services/erro.test.ts   (front, copiado de docs/ferramentas-analise/)
+MENSAGEM 409 => {"type":"https://controle-estoque-emprestimos.example/problems/conflict","title":"Conflito de dados","status":409,"detail":"Já existe um item com este tombamento.","instance":"/x","code":"CONFLICT",...}
+MENSAGEM 422 => {"type":".../problems/validation-failed","title":"Dados inválidos","status":422,"detail":"Um ou mais campos precisam ser corrigidos.",...,"errors":{"nome":["Obrigatório"]}}
+Tests  2 passed (2)
+
+$ npx vitest run src/modules/movimentacoes/dto/ach04.test.ts   (back, copiado de docs/ferramentas-analise/)
+pipe global devolveu sem erro: {"itemId":"x","tipo":"INVALIDO","quantidade":-5}
+class-validator apontaria 2 erro(s)
 
 $ TZ=UTC node docs/ferramentas-analise/data.mjs                  -> abertura=20/11/2026  prevista=20/11/2026
 $ TZ=America/Sao_Paulo node docs/ferramentas-analise/data.mjs    -> abertura=20/11/2026  prevista=19/11/2026
@@ -227,7 +267,10 @@ $ TZ=America/Recife node docs/ferramentas-analise/data-fuso-pdf.mjs
 2. A LLM leu os arquivos do back e do front, escreveu os scripts da seção acima e propôs os candidatos. Cada achado voltou ao código (arquivo e linha) antes de entrar na lista, e os que a leitura não sustentou foram para a seção 4.
 3. LLM (Gemini) para análise do EmprestimosService. Prompt: "Análise de violações de SOLID e code smells no arquivo emprestimos.service.ts".
 4. Randell (ACH-09, ACH-10, ACH-15, FP-03 e FP-09): prompt com o roteiro da S3B-07 colado, pedindo apoio para conferir ACH-09 e ACH-10, propor um achado em termo em PDF/storage e validar os trechos no código local (`8de43cf`). O script `data-fuso-pdf.mjs` foi executado em `TZ=UTC` e `TZ=America/Recife`, e todos os trechos citados foram lidos diretamente nos arquivos antes da assinatura.
-5. Caio (ACH-01 a ACH-04, FP-01, FP-02, FP-04, FP-07 e FP-08): conversa com Claude passo a passo, com o roteiro da S3B-07 colado e o `log-analise.md` anexado. A LLM indicou o comando de cada verificação, e eu rodei no código local (`4fa5aa4`) e colei a saída. Os trechos e as contagens foram lidos nas saídas antes da assinatura; o que não pôde ser comprovado (saldo -1, DTOs sem validação e o 422 tratado no front) ficou como "a confirmar".
+5. Mateus (ACH-01 a ACH-04): prompt com o contexto da S3B-07 pedindo para conferir os blocos ACH-01 a ACH-04 contra o código local (`b9b67c5`) e interpretar as saídas do PowerShell; os testes `erro.test.ts` e `ach04.test.ts` foram escritos com apoio da LLM e executados localmente.
+6. Mateus (revisão de ACH-11 e ACH-12): prompt com a descrição da S3B-07 pedindo auditoria contra o código local (`b9b67c5`), nova execução do ESLint sem correções e substituição dos candidatos que não atendem aos critérios da issue. Saída do lint salva em `%TEMP%\ach11-12-eslint-audit.txt`; trechos de `useTermo` e `KeycloakIdentitySource` lidos nesta revisão.
+7. Caio (ACH-01 a ACH-04, FP-01, FP-02, FP-04, FP-07 e FP-08): conversa com Claude passo a passo, com o roteiro da S3B-07 colado e o `log-analise.md` anexado. A LLM indicou o comando de cada verificação, e eu rodei no código local (`4fa5aa4`) e colei a saída. Os trechos e as contagens foram lidos nas saídas antes da assinatura; o que não pôde ser comprovado (saldo -1, DTOs sem validação e o 422 tratado no front) ficou como "a confirmar".
+
 
 > Quem usar outra LLM ou ferramenta para a própria parte deve acrescentar aqui o prompt e a ferramenta, uma linha por uso.
 
@@ -245,7 +288,7 @@ Sugestão para fechar "2 ou mais achados confirmados por pessoa". Cada um confir
 
 | Critério da issue | Situação |
 |---|---|
-| 2 ou mais achados confirmados por pessoa (meta de cerca de 8 no time) | 10 achados prontos, **faltam as confirmações humanas** (campo "Confirmado por") |
+| 2 ou mais achados confirmados por pessoa (meta de cerca de 8 no time) | Mateus confirmou ACH-01 a ACH-04, ACH-11 e ACH-12 lendo o código local no commit `b9b67c5`; faltam confirmações humanas dos demais achados com campo "Confirmado por" em branco. As verificações ainda marcadas **a confirmar** dependem de execução. |
 | Achado com arquivo/função, problema, categoria, consequência e como foi encontrado | feito |
-| Falsos positivos anotados com o motivo | feito (9) |
+| Falsos positivos anotados com o motivo | feito (14) |
 | Prompts e ferramentas registrados | feito (seção 5) |
