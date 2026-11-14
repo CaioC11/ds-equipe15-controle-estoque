@@ -18,7 +18,7 @@ Suíte: `tests/v1-llm/us04-emprestimos.spec.ts`. Execução de 13/11/2026 com Vi
 | **Valores-limite cobertos** | **80,00% (8/10 valores)** | 3 de 5 fronteiras cobertas nos dois lados (60,00%: LM-01, LM-04, LM-05). LM-02 (lado "prazo = hoje") e LM-03 (lado "0 em atraso") ficaram `Parcial`. |
 | **Requisitos (CAs) cobertos** | **90,91% (10/11 CAs)** | Pelo critério de ao menos um teste (`CA-10` sem cobertura). `CA-02` e `CA-11` com cobertura parcial; `CA-09` tem testes, mas eles falham. Pelo critério estrito (todos os CTs do CA em `Sim`/`Sim*`), só `CA-03`, `CA-04` e `CA-06`: 27,27% (3/11). |
 | **Casos de teste da matriz (CTs)** | **58,70% Sim (27/46)** | 5 `Sim` e 22 `Sim*` via mock, 6 `Parcial` (13,04%: CT-04-01, 10, 21, 28, 42, 45) e 13 `Não` (28,26%: CT-04-02, 04, 05, 09, 34, 35, 36, 37, 38, 39, 40, 43, 46). |
-| **Testes sem asserção ou triviais** | **4** | **0** sem asserção (todo `it` tem `expect` ou usa o helper `erroDe`, que lança se a promessa não for rejeitada). **4** triviais, só com `resolves.toBeDefined()`: "aceita prazo igual à retirada / 1 ms depois da retirada" (2) e "aceita arquivo com tamanho exatamente no limite / 1 byte abaixo do limite" (2). Há ainda 3 asserções circulares dentro de testes que têm outras asserções válidas (ver 4a). |
+| **Testes sem asserção ou triviais** | **4** | **0** sem asserção (todo `it` tem `expect` ou usa o helper `erroDe`, que lança se a promessa não for rejeitada). **4** triviais, só com `resolves.toBeDefined()`: "aceita prazo igual à retirada / 1 ms depois da retirada" (2) e "aceita arquivo com tamanho exatamente no limite / 1 byte abaixo do limite" (2). Há ainda 3 asserções circulares dentro de testes que têm outras asserções válidas (ver 4d). |
 | **Defeitos reais identificados** | **1 defeito e 1 lacuna** | Defeito: `create` não bloqueia responsável com item em atraso (CA-09, Issue 1, revelado por 2 testes que falham). Lacuna funcional: não existem consultas de responsáveis nem de histórico (CA-02 e CA-10, Issue 2, revelada pelos 2 `it.todo`). |
 
 Falhas investigadas (detalhe em `docs/testes/llm-log.md`):
@@ -34,7 +34,7 @@ Falhas investigadas (detalhe em `docs/testes/llm-log.md`):
 
 As quatro perguntas seguem o roteiro da Sprint 3 (Etapa 4). Os números vêm da execução de 13/11/2026, do `coverage-summary.json` e da matriz `matriz-rastreabilidade-us4.md`.
 
-### Pergunta 1. Técnicas funcionais: a LLM identificou as mesmas partições e limites que a equipe?
+### 4a. Técnicas funcionais: a LLM identificou as mesmas partições e limites que a equipe?
 
 Das 43 partições da matriz, a v1 exercitou 30 (69,77%), deixou 4 `Parcial` e perdeu 9. Dos 10 valores-limite, cobriu 8 (80,00%).
 
@@ -56,7 +56,7 @@ Das 43 partições da matriz, a v1 exercitou 30 (69,77%), deixou 4 `Parcial` e p
   * **Falha na gravação do termo:** o PDF é removido e o erro é traduzido (4 testes).
   * **`it.todo` correto:** a LLM percebeu que o módulo não tem consulta de responsáveis nem de histórico e registrou isso, em vez de inventar um teste que passaria com mock.
 
-### Pergunta 2. Requisitos: algum critério ficou sem teste? Algum teste não corresponde a requisito nenhum?
+### 4b. Requisitos: algum critério ficou sem teste? Algum teste não corresponde a requisito nenhum?
 
 | CA | Situação na v1 | Casos da matriz |
 | :--- | :--- | :--- |
@@ -83,7 +83,7 @@ Resultado: 10 de 11 CAs com ao menos um teste (90,91%). Com o critério estrito 
 
 São testes válidos, mas não rastreáveis à matriz da US04.
 
-### Pergunta 3. Linhas versus branches
+### 4c. Linhas versus branches
 
 **Trecho em `src/modules/emprestimos/emprestimos.service.ts` (linhas 262–266, método `obterPdfAssinado`):**
 
@@ -97,11 +97,17 @@ async obterPdfAssinado(estoqueId: string, emprestimoId: string, user?: CurrentUs
 
 Os 2 testes que chamam `obterPdfAssinado` ("devolve o PDF assinado com sufixo -assinado" e "responde 404 quando não há termo assinado anexado") passam `role: ADMIN`. A linha 264 conta como coberta, porque o `if` foi avaliado, e só o ramo "não é ADMIN" nunca foi tomado. Por isso a linha 265 e o branch correspondente aparecem como descobertos. Um teste com o gestor do estoque fecha o ramo, e um com usuário sem vínculo confere o 403.
 
-O mesmo desencontro aparece nos números do service: **98,03% de linhas (150/153) contra 95,34% de branches (82/86)**. Há 3 linhas descobertas (196, 265 e 273: o 404 de empréstimo inexistente em `obterPdf` e em `obterPdfAssinado`, e o ramo não-ADMIN) e 4 branches descobertos. Não identifiquei o quarto branch sem abrir o relatório HTML.
+O mesmo desencontro aparece nos números do service: **98,03% de linhas (150/153) contra 95,34% de branches (82/86)**. Há 3 linhas descobertas (196, 265 e 273: o 404 de empréstimo inexistente em `obterPdf` e em `obterPdfAssinado`, e o ramo não-ADMIN) e 4 branches descobertos. O quarto branch está na **linha 39**, no helper `comFlagTermo`: o caminho `null` do ternário abaixo aparece no [relatório HTML](relatorios/v1/us04/modules/emprestimos/emprestimos.service.ts.html#L39) como `branch-1 cbranch-no` (`branch not covered`):
+
+```ts
+termo: termo ? { id: termo.id, numeroAno: termo.numeroAno } : null, // linha 39
+```
+
+A linha é executada com `termo` presente, mas falta exercitar um empréstimo com `termo: null` e conferir `termo: null` e `termoAssinadoAnexado: false` no resultado. Assim, os quatro branches descobertos correspondem ao ternário da linha 39 e aos caminhos dos `if` das linhas 195, 264 e 272. Essas referências são do código preservado no HTML da medição v1; o código atual já inclui alterações posteriores.
 
 Mais importante: o `create` tem 100% das linhas cobertas e mesmo assim o CA-09 (bloqueio por atraso) não existe nele. A cobertura mede o código que está escrito e não detecta regra que falta. Quem achou o defeito foram os testes derivados dos critérios, e não a métrica.
 
-### Pergunta 4. Oráculos: a LLM assumiu o comportamento do código em vez do requisito?
+### 4d. Oráculos: a LLM assumiu o comportamento do código em vez do requisito?
 
 * **Testes que seguem o código quando o requisito é omisso ou diverge: 16 de 138 (11,59%).**
   * **Atraso por instante (3 testes de `estaAtrasado`):** os de 1 ms antes, exato e 1 ms depois seguem `prazoDevolucao < agora`. O critério diz só "prazo vencido", e a matriz (`PR-04`) espera que no dia do prazo ainda não haja atraso.
@@ -117,8 +123,4 @@ Mais importante: o `create` tem 100% das linhas cobertas e mesmo assim o CA-09 (
   * **Triviais:** 4, só com `resolves.toBeDefined()` ("aceita prazo igual à retirada" e "1 ms depois da retirada", e "aceita arquivo com tamanho exatamente no limite" e "1 byte abaixo do limite").
   * **Asserções circulares:** 3. O `r.status` de `AGUARDANDO_TERMO` em `create`, `ATIVO` em `confirmarEntrega` e `DEVOLVIDO` em `devolver` vêm do próprio mock. Esses testes passam por outras asserções válidas.
 
----
-
-### Observações adicionais
-
-* **Nome do arquivo:** o comando e o log usam `us04-emprestimos.spec.ts`. Se o arquivo ainda estiver como `us04-itens.spec.ts`, renomeie antes do commit.
+**Conclusão da 4d:** a v1 exige revisão dos oráculos e da rastreabilidade antes de servir como evidência de atendimento integral aos requisitos. Dos 46 CTs da matriz, **13 estão em `Não` (28,26%) e 6 em `Parcial` (13,04%)**; portanto, **19/46 (41,30%)** não têm cobertura completa, apesar dos 95,65% de testes passando e dos 98,29% de linhas cobertas. O erro de mock na **linha 470** mostra por que uma falha não prova, sozinha, um defeito de produção: a gravação de `prazoDevolucao: null` é verificada na linha 468, mas o retorno simulado não inclui esse campo. Para a revisão seguinte, é necessário corrigir esse retorno no setup, completar os 13 CTs ausentes e as asserções dos 6 parciais, e validar as premissas de prazo e tamanho do anexo contra os requisitos. A v1 e seus indicadores permanecem como registro histórico da execução de 13/11/2026.
