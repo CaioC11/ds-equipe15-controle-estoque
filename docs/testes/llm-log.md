@@ -2435,6 +2435,42 @@ INSTRUÇÕES
 | EmprestimosService.create > responsável com item em atraso > impede novo empréstimo para responsável com item em atraso | a promise resolveu (`AGUARDANDO_TERMO`) em vez de rejeitar | defeito real | `create` não consulta empréstimos ativos vencidos do responsável. `estaAtrasado` só é usado em `findPendentes` e não há menção a atraso ou pendência no fluxo de criação. O CA9 (premissa A5) não está implementado. O campo `justificativaPermanencia` já existe no schema, sem uso. | Issue 1 |
 | EmprestimosService.create > responsável com item em atraso > informa a pendência na mensagem de erro | `Esperava que a promessa fosse rejeitada` | defeito real (mesma causa do anterior) | Como não há bloqueio, nenhum erro é lançado, então não existe mensagem de pendência. | Issue 1 |
 
+## US04 — Suíte v2 (Theo)
+
+> Trecho para colar no `docs/testes/llm-log.md`, depois da seção da v1 da US04. Revise os campos marcados antes do commit.
+
+#### Rodada v2-1
+- Data e hora: 14/11/2026 (escrita da suíte; a execução fica registrada abaixo)
+- Modelo e contexto: Claude Sonnet 5.5, na mesma conversa da v1 da US04, com o zip atualizado do projeto anexado (código com a Issue 1 implementada, `tests/v1-llm/us04-emprestimos.spec.ts` já commitada e a matriz com a coluna "Coberto pela v1?" preenchida).
+- Prompt das lacunas: texto da task S3B (suíte v2 em `tests/v2/`, cada mudança ligada a uma lacuna da matriz, meta de 100% dos CAs, partições e limites, e branches acima da v1) mais a ordem de analisar o projeto antes. As lacunas informadas vieram da coluna "Coberto pela v1?":
+  - 13 casos `Não`: CT-04-02, 04, 05, 09, 34, 35, 36, 37, 38, 39, 40, 43 e 46.
+  - 6 casos `Parcial`: CT-04-01, 10, 21, 28, 42 e 45.
+  - 2 testes da v1 que falhavam por oráculo errado (prazo indefinido, CT-04-12) e 4 testes triviais (`toBeDefined`).
+  - 3 branches descobertos do `emprestimos.service.ts` (linhas 196, 265 e 273).
+- Resumo da resposta: arquivo `tests/v2/us04-emprestimos.spec.ts` com todos os testes da v1 (mantidos ou corrigidos) e os novos, cada um com o comentário `[v2] Lacuna CT-04-xx`. Novos grupos: perfis de acesso pelo controller com o service real (ADMIN, requisitante e gestor de outro estoque), fluxo completo com estado simulado, `registrarJustificativaPermanencia` e seu schema, bloqueio por atraso com as partições da matriz e os branches de `obterPdf` e `obterPdfAssinado`. `it.todo` para o que depende da Issue 2 (CT-04-05, 09, 10, 38 e 39) e para a PR-04 (CT-04-28).
+- Problemas observados:
+  - A primeira versão do arquivo foi escrita contra o código anterior, em que o bloqueio por atraso não existia, e usava `it.fails` para o CA-09. O zip atualizado mostrou a Issue 1 implementada, então esses testes viraram testes normais e foram acrescentados os da ação `justificativa-permanencia`.
+  - O simulador de empréstimos existentes teve de respeitar os filtros novos do service (`prazoDevolucao.lt` e `justificativaPermanencia` nula), senão os casos "aceita" falhariam.
+  - A LLM não executou a suíte. A execução e a contagem abaixo são do integrante.
+- Revisão contra o requisito (marque ao concluir):
+  - [ ] Cada teste `[v2]` confere o resultado esperado do CT que cita, e não só o que o código faz.
+  - [ ] Os testes que usam o estado simulado (fluxo completo, devolver e emprestar de novo, justificativa e liberação) foram lidos contra a matriz.
+
+#### Execução e contagem
+Execução de 14/11/2026, 10:55 (`vitest run tests/v2/us04-emprestimos.spec.ts --config vitest.llm.config.ts`, Vitest v4.1.8, cobertura v8). Primeira rodada da v2, sem ajustes depois da execução.
+
+| Passando | Falhando | Não compilam | Todo |
+|---|---|---|---|
+| 194 | 0 | 0 | 6 |
+
+#### Investigação das falhas
+Não houve falhas na v2. Os 6 `it.todo` não são falhas: CT-04-05, 09, 10, 38 e 39 dependem da Issue 2, e o CT-04-28 depende de confirmar a premissa PR-04.
+
+
+
+
+
+
 #### Lacunas sinalizadas pela LLM (`it.todo`)
 | Teste | CA | Verificação no código | Issue |
 |---|---|---|---|
