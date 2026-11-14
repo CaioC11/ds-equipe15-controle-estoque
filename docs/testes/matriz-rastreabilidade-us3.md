@@ -88,45 +88,45 @@ Pontos que a issue #7 não define. Se a resposta for diferente, ajustar a linha 
 
 | Requisito / critério | Variável | Partição ou limite | Caso de teste esperado | Coberto pela v1? | Coberto pela v2? |
 |----------------------|----------|--------------------|------------------------|------------------|------------------|
-| CA-01 | tipo, tombamento, categoria, estoque, perfil | PT-01, PTB-01, PCA-01, PES-01, PPF-01 | CT-03-01: gestor do estoque cadastra item PATRIMONIAL com categoria existente e tombamento inédito → item criado, vinculado ao estoque e à categoria | Sim* — service CA1: cria item patrimonial (banco simulado) | (preencher na Etapa 4) |
-| CA-01, CA-03 | tipo, tombamento | PT-02, PTC-01 | CT-03-02: gestor cadastra item CONSUMO sem tombamento → item criado | Sim — schema e service CA4 consumo sem tombamento | |
-| CA-01 | tipo | PT-03 | CT-03-03: cadastro sem tipo → recusado, nada criado | Sim — schema: rejeita tipo ausente | |
-| CA-01 | tipo | PT-04 | CT-03-04: cadastro com tipo "OUTRO" → recusado, nada criado | Sim — schema: tipo fora do enum (teste falha só na mensagem) e minúsculas | |
-| CA-01 | categoria | PCA-02 | CT-03-05: cadastro sem categoria → recusado | Sim — schema: rejeita categoriaId ausente | |
-| CA-01 | categoria | PCA-03 | CT-03-06: cadastro com categoria inexistente → recusado | Sim — service: categoria não existe, nada criado | |
-| CA-01 | estoque | PES-02 | CT-03-07: cadastro em estoque inexistente → recusado (não encontrado) | Sim — service: estoque não existe, nada criado | |
-| CA-02 | tombamento | PTB-02 | CT-03-08: PATRIMONIAL sem tombamento → recusado | Sim — schema CA2: patrimonial sem tombamento | |
-| CA-02 | tombamento | PTB-03, LM-02 (lado inválido) | CT-03-09: PATRIMONIAL com tombamento "" → recusado | Sim — schema CA2: tombamento vazio | |
-| CA-02 | tombamento | PTB-03 | CT-03-10: PATRIMONIAL com tombamento "   " (só espaços) → recusado | Sim — schema CA2: tombamento só de espaços | |
-| CA-02 | tombamento | PTB-01, LM-02 (lado válido) | CT-03-11: PATRIMONIAL com tombamento "1" → item criado | Sim — schema CA1: tombamento de 1 caractere | |
-| CA-02 | tombamento | PTB-04, LM-03 (lado inválido) | CT-03-12: PATRIMONIAL com tombamento já usado por outro item do mesmo estoque → recusado, com mensagem clara de duplicidade; apenas 1 item com esse tombamento no banco | Sim* — service CA3: P2002 simulado, mensagem clara; banco real não verificado | |
-| CA-02 | tombamento | PTB-04 (PR-02*) | CT-03-13*: PATRIMONIAL com tombamento já usado por item de outro estoque → recusado | Não — mock não distingue estoques | |
-| CA-02 | tombamento | PTB-01, LM-03 (lado válido) | CT-03-14: dois PATRIMONIAIS com tombamentos distintos → ambos criados | Não — nenhum teste com duas criações | |
-| CA-03 | tombamento | PTC-01 | CT-03-15: dois itens de CONSUMO sem tombamento no mesmo estoque → ambos criados (ausência de tombamento não conta como duplicado) | Não — nenhum teste com dois consumos | |
-| CA-03 (PR-05*) | saldo | PT-02 | CT-03-16*: item CONSUMO recebe entrada de 10 unidades → saldo 10 | Não — nenhum teste de saldo | |
-| CA-07 | saldo | PT-01 | CT-03-17: item PATRIMONIAL recém-cadastrado → saldo 1 | Não — nenhum teste de saldo 1 | |
-| CA-04 | nº de série, nível mínimo | PNS-01, PNM-01 | CT-03-18: cadastro sem nº de série e sem nível mínimo → item criado | Sim — schema e service CA5: opcionais omitidos | |
-| CA-04 | nº de série | PNS-02 | CT-03-19: cadastro com nº de série "SN-123" → item criado com esse nº de série | Sim — service CA5: nº de série informado é salvo | |
-| CA-04 | nível mínimo | PNM-02 | CT-03-20: cadastro de CONSUMO com nível mínimo 5 → item criado com nível mínimo 5 | Sim — schema CA5: nível mínimo 5 mantido | |
-| CA-04 (PR-03*) | nível mínimo | PNM-03, LM-01 (lado válido) | CT-03-21*: nível mínimo 0 → item criado | Sim — schema, service e update: nível mínimo 0 | |
-| CA-04 (PR-03*) | nível mínimo | PNM-04, LM-01 (lado inválido) | CT-03-22*: nível mínimo -1 → recusado | Sim — schema e update: nível mínimo -1 | |
-| CA-04 (PR-03*) | nível mínimo | PNM-05 | CT-03-23*: nível mínimo 2.5 → recusado | Sim — schema: 1.5 e 0.1; update: 2.5 | |
-| CA-05 | listagem | PLI-01 | CT-03-24: estoque com 3 itens → listagem devolve exatamente esses 3 | Parcial — 2 itens vindos do mock, não 3 | |
-| CA-05 | listagem | PLI-01 | CT-03-25: dois estoques com itens → listagem de um não traz itens do outro | Parcial — só confere where { estoqueId } | |
-| CA-05 | listagem | PLI-02, LM-04 (0 itens) | CT-03-26: estoque sem itens → lista vazia | Parcial — só toBeDefined(), não verifica lista vazia | |
-| CA-05 | listagem | LM-04 (1 item) | CT-03-27: estoque com exatamente 1 item → lista com 1 elemento | Não — nenhum teste com exatamente 1 item | |
-| CA-05 | estoque | PES-02 | CT-03-28: listagem de estoque inexistente → não encontrado | Sim — service: estoque não existe, não consulta itens | |
-| CA-06 | perfil | PPF-01 | CT-03-29: gestor do estoque edita o nome de um item → atualizado | Sim — service CA5: update repassa nome (confere a chamada ao Prisma) | |
-| CA-06 | perfil | PPF-02 | CT-03-30: gestor de outro estoque tenta cadastrar → 403, nada criado | Sim* — service CA7: vínculo null, 403, nada criado | |
-| CA-06 | perfil | PPF-02 | CT-03-31: gestor de outro estoque tenta editar → 403, item inalterado | Sim* — service CA7: vínculo null, 403, update não chamado | |
-| CA-06 | perfil | PPF-03 | CT-03-32: requisitante tenta cadastrar → 403, nada criado | Parcial — só o caso genérico sem vínculo; sem requisitante | |
-| CA-06 | perfil | PPF-03 | CT-03-33: requisitante tenta editar → 403, item inalterado | Parcial — só o caso genérico sem vínculo; sem requisitante | |
-| CA-06 (PR-04*) | perfil | PPF-04 | CT-03-34*: ADMIN sem vínculo com o estoque tenta cadastrar → 403 | Não — nenhum teste com ADMIN | |
-| CA-02 | tombamento | PTB-02 | CT-03-35: editar item PATRIMONIAL removendo o tombamento → recusado, tombamento anterior mantido | Parcial — schema update rejeita tombamento vazio; 'anterior mantido' não verificado | |
-| CA-02 | tombamento | PTB-04, LM-03 (lado inválido) | CT-03-36: editar o tombamento de um item para o valor de outro item → recusado | Sim* — service CA3: P2002 de tombamento na edição | |
-| CA-02 | tombamento | LM-03 (lado válido) | CT-03-37: editar um item PATRIMONIAL mantendo o próprio tombamento → aceito (não conta como duplicado) | Não — nenhum teste de manter o próprio tombamento | |
+| CA-01 | tipo, tombamento, categoria, estoque, perfil | PT-01, PTB-01, PCA-01, PES-01, PPF-01 | CT-03-01: gestor do estoque cadastra item PATRIMONIAL com categoria existente e tombamento inédito → item criado, vinculado ao estoque e à categoria | Sim* — service CA1: cria item patrimonial (banco simulado) | Sim* — mantido da v1 |
+| CA-01, CA-03 | tipo, tombamento | PT-02, PTC-01 | CT-03-02: gestor cadastra item CONSUMO sem tombamento → item criado | Sim — schema e service CA4 consumo sem tombamento | Sim — mantido da v1 |
+| CA-01 | tipo | PT-03 | CT-03-03: cadastro sem tipo → recusado, nada criado | Sim — schema: rejeita tipo ausente | Sim — mantido da v1 |
+| CA-01 | tipo | PT-04 | CT-03-04: cadastro com tipo "OUTRO" → recusado, nada criado | Sim — schema: tipo fora do enum (teste falha só na mensagem) e minúsculas | Sim — corrigido (C1): recusa conferida pelo path `tipo`, sem fixar a mensagem |
+| CA-01 | categoria | PCA-02 | CT-03-05: cadastro sem categoria → recusado | Sim — schema: rejeita categoriaId ausente | Sim — mantido da v1 |
+| CA-01 | categoria | PCA-03 | CT-03-06: cadastro com categoria inexistente → recusado | Sim — service: categoria não existe, nada criado | Sim — mantido da v1 |
+| CA-01 | estoque | PES-02 | CT-03-07: cadastro em estoque inexistente → recusado (não encontrado) | Sim — service: estoque não existe, nada criado | Sim — mantido da v1 |
+| CA-02 | tombamento | PTB-02 | CT-03-08: PATRIMONIAL sem tombamento → recusado | Sim — schema CA2: patrimonial sem tombamento | Sim — mantido da v1; sujeito à S3-19 |
+| CA-02 | tombamento | PTB-03, LM-02 (lado inválido) | CT-03-09: PATRIMONIAL com tombamento "" → recusado | Sim — schema CA2: tombamento vazio | Sim — mantido da v1; sujeito à S3-19 |
+| CA-02 | tombamento | PTB-03 | CT-03-10: PATRIMONIAL com tombamento "   " (só espaços) → recusado | Sim — schema CA2: tombamento só de espaços | Sim — mantido da v1; sujeito à S3-19 |
+| CA-02 | tombamento | PTB-01, LM-02 (lado válido) | CT-03-11: PATRIMONIAL com tombamento "1" → item criado | Sim — schema CA1: tombamento de 1 caractere | Sim — mantido da v1 |
+| CA-02 | tombamento | PTB-04, LM-03 (lado inválido) | CT-03-12: PATRIMONIAL com tombamento já usado por outro item do mesmo estoque → recusado, com mensagem clara de duplicidade; apenas 1 item com esse tombamento no banco | Sim* — service CA3: P2002 simulado, mensagem clara; banco real não verificado | Sim* — mantido da v1 |
+| CA-02 | tombamento | PTB-04 (PR-02*) | CT-03-13*: PATRIMONIAL com tombamento já usado por item de outro estoque → recusado | Não — mock não distingue estoques | Sim* — L8: conflito (409) com tombamento de outro estoque; fake em memória |
+| CA-02 | tombamento | PTB-01, LM-03 (lado válido) | CT-03-14: dois PATRIMONIAIS com tombamentos distintos → ambos criados | Não — nenhum teste com duas criações | Sim* — L6: dois patrimoniais com tombamentos distintos; fake em memória |
+| CA-03 | tombamento | PTC-01 | CT-03-15: dois itens de CONSUMO sem tombamento no mesmo estoque → ambos criados (ausência de tombamento não conta como duplicado) | Não — nenhum teste com dois consumos | Sim* — L7: dois consumos sem tombamento; fake em memória |
+| CA-03 (PR-05*) | saldo | PT-02 | CT-03-16*: item CONSUMO recebe entrada de 10 unidades → saldo 10 | Não — nenhum teste de saldo | Não — o saldo é calculado em `movimentacoes.service`; exige integração com banco, fora do escopo unitário de itens |
+| CA-07 | saldo | PT-01 | CT-03-17: item PATRIMONIAL recém-cadastrado → saldo 1 | Não — nenhum teste de saldo 1 | Não — idem; o cadastro de item não cria movimentação (ver observação no relatório) |
+| CA-04 | nº de série, nível mínimo | PNS-01, PNM-01 | CT-03-18: cadastro sem nº de série e sem nível mínimo → item criado | Sim — schema e service CA5: opcionais omitidos | Sim — mantido da v1 |
+| CA-04 | nº de série | PNS-02 | CT-03-19: cadastro com nº de série "SN-123" → item criado com esse nº de série | Sim — service CA5: nº de série informado é salvo | Sim — mantido da v1 |
+| CA-04 | nível mínimo | PNM-02 | CT-03-20: cadastro de CONSUMO com nível mínimo 5 → item criado com nível mínimo 5 | Sim — schema CA5: nível mínimo 5 mantido | Sim — mantido da v1 |
+| CA-04 (PR-03*) | nível mínimo | PNM-03, LM-01 (lado válido) | CT-03-21*: nível mínimo 0 → item criado | Sim — schema, service e update: nível mínimo 0 | Sim — mantido da v1 |
+| CA-04 (PR-03*) | nível mínimo | PNM-04, LM-01 (lado inválido) | CT-03-22*: nível mínimo -1 → recusado | Sim — schema e update: nível mínimo -1 | Sim — mantido da v1 |
+| CA-04 (PR-03*) | nível mínimo | PNM-05 | CT-03-23*: nível mínimo 2.5 → recusado | Sim — schema: 1.5 e 0.1; update: 2.5 | Sim — mantido da v1 |
+| CA-05 | listagem | PLI-01 | CT-03-24: estoque com 3 itens → listagem devolve exatamente esses 3 | Parcial — 2 itens vindos do mock, não 3 | Sim* — L2: 3 itens, `meta.total` 3; fake em memória |
+| CA-05 | listagem | PLI-01 | CT-03-25: dois estoques com itens → listagem de um não traz itens do outro | Parcial — só confere where { estoqueId } | Sim* — L3: isolamento entre dois estoques; fake em memória |
+| CA-05 | listagem | PLI-02, LM-04 (0 itens) | CT-03-26: estoque sem itens → lista vazia | Parcial — só toBeDefined(), não verifica lista vazia | Sim — C2: `items` vazio e `meta.total` 0 |
+| CA-05 | listagem | LM-04 (1 item) | CT-03-27: estoque com exatamente 1 item → lista com 1 elemento | Não — nenhum teste com exatamente 1 item | Sim* — L1: 1 item, `meta.total` 1; fake em memória |
+| CA-05 | estoque | PES-02 | CT-03-28: listagem de estoque inexistente → não encontrado | Sim — service: estoque não existe, não consulta itens | Sim — mantido da v1 |
+| CA-06 | perfil | PPF-01 | CT-03-29: gestor do estoque edita o nome de um item → atualizado | Sim — service CA5: update repassa nome (confere a chamada ao Prisma) | Sim — mantido da v1 |
+| CA-06 | perfil | PPF-02 | CT-03-30: gestor de outro estoque tenta cadastrar → 403, nada criado | Sim* — service CA7: vínculo null, 403, nada criado | Sim* — mantido da v1 |
+| CA-06 | perfil | PPF-02 | CT-03-31: gestor de outro estoque tenta editar → 403, item inalterado | Sim* — service CA7: vínculo null, 403, update não chamado | Sim* — mantido da v1 |
+| CA-06 | perfil | PPF-03 | CT-03-32: requisitante tenta cadastrar → 403, nada criado | Parcial — só o caso genérico sem vínculo; sem requisitante | Sim* — L4: 403 e nada criado; o service não lê o perfil, só o vínculo de gestor |
+| CA-06 | perfil | PPF-03 | CT-03-33: requisitante tenta editar → 403, item inalterado | Parcial — só o caso genérico sem vínculo; sem requisitante | Sim* — L4: 403 e item inalterado; o service não lê o perfil, só o vínculo de gestor |
+| CA-06 (PR-04*) | perfil | PPF-04 | CT-03-34*: ADMIN sem vínculo com o estoque tenta cadastrar → 403 | Não — nenhum teste com ADMIN | Sim* — L5: 403; o service não lê o perfil, só o vínculo de gestor |
+| CA-02 | tombamento | PTB-02 | CT-03-35: editar item PATRIMONIAL removendo o tombamento → recusado, tombamento anterior mantido | Parcial — schema update rejeita tombamento vazio; 'anterior mantido' não verificado | Parcial — L10: o schema recusa (path `tombamento`); 'anterior mantido' não é verificado de forma independente; sujeito à S3-19 |
+| CA-02 | tombamento | PTB-04, LM-03 (lado inválido) | CT-03-36: editar o tombamento de um item para o valor de outro item → recusado | Sim* — service CA3: P2002 de tombamento na edição | Sim* — mantido da v1 |
+| CA-02 | tombamento | LM-03 (lado válido) | CT-03-37: editar um item PATRIMONIAL mantendo o próprio tombamento → aceito (não conta como duplicado) | Não — nenhum teste de manter o próprio tombamento | Sim* — L9: edição mantendo o próprio tombamento, sem conflito; fake em memória |
 
-Legenda da coluna v1: **Sim** = teste com entrada na partição e asserção sobre o resultado esperado; **Sim\*** = idem, mas só com o banco simulado (mock); **Parcial** = há teste, mas a asserção é trivial ou não distingue o caso; **Não** = nenhum teste.
+Legenda da coluna v1: **Sim** = teste com entrada na partição e asserção sobre o resultado esperado; **Sim\*** = idem, mas só com o banco simulado (mock); **Parcial** = há teste, mas a asserção é trivial ou não distingue o caso; **Não** = nenhum teste. Na coluna da v2, **Sim\*** também cobre os casos verificados com o fake em memória de `prisma.item` (unicidade global de tombamento simulada), que continuam sendo simulação e não banco real.
 
 ## 7. Totais (contados nesta matriz)
 
@@ -136,3 +136,18 @@ Legenda da coluna v1: **Sim** = teste com entrada na partição e asserção sob
 | Partições de equivalência | 27 |
 | Fronteiras de valor-limite | 4 (8 valores) |
 | Casos de teste esperados | 37 (6 dependem de premissa: CT-03-13, 16, 21, 22, 23, 34) |
+
+Medição da v2 (mesmo escopo e ferramentas da v1): 34 dos 37 casos cobertos (Sim ou Sim\*), 1 parcial (CT-03-35) e 2 sem cobertura (CT-03-16 e CT-03-17, saldo). Partições: 27/27. Fronteiras: 4/4 (8/8 valores).
+
+## 8. Revisão prevista na S3-19 (#95)
+
+A S3-19 permite cadastrar item patrimonial sem tombamento (pendente) e completar o tombamento depois. Os casos abaixo valem para o requisito vigente (#7) e serão revisados quando a S3-19 for implementada:
+
+| Caso | Hoje (#7) | Após a S3-19 |
+|------|-----------|--------------|
+| CT-03-08 | PATRIMONIAL sem tombamento é recusado | Aceito, fica pendente |
+| CT-03-09 | PATRIMONIAL com tombamento "" é recusado | Aceito, fica pendente |
+| CT-03-10 | PATRIMONIAL com tombamento só de espaços é recusado | Aceito, fica pendente |
+| CT-03-35 | Editar removendo o tombamento é recusado, anterior mantido | Continua recusado (tombamento preenchido não pode ser apagado) |
+
+Os testes de schema equivalentes (CA2 na v1) também mudam.
