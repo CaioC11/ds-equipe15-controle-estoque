@@ -1115,6 +1115,480 @@ Observação (fora dos CAs): as linhas 196, 265 e 273 do `emprestimos.service.ts
 
 ## US05 — Termo de Responsabilidade (Randell)
 
+#### Prompt Completo
+````text
+Você vai gerar testes automatizados com Vitest (TypeScript, NestJS 11, Prisma 5).
+
+USER STORY
+US05 — Termo de Responsabilidade: o requisitante recebe o Termo de Responsabilidade ao retirar um item emprestado, formalizando a posse temporária do equipamento.
+
+CRITÉRIOS DE ACEITAÇÃO
+- CA1: Dado que um empréstimo é registrado no sistema, quando o Termo de Responsabilidade em PDF é gerado, então ele recebe um número sequencial por ano (contador simples) no formato "Nº XX/ano".
+- CA2: Dado que o Termo de Responsabilidade em PDF é gerado para um empréstimo, quando o documento é produzido, então ele contém os dados do responsável (nome, Siape, lotação e cargo), a unidade de acautelamento (estoque), a data de abertura, a data prevista para fechamento (ou "INDEFINIDO" quando ausente), os bens acautelados (tombamento ou nº de série, e denominação) e a declaração de responsabilidade.
+- CA3: Dado que existe um termo gerado para um empréstimo, quando um usuário solicita visualizar ou baixar o PDF, então o acesso é permitido ao gestor do estoque do empréstimo e em modo leitura ao ADMIN, sendo recusado aos demais perfis.
+- CA4: Dado que um usuário solicita visualizar ou baixar o termo de um empréstimo inexistente, quando a consulta é processada, então o erro é tratado como recurso não encontrado.
+- CA5: Dado que o Termo de Responsabilidade em PDF foi gerado pelo sistema, quando o usuário autorizado visualiza ou baixa o arquivo, então o PDF do termo gerado é devolvido.
+- CA6: Dado um empréstimo aguardando termo assinado, quando o gestor realiza o upload do PDF assinado, então o arquivo é validado e anexado ao empréstimo.
+- CA7: Dado um empréstimo aguardando termo assinado, quando se verifica a confirmação da entrega, então a confirmação só é habilitada e permitida após o termo assinado ser anexado.
+- CA8: Dado o fluxo de upload do termo assinado e confirmação da entrega, quando as operações são executadas com entradas válidas ou inválidas, então o sistema retorna as respectivas mensagens de sucesso ou de erro.
+
+CÓDIGO DO MÓDULO
+
+Arquivo: controle-estoque-emprestimos-back/src/modules/emprestimos/termo-pdf.service.ts
+```ts
+import { Injectable } from '@nestjs/common';
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+
+export interface TermoPdfData {
+  numeroAno: string;
+  responsavel: {
+    nome: string;
+    siape: string | null;
+    lotacao: string;
+    cargo: string;
+  };
+  unidade: string;
+  dataAbertura: Date;
+  dataFechamento: Date | null;
+  item: {
+    nome: string;
+    tombamento: string | null;
+    numeroSerie: string | null;
+    descricao: string | null;
+  };
+}
+
+const PAGE_WIDTH = 595.28;
+const PAGE_HEIGHT = 841.89;
+const MARGIN = 48;
+const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
+
+const formatarData = (val: any): string => {
+  if (!val || val === 'null') return 'INDEFINIDO';
+  const d = new Date(val);
+  return isNaN(d.getTime()) ? 'INDEFINIDO' : d.toLocaleDateString('pt-BR');
+};
+
+@Injectable()
+export class TermoPdfService {
+  async gerar(data: TermoPdfData): Promise<Uint8Array> {
+    const pdf = await PDFDocument.create();
+    pdf.setTitle(`Termo de Acautelamento Provisório Nº ${data.numeroAno}`);
+    pdf.setSubject('Termo de responsabilidade de bem acautelado');
+
+    const regular = await pdf.embedFont(StandardFonts.Helvetica);
+    const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+    let page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+    let y = PAGE_HEIGHT - MARGIN;
+
+    const addPageIfNeeded = (height: number) => {
+      if (y - height < MARGIN) {
+        page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+        y = PAGE_HEIGHT - MARGIN;
+      }
+    };
+
+    const drawWrapped = (text: string, font = regular, size = 10, lineHeight = 14) => {
+      const words = text.split(/\s+/);
+      let line = '';
+      const lines: string[] = [];
+
+      for (const word of words) {
+        const candidate = line ? `${line} ${word}` : word;
+        if (font.widthOfTextAtSize(candidate, size) > CONTENT_WIDTH && line) {
+          lines.push(line);
+          line = word;
+        } else {
+          line = candidate;
+        }
+      }
+      if (line) lines.push(line);
+
+      for (const lineText of lines) {
+        addPageIfNeeded(lineHeight);
+        page.drawText(lineText, {
+          x: MARGIN,
+          y: y - size,
+          size,
+          font,
+          color: rgb(0.12, 0.16, 0.2),
+        });
+        y -= lineHeight;
+      }
+    };
+
+    const drawField = (label: string, value: string) => {
+      drawWrapped(`${label}: ${value}`);
+    };
+
+    const drawSection = (title: string) => {
+      y -= 20;
+      addPageIfNeeded(24);
+      page.drawRectangle({
+        x: MARGIN,
+        y: y - 5,
+        width: CONTENT_WIDTH,
+        height: 20,
+        color: rgb(0.91, 0.94, 0.97),
+      });
+      page.drawText(title, {
+        x: MARGIN + 8,
+        y,
+        size: 11,
+        font: bold,
+        color: rgb(0.12, 0.16, 0.2),
+      });
+      y -= 24;
+    };
+
+    const date = (value: Date) =>
+      new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC' }).format(value);
+
+    drawWrapped(
+      'Conforme o item 10 da Instrução Normativa nº 205/88, todo servidor público poderá ser chamado à responsabilidade pelo desaparecimento do material que lhe for confiado, para guarda ou uso, bem como pelo dano que, doloso ou culposamente, causar a qualquer material, esteja ou não sob sua guarda.',
+      regular,
+      9,
+      13,
+    );
+    y -= 12;
+
+    const title = `TERMO DE ACAUTELAMENTO PROVISÓRIO Nº ${data.numeroAno}`;
+    const titleWidth = bold.widthOfTextAtSize(title, 14);
+    addPageIfNeeded(28);
+    page.drawText(title, {
+      x: (PAGE_WIDTH - titleWidth) / 2,
+      y,
+      size: 14,
+      font: bold,
+      color: rgb(0.08, 0.16, 0.26),
+    });
+    y -= 32;
+
+    drawField('Nome', data.responsavel.nome);
+    drawField('Siape', data.responsavel.siape ?? 'Não informado');
+    drawField('Lotação', data.responsavel.lotacao);
+    drawField('Cargo', data.responsavel.cargo);
+    drawField('Unidade de Acautelamento', data.unidade);
+    drawField('Data de Abertura', date(data.dataAbertura));
+    drawField(
+      'Data Prevista para Fechamento',
+      formatarData(data.dataFechamento),
+    );
+
+    drawSection('BENS ACAUTELADOS');
+    drawField(
+      'Tombamento/Nº de Série',
+      data.item.tombamento ?? data.item.numeroSerie ?? 'Sem identificação',
+    );
+    drawField('Denominação', data.item.nome);
+    if (data.item.descricao) drawWrapped(data.item.descricao);
+
+    drawSection('DECLARAÇÃO DE RESPONSABILIDADE');
+    drawWrapped(
+      'Declaro ter recebido o(s) bem(ns) patrimonial(ais) relacionado(s) no presente Termo. Assumindo total responsabilidade pela guarda e zelo do(s) mesmo(s), comprometendo-me a informar à Gerência de Infraestrutura sobre todas as ocorrências relativas ao(aos) referido(s) bem(ns) e ainda ressarcir o Órgão por perdas e danos caso comprovada a omissão da responsabilidade de minha parte.',
+    );
+
+    y -= 56;
+    addPageIfNeeded(54);
+    page.drawLine({
+      start: { x: MARGIN + 45, y },
+      end: { x: PAGE_WIDTH - MARGIN - 45, y },
+      thickness: 1,
+      color: rgb(0.25, 0.29, 0.33),
+    });
+    y -= 18;
+    drawWrapped(data.responsavel.nome, bold, 10, 14);
+    drawWrapped('Responsável pelo bem', regular, 9, 12);
+
+    return pdf.save();
+  }
+}
+```
+
+Arquivo: controle-estoque-emprestimos-back/src/modules/emprestimos/termo-storage.service.ts
+```ts
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
+import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+
+@Injectable()
+export class TermoStorageService {
+  private readonly root: string;
+
+  constructor(config: ConfigService) {
+    const configuredPath = config.get<string>('TERMO_STORAGE_PATH', './storage/termos');
+    this.root = resolve(configuredPath);
+  }
+
+  async write(relativePath: string, contents: Uint8Array): Promise<void> {
+    const absolutePath = this.resolvePath(relativePath);
+    await mkdir(dirname(absolutePath), { recursive: true });
+    await writeFile(absolutePath, contents, { flag: 'wx' });
+  }
+
+  async read(relativePath: string): Promise<Buffer> {
+    return readFile(this.resolvePath(relativePath));
+  }
+
+  async remove(relativePath: string): Promise<void> {
+    await rm(this.resolvePath(relativePath), { force: true });
+  }
+
+  private resolvePath(relativePath: string): string {
+    if (isAbsolute(relativePath)) {
+      throw new Error('O caminho do arquivo do termo deve ser relativo ao storage.');
+    }
+
+    const absolutePath = resolve(this.root, relativePath);
+    const fromRoot = relative(this.root, absolutePath);
+    if (fromRoot === '..' || fromRoot.startsWith(`..${sep}`) || isAbsolute(fromRoot)) {
+      throw new Error('O caminho do arquivo do termo está fora do storage configurado.');
+    }
+    return absolutePath;
+  }
+}
+```
+
+Arquivo: controle-estoque-emprestimos-back/src/modules/emprestimos/termo-assinado.constants.ts
+```ts
+export const TERMO_ASSINADO_MAX_BYTES = 5 * 1024 * 1024; // 5 MB
+export const TERMO_ASSINADO_MIME = 'application/pdf';
+// Todo PDF válido começa com "%PDF-"
+export const PDF_MAGIC = Buffer.from('%PDF-');
+
+export interface ArquivoUpload {
+  originalname: string;
+  mimetype: string;
+  size: number;
+  buffer: Buffer;
+}
+```
+
+Arquivo: controle-estoque-emprestimos-back/src/modules/emprestimos/emprestimos.service.ts (trechos de obtenção/anexo do termo e ativação em confirmarEntrega)
+```ts
+  async obterPdf(estoqueId: string, emprestimoId: string, user?: CurrentUser) {
+    await this.findEstoqueOrFail(estoqueId);
+    if (user?.role !== AccessRole.ADMIN) {
+      await this.assertGestorDoEstoque(estoqueId, user?.userId);
+    }
+
+    const emprestimo = await this.prisma.emprestimo.findFirst({
+      where: { id: emprestimoId, item: { estoqueId } },
+      include: { termo: true },
+    });
+    if (!emprestimo) {
+      throw new ResourceNotFoundException('Empréstimo', emprestimoId);
+    }
+    if (!emprestimo.termo) {
+      throw new ResourceNotFoundException('Termo', emprestimoId);
+    }
+
+    return {
+      pdf: await this.termoStorage.read(emprestimo.termo.arquivoPdf),
+      nomeArquivo: `termo-${emprestimo.termo.numeroAno.replace('/', '-')}.pdf`,
+    };
+  }
+
+  // Anexa (ou substitui, enquanto aguarda) o PDF assinado. Não ativa o empréstimo.
+  async anexarTermoAssinado(
+    estoqueId: string,
+    emprestimoId: string,
+    arquivo: ArquivoUpload | undefined,
+    userId?: string,
+  ) {
+    await this.findEstoqueOrFail(estoqueId);
+    await this.assertGestorDoEstoque(estoqueId, userId);
+
+    const emprestimo = await this.prisma.emprestimo.findFirst({
+      where: { id: emprestimoId, item: { estoqueId } },
+      include: { termo: true },
+    });
+    if (!emprestimo) {
+      throw new ResourceNotFoundException('Empréstimo', emprestimoId);
+    }
+    if (!emprestimo.termo) {
+      throw new ResourceNotFoundException('Termo', emprestimoId);
+    }
+    if (emprestimo.status !== StatusEmprestimo.AGUARDANDO_TERMO) {
+      throw new ResourceConflictException(
+        `Só é possível anexar o termo assinado a empréstimo aguardando termo (status atual: ${emprestimo.status}).`,
+      );
+    }
+
+    this.validarPdf(arquivo);
+
+    const anterior = emprestimo.termo.arquivoAssinado;
+    const ano = new Date().getFullYear();
+    const novoCaminho = `${ano}/assinados/${randomUUID()}.pdf`;
+
+    await this.termoStorage.write(novoCaminho, arquivo.buffer);
+    try {
+      await this.prisma.termo.update({
+        where: { id: emprestimo.termo.id },
+        data: { arquivoAssinado: novoCaminho },
+      });
+    } catch (error) {
+      await this.termoStorage.remove(novoCaminho).catch(() => undefined);
+      throw error;
+    }
+    if (anterior) {
+      await this.termoStorage.remove(anterior).catch(() => undefined);
+    }
+
+    const resultado = await this.prisma.emprestimo.findUniqueOrThrow({
+      where: { id: emprestimoId },
+      include: INCLUDE_EMPRESTIMO,
+    });
+
+    return comFlagTermo(resultado);
+  }
+
+  async obterPdfAssinado(estoqueId: string, emprestimoId: string, user?: CurrentUser) {
+    await this.findEstoqueOrFail(estoqueId);
+    if (user?.role !== AccessRole.ADMIN) {
+      await this.assertGestorDoEstoque(estoqueId, user?.userId);
+    }
+
+    const emprestimo = await this.prisma.emprestimo.findFirst({
+      where: { id: emprestimoId, item: { estoqueId } },
+      include: { termo: true },
+    });
+    if (!emprestimo) {
+      throw new ResourceNotFoundException('Empréstimo', emprestimoId);
+    }
+    if (!emprestimo.termo?.arquivoAssinado) {
+      throw new ResourceNotFoundException('Termo assinado', emprestimoId);
+    }
+
+    return {
+      pdf: await this.termoStorage.read(emprestimo.termo.arquivoAssinado),
+      nomeArquivo: `termo-${emprestimo.termo.numeroAno.replace('/', '-')}-assinado.pdf`,
+    };
+  }
+
+  // Confirma a entrega física: AGUARDANDO_TERMO -> ATIVO e item -> EMPRESTADO
+  async confirmarEntrega(estoqueId: string, emprestimoId: string, userId?: string) {
+    await this.findEstoqueOrFail(estoqueId);
+    await this.assertGestorDoEstoque(estoqueId, userId);
+
+    return this.prisma.$transaction(async (tx) => {
+      const emprestimo = await tx.emprestimo.findFirst({
+        where: { id: emprestimoId, item: { estoqueId } },
+        include: { termo: true },
+      });
+      if (!emprestimo) {
+        throw new ResourceNotFoundException('Empréstimo', emprestimoId);
+      }
+      if (emprestimo.status !== StatusEmprestimo.AGUARDANDO_TERMO) {
+        throw new ResourceConflictException(
+          `Só é possível confirmar a entrega de empréstimo aguardando termo (status atual: ${emprestimo.status}).`,
+        );
+      }
+      if (!emprestimo.termo?.arquivoAssinado) {
+        throw new ResourceConflictException(
+          'Anexe o termo de responsabilidade assinado antes de confirmar a entrega.',
+        );
+      }
+
+      const { count } = await tx.emprestimo.updateMany({
+        where: { id: emprestimoId, status: StatusEmprestimo.AGUARDANDO_TERMO },
+        data: { status: StatusEmprestimo.ATIVO },
+      });
+      if (count === 0) {
+        throw new ResourceConflictException('A entrega deste empréstimo já foi confirmada.');
+      }
+
+      await tx.item.update({
+        where: { id: emprestimo.itemId },
+        data: { status: StatusItem.EMPRESTADO },
+      });
+
+      const resultado = await tx.emprestimo.findUniqueOrThrow({
+        where: { id: emprestimoId },
+        include: INCLUDE_EMPRESTIMO,
+      });
+
+      return comFlagTermo(resultado);
+    });
+  }
+
+  // Valida tipo, tamanho e assinatura real do arquivo (não confia só no mimetype do cliente)
+  private validarPdf(arquivo: ArquivoUpload | undefined): asserts arquivo is ArquivoUpload {
+    const invalido = (mensagem: string) =>
+      new AppException(ErrorCode.VALIDATION_FAILED, mensagem, HttpStatus.BAD_REQUEST);
+
+    if (!arquivo?.buffer?.length) {
+      throw invalido('Envie o PDF assinado no campo "arquivo" (multipart/form-data).');
+    }
+    if (arquivo.size > TERMO_ASSINADO_MAX_BYTES) {
+      throw invalido(
+        `O arquivo excede o limite de ${TERMO_ASSINADO_MAX_BYTES / (1024 * 1024)} MB.`,
+      );
+    }
+    if (
+      arquivo.mimetype !== TERMO_ASSINADO_MIME ||
+      !arquivo.buffer.subarray(0, PDF_MAGIC.length).equals(PDF_MAGIC)
+    ) {
+      throw invalido('Arquivo inválido: apenas PDF é aceito.');
+    }
+  }
+```
+
+INSTRUÇÕES
+1. Aplique partições de equivalência (válidas e inválidas) em cada variável de entrada.
+2. Aplique análise de valores-limite dos dois lados de cada fronteira.
+3. Garanta que cada critério de aceitação tenha ao menos um teste.
+4. Em cada teste, adicione um comentário com a técnica usada
+   (partição / valor-limite / critério) e o requisito coberto (ex.: CA2).
+5. Use apenas os arquivos e caminhos fornecidos. O arquivo de saída é
+   tests/v1-llm/<story>.spec.ts e os imports apontam para ../../src/...
+6. Responda com um único bloco de código.
+````
+
+#### Rodada 1
+- Data e hora: 13/11/2026 às 20:22
+- Prompt completo: o da seção acima.
+- Resumo da resposta: um único arquivo, `tests/v1-llm/us05-termo.spec.ts`, com 90 testes em quatro blocos: constantes do upload, `TermoPdfService.gerar` (verifica o texto desenhado espionando `PDFPage.prototype.drawText`), `TermoStorageService` (grava em diretório temporário, cobre caminho absoluto, `..` e diretório irmão) e `EmprestimosService` (`obterPdf`, `obterPdfAssinado`, `anexarTermoAssinado` e `confirmarEntrega`, com Prisma e storage simulados). Cada teste traz o comentário de técnica e de requisito pedido no prompt. A LLM identificou as exceções pelo nome da classe, porque os caminhos delas não foram fornecidos.
+- Problemas observados: o arquivo carregou e rodou sem erro de import, de tipo ou de setup, depois do `npm install` e do `npx prisma generate` do ambiente. Isso não conta como rodada com a LLM. No VS Code apareceram sublinhados de "módulo não encontrado" enquanto as dependências do back não estavam instaladas. Nenhuma falha de asserção. Nenhuma rodada extra foi necessária.
+- Resultado: 90 testes · 90 passando · 0 falhando · 0 não compilam
+
+#### Contagem final
+| Passando | Falhando | Não compilam |
+|---|---|---|
+| 90 | 0 | 0 |
+
+#### Testes comentados por não compilar
+| Teste | Motivo |
+|---|---|
+| nenhum | não se aplica |
+
+#### Investigação das falhas
+| Teste | Erro | Classificação | Evidência | Issue |
+|---|---|---|---|---|
+| nenhuma falha | não se aplica | não se aplica | `npm run test:v1`: `us05-termo.spec.ts (90 tests)` passou por inteiro. A falha única da execução é de `us03-itens.spec.ts` e está na seção da US03. | não se aplica |
+
+#### Cobertura (execução do `npm run test:v1`)
+Os valores abaixo vêm da saída do comando. As linhas de `src/modules/emprestimos` só são exercidas pela suíte da US05, já que a US03 testa o módulo de itens.
+
+| Arquivo | Linhas | Branch | Linhas com ramo não coberto |
+|---|---|---|---|
+| `termo-pdf.service.ts` | 100% | 96,15% | 67 |
+| `termo-storage.service.ts` | 100% | 88,88% | 6 |
+| `termo-assinado.constants.ts` | 100% | 100% | — |
+| `emprestimos.service.ts` | 52,28% | 51,16% | 51, 67-181, 354-457, 484-489 |
+| `emprestimos.controller.ts` | 0% | 100% | 29-167 |
+| `dto/create-emprestimo.dto.ts` | 0% | 0% | 4-40 |
+
+#### Observações da análise crítica (fora dos CAs)
+Os itens 1 e 2 estão confirmados pela cobertura; os demais são de leitura do código do teste.
+1. **CA1 coberto só pela exibição.** O sequencial por ano nasce em `EmprestimosService.create` (`contadorTermo.upsert` e `padStart(2, '0')`), nas linhas 67-181 do service, que ficaram sem cobertura. O `it.each` de "limites do padStart" (`01/2026` a `100/2026`) só confere que o PDF imprime a string recebida; não exercita o `padStart`.
+2. **Controller sem teste.** `emprestimos.controller.ts` tem 0% de cobertura. O CA3 ("visualizar ou baixar") é testado no service, e os cabeçalhos `inline` e `attachment` do `StreamableFile` não são testados.
+3. **Teste que passa por causa de um defeito.** `TermoStorageService › falha ao ler arquivo inexistente` espera rejeitar com `/ENOENT/`. Ele passa porque o erro de disco vaza pelo storage sem tradução (ACH-15, `docs/log-analise.md`). Nenhum teste verifica o que a API devolve quando o arquivo do termo some.
+4. **Fuso da data prevista.** As datas de teste usam `12:00Z`, longe da virada de dia, e só a data de abertura tem teste de fronteira (`00:00:00Z` e `23:59:59Z`). A data de fechamento, que usa o fuso do servidor, não tem (ACH-09).
+5. **Asserções frouxas.** Em `esperaInvalido`, `if (typeof e.getStatus === 'function') expect(...).toBe(400)` não falha se o método não existir.
+6. **Limite de 5 MB só no número.** Nos testes de 5 MB, 5 MB − 1 e 5 MB + 1, o `size` é um valor do mock e o buffer real é de poucos bytes. Isso testa a comparação, não o recebimento de um arquivo grande.
+
 ## US06 — Alerta de estoque baixo (Mateus)
 
 ---
