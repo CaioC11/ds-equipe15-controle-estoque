@@ -46,22 +46,22 @@ Total: **12 achados** e **9 falsos positivos** (seção 4). A meta do time era c
 - **Ideia de correção:** nomear os conceitos (`contagemPorStatus` e `saldo`) ou calcular o resumo do estoque a partir de uma única fonte.
 
 #### ACH-03 — O front não entende o formato de erro do back
-- **Onde:** `back/src/common/filters/http-exception.filter.ts` (L45-54, corpo `application/problem+json` com `detail`) e `front/src/services/api.ts` `getApiErrorMessage` (L135-156, lê `message` ou `error`). Efeitos em `front/src/modules/estoques/item.service.ts` `failFrom` (L46-56) e `front/src/components/GerenciamentoEstoque.tsx` (L105-115).
+- **Onde:** `back/src/common/filters/http-exception.filter.ts` (L45-54, corpo `application/problem+json` com `detail`; `resolve` L59-93; `fromZodError` L95-108) e `front/src/services/api.ts` `getApiErrorMessage` (L135-156, lê `message` ou `error`). Efeitos em `front/src/modules/estoques/item.service.ts` `failFrom` (L46-56) e `front/src/components/GerenciamentoEstoque.tsx` (L105-115).
 - **Categoria:** acoplamento por contrato implícito e integridade conceitual entre as duas partes.
-- **Problema:** o filtro global (registrado em `main.ts` L22) devolve `{type, title, status, detail, code, ...}`. O front espera o formato padrão do Nest (`{message}`). Como não acha `message`, cai na leitura do corpo como texto e **devolve o JSON inteiro como mensagem**. Além disso, o back responde 422 para erro de Zod e 400 para `AppException` de validação, e o front só trata o 400 como "dados inválidos".
-- **Por que atrapalha:** o usuário que tenta cadastrar um tombamento duplicado vê na tela o JSON bruto (`{"type":"https://controle-estoque-emprestimos.example/problems/conflict",...,"detail":"Já existe um item com este tombamento."}`) em vez da frase. A tela de itens só marca o campo certo porque a regex `/tombamento/i` casa com o texto cru do JSON, o que funciona por acaso.
-- **Como foi encontrado:** leitura da cadeia de erro nos dois lados; depois, um script em Node que alimenta a função do front com o corpo exato que o filtro gera (`docs/ferramentas-analise/erro.mjs`). O `api.test.ts` do front não tem nenhum caso com `detail`.
-- **Confirmação:** executado (saída na seção 5).
+- **Problema:** o filtro global (registrado em `main.ts` L22) devolve `{type, title, status, detail, code, ...}`. O front espera o formato padrão do Nest (`{message}`, como diz o comentário das L130-134 de `api.ts`). Como não acha `message`, cai na leitura do corpo como texto e **devolve o JSON inteiro como mensagem**. Além disso, o back responde **422** para erro de Zod (`fromZodError`, L103) e **400** para `BadRequestException` do Nest (mapeado para `VALIDATION_FAILED` em `mapStatusToErrorCode`), e o `failFrom` só trata o 400 como "dados inválidos" (L51-53); um 422 cai no ramo genérico da L55.
+- **Por que atrapalha:** o usuário que tenta cadastrar um tombamento duplicado vê na tela o JSON bruto (`{"type":"https://controle-estoque-emprestimos.example/problems/conflict",...,"detail":"Já existe um item com este tombamento."}`) em vez da frase. A tela de itens só marca o campo certo porque a regex `/tombamento/i` (L109 do componente) casa com o texto cru do JSON, o que funciona por acaso. Os erros por campo (`errors`) nunca chegam à tela.
+- **Como foi encontrado:** leitura da cadeia de erro nos dois lados; `Select-String` por `\.detail|problem\+json` em `front/src` (sem resultados) e por `detail|problem` em `api.test.ts` (sem resultados); teste `docs/ferramentas-analise/erro.test.ts` (vitest) que alimenta `getApiErrorMessage` com o corpo que o filtro gera, para 409 e 422 (seção 5).
+- **Confirmação:** executado em 14/11 no commit `b9b67c5`; os dois casos imprimiram o JSON cru como mensagem.
 - **Confirmado por:** ______ em __/__
-- **Ideia de correção:** `getApiErrorMessage` ler `detail` (e `errors` por campo), e o back/front concordarem em um único código de status para validação.
+- **Ideia de correção:** `getApiErrorMessage` ler `detail` (e `errors` por campo), e o back e o front concordarem em um único código de status para validação.
 
 #### ACH-04 — Dois estilos para o mesmo problema: exceções e validação de entrada
-- **Onde:** exceções em `movimentacoes.service.ts` (9 usos de `BadRequestException`, `ConflictException`, `ForbiddenException`, `NotFoundException`), `estoques.service.ts`, `categorias.service.ts` e `gestor.guard.ts` (17 no total), contra a família `AppException`/`ResourceNotFoundException`/`AccessDeniedException` em `emprestimos.service.ts` (24 usos) e `itens.service.ts` (9). Validação: Zod em `create-item.dto.ts`, `create-emprestimo.dto.ts`, `create-estoque.dto.ts` e outros; `class-validator` em `categorias/dto/create-categoria.dto.ts` e `movimentacoes/dto/registrar-movimentacao.dto.ts`.
+- **Onde:** exceções nativas do Nest em `movimentacoes.service.ts` (9 usos), `estoques.service.ts` (3), `categorias.service.ts` (3) e `gestor.guard.ts` (2): 17 no total. Família própria (`AppException`, `ResourceNotFoundException`, `ResourceConflictException`, `AccessDeniedException`) em `emprestimos.service.ts` (29), `itens.service.ts` (9), `estoques.service.ts` (3), `keycloak.identity-source.ts` (2) e `roles.guard.ts` (1): 44 no total. Validação: Zod em 8 DTOs (`create-item`, `update-item`, `create-emprestimo`, `create-estoque`, `update-estoque`, `autorizar-gestor`, `registrar-justificativa-permanencia`, `pagination-query`); `class-validator` em 2 (`categorias/dto/create-categoria.dto.ts` e `movimentacoes/dto/registrar-movimentacao.dto.ts`).
 - **Categoria:** integridade conceitual (o sistema não parece desenhado por uma única cabeça).
-- **Problema:** o `estoques.service.ts` usa os dois estilos no mesmo arquivo (`ConflictException` na L23 e `ResourceConflictException` na L113). Só o `ZodValidationPipe` está registrado como pipe global (`app.module.ts` L37), e `main.ts` não registra `ValidationPipe`.
-- **Por que atrapalha:** o formato do erro e o código `ErrorCode` dependem do módulo que lançou. Quem mexe em um módulo copia o estilo errado. Os dois DTOs com `class-validator` **podem não estar sendo validados**, porque as anotações `@IsEnum`, `@IsInt` e `@Min(1)` só têm efeito com um `ValidationPipe`. Isso explica por que `registrarMovimentacao` repete à mão a checagem de quantidade (L58-60).
-- **Como foi encontrado:** `grep` por `new (BadRequest|Conflict|Forbidden|NotFound)Exception` contra `new (AppException|ResourceConflict|...)`, e por `class-validator` contra `nestjs-zod`.
-- **Confirmação:** leitura para os dois estilos. O efeito de "DTO sem validação" está **a confirmar** rodando `POST /movimentacoes` com `tipo` inválido e `POST /categorias` com `nome` numérico (a dependência `nestjs-zod` não estava instalada aqui).
+- **Problema:** o `estoques.service.ts` usa os dois estilos no mesmo arquivo, inclusive para o **mesmo conceito**: "estoque não encontrado" é `NotFoundException('Estoque não encontrado')` na L59 e `ResourceNotFoundException('Estoque', estoqueId)` na L138; o conflito é `ConflictException` nas L23 e L80 e `ResourceConflictException` na L113. Só o `ZodValidationPipe` está registrado como pipe global (`app.module.ts` L36-37); `main.ts` não registra `ValidationPipe` e nenhum arquivo de `src` usa `@UsePipes` ou `ValidationPipe`.
+- **Por que atrapalha:** o formato do erro e o `ErrorCode` dependem do módulo que lançou. Quem mexe em um módulo copia o estilo errado. Os dois DTOs com `class-validator` **não são validados**: no teste, o pipe global deixou passar `{tipo: 'INVALIDO', quantidade: -5}` sem erro, enquanto o `class-validator` executado à mão apontou 2 erros. Isso é compatível com a checagem manual de quantidade em `registrarMovimentacao` (L58-60), que repete o `@IsInt` e o `@Min(1)` do DTO.
+- **Como foi encontrado:** `Select-String` por `new (BadRequest|Conflict|Forbidden|NotFound)Exception` contra `new (AppException|ResourceNotFoundException|ResourceConflictException|AccessDeniedException)`, com contagem por arquivo; por `Pipe` em `main.ts` e `app.module.ts`; por `ValidationPipe|UsePipes|ZodValidationPipe` em `src`; por `class-validator|nestjs-zod|from 'zod'` nos `*.dto.ts`; teste `docs/ferramentas-analise/ach04.test.ts` (vitest) (seção 5).
+- **Confirmação:** leitura para os dois estilos e para o pipe; executado em teste do pipe global contra `RegistrarMovimentacaoDto` no commit `b9b67c5`. Não foi feito por HTTP (`POST /movimentacoes`), e `create-categoria.dto.ts` está confirmado só por leitura e grep.
 - **Confirmado por:** ______ em __/__
 - **Ideia de correção:** migrar os dois DTOs para Zod e padronizar as exceções na família `AppException`.
 
@@ -184,7 +184,7 @@ Pontos vistos durante a leitura que são defeitos ou lacunas funcionais, não de
 | `wc -l`, contagem de métodos por classe | tamanho e coesão | `EmprestimosService`: 491 linhas e 13 métodos |
 | `grep`/ripgrep | `any`, `as string`, literais de enum, exceções nativas × próprias, `class-validator` × `nestjs-zod`, `CANCELADO`/`semTombamento` | ACH-04, ACH-09, ACH-10 |
 | `docs/ferramentas-analise/dup.py` (script próprio, janelas de 6 e 7 linhas normalizadas) | duplicação | achou `assertGestorDoEstoque` e `request<T>`; 1 resultado era falso (FP-07) |
-| `docs/ferramentas-analise/erro.mjs` (Node 22) | alimenta a cópia de `getApiErrorMessage` com o corpo do filtro do back | reproduziu o JSON cru como mensagem (ACH-03) |
+| `docs/ferramentas-analise/erro.test.ts` (vitest, front) | alimenta `getApiErrorMessage` com o corpo do filtro do back, em 409 e 422 | devolveu o JSON cru como mensagem nos dois casos (ACH-03) |
 | `docs/ferramentas-analise/data.mjs` (Node 22, `TZ=UTC` e `TZ=America/Sao_Paulo`) | formatadores de data do PDF | `20/11/2026` em UTC e `19/11/2026` em São Paulo (ACH-09) |
 | `docs/ferramentas-analise/data-fuso-pdf.mjs` (Node 22, `TZ=UTC` e `TZ=America/Recife`) | formatadores de data do PDF, com a entrada real do front (`fimDoDiaISO`) | prazo de 20/11 sai `21/11/2026` em UTC e `20/11/2026` em Recife; data pura sai `20/11` em UTC e `19/11` em Recife (ACH-09) |
 | `grep -rnE "ENOENT\|termoStorage\.read" back/src` | tratamento de arquivo ausente no storage | 2 usos de `read`, nenhum tratamento (ACH-15) |
@@ -195,13 +195,25 @@ Pontos vistos durante a leitura que são defeitos ou lacunas funcionais, não de
 | `Select-String` (PowerShell, back) | Buscar `\$transaction\|timeout\|maxWait` em `emprestimos.service.ts` | Revelou 3 transações sem `timeout` ou `maxWait` configurado (ACH-05) |
 | `(Get-Content ...).Count` + `Select-String` (PowerShell, front) | Tamanho e padrões (`z.object`, `onSubmit`, regex, `<table>`) em `GerenciamentoEstoque.tsx` | Confirmou schema, tradução de erro por regex, formulário e tabela em 327 linhas (ACH-06) |
 | `Get-ChildItem` + `Select-String` (PowerShell, front) | Buscar `isGestor\|EhGestor\|gestor` em `front/src` | Encontrou `const usuarioLogadoEhGestor = true` em `estoques/index.tsx` L49 (ACH-13) |
+| `git rev-parse --short HEAD` | commit analisado | `b9b67c5` |
+| `Select-String` (PowerShell, back) | `movimentacao`, `ENTRADA`, `saldo\|calcularSaldo\|insuficiente`, `saldo\|disponiveis\|emprestados\|totalItens`, `calcularSaldoItem\|consultarSaldoEstoque`, `StatusItem\|AGUARDANDO_TERMO` | sustentou ACH-01 e ACH-02 |
+| `Get-Content -Encoding UTF8` + numeração (função `Num`, PowerShell) | leitura de trechos com número de linha | linhas citadas em ACH-01 a ACH-04 |
+| `Select-String` + `Group-Object` (PowerShell, back) | exceções nativas × família `AppException`, `Pipe`, `class-validator\|nestjs-zod\|from 'zod'` | 17 contra 44 usos; só o `ZodValidationPipe` global (ACH-04) |
+| `Select-String` (PowerShell, front) | `\.detail\|problem\+json` em `front/src` e em `api.test.ts` | sem resultados (ACH-03) |
+| `docs/ferramentas-analise/ach04.test.ts` (vitest, back) | pipe global contra `RegistrarMovimentacaoDto` | pipe não lançou erro; `class-validator` apontaria 2 erros (ACH-04) |
 
 **Ferramentas que não rodaram:** Biome (back) e ESLint (front), `tsc --noEmit` e os testes, porque o ambiente não tinha `node_modules` do projeto nem acesso à rede para instalar. Rodar `npm run lint` nos dois pacotes e comparar com esta lista é um passo que ainda falta.
 
-**Saídas dos dois scripts:**
+**Saídas dos scripts e testes:**
 ```
-$ node docs/ferramentas-analise/erro.mjs
-mensagem exibida ao usuário => {"type":"https://controle-estoque-emprestimos.example/problems/conflict","title":"Conflito de dados","status":409,"detail":"Já existe um item com este tombamento.", ...}
+$ npx vitest run src/services/erro.test.ts   (front, copiado de docs/ferramentas-analise/)
+MENSAGEM 409 => {"type":"https://controle-estoque-emprestimos.example/problems/conflict","title":"Conflito de dados","status":409,"detail":"Já existe um item com este tombamento.","instance":"/x","code":"CONFLICT",...}
+MENSAGEM 422 => {"type":".../problems/validation-failed","title":"Dados inválidos","status":422,"detail":"Um ou mais campos precisam ser corrigidos.",...,"errors":{"nome":["Obrigatório"]}}
+Tests  2 passed (2)
+
+$ npx vitest run src/modules/movimentacoes/dto/ach04.test.ts   (back, copiado de docs/ferramentas-analise/)
+pipe global devolveu sem erro: {"itemId":"x","tipo":"INVALIDO","quantidade":-5}
+class-validator apontaria 2 erro(s)
 
 $ TZ=UTC node docs/ferramentas-analise/data.mjs                  -> abertura=20/11/2026  prevista=20/11/2026
 $ TZ=America/Sao_Paulo node docs/ferramentas-analise/data.mjs    -> abertura=20/11/2026  prevista=19/11/2026
@@ -222,6 +234,8 @@ $ TZ=America/Recife node docs/ferramentas-analise/data-fuso-pdf.mjs
 2. A LLM leu os arquivos do back e do front, escreveu os scripts da seção acima e propôs os candidatos. Cada achado voltou ao código (arquivo e linha) antes de entrar na lista, e os que a leitura não sustentou foram para a seção 4.
 3. LLM (Gemini) para análise do EmprestimosService. Prompt: "Análise de violações de SOLID e code smells no arquivo emprestimos.service.ts".
 4. Randell (ACH-09, ACH-10, ACH-15, FP-03 e FP-09): prompt com o roteiro da S3B-07 colado, pedindo apoio para conferir ACH-09 e ACH-10, propor um achado em termo em PDF/storage e validar os trechos no código local (`8de43cf`). O script `data-fuso-pdf.mjs` foi executado em `TZ=UTC` e `TZ=America/Recife`, e todos os trechos citados foram lidos diretamente nos arquivos antes da assinatura.
+
+5. Mateus (ACH-01 a ACH-04): prompt com o contexto da S3B-07 pedindo para conferir os blocos ACH-01 a ACH-04 contra o código local (`b9b67c5`) e interpretar as saídas do PowerShell; os testes `erro.test.ts` e `ach04.test.ts` foram escritos com apoio da LLM e executados localmente.
 
 > Quem usar outra LLM ou ferramenta para a própria parte deve acrescentar aqui o prompt e a ferramenta, uma linha por uso.
 
