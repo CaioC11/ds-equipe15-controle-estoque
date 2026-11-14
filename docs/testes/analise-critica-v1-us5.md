@@ -98,6 +98,15 @@ O mesmo vale para `termo-storage.service.ts:6` (`@Injectable()`, 88,88% de branc
 
 ---
 
-### 4ª pergunta
+### 4d. Oráculos: a LLM assumiu o comportamento do código em vez do requisito?
 
-PENDENTE: o enunciado da 4ª pergunta da Etapa 4 não está no repositório. Preencher quando o grupo ou a professora passar o texto.
+**Sim, na maior parte dos casos em que o requisito era omisso ou onde o código já continha um defeito.** Como o prompt recebeu tanto a matriz de rastreabilidade quanto os arquivos-fonte da US05, a LLM usou o comportamento implementado como fonte de verdade sempre que a matriz trazia resultados genéricos ("recusado") ou registrava pontos em aberto:
+
+- **Defeito de armazenamento transformado em oráculo (ACH-15):** em `TermoStorageService › falha ao ler arquivo inexistente` (spec, linhas 277-279), o teste espera `rejects.toThrow(/ENOENT/)`. Os requisitos (CA-03, CA-04, CA-05) exigem tratamento de erro quando o termo não é encontrado, mas `termo-storage.service.ts:21-23` deixa o erro cru do `fs/promises` atravessar a fronteira (gerando HTTP 500 na API). A LLM cristalizou o defeito como comportamento esperado.
+- **Premissa da matriz substituída pela validação do código:** a matriz (PR-04 / CT-05-21) previa "PDF com 1 byte aceito pela regra de tamanho", mas `emprestimos.service.ts:344-348` exige os 5 bytes mágicos `%PDF-`. A LLM descartou o caso de 1 byte da matriz e criou `aceita buffer de exatamente 5 bytes "%PDF-"` espelhando a implementação.
+- **Textos de fallback copiados do código sem lastro nos CAs:** os oráculos `'Siape: Não informado'` (spec, linha 155), `'Tombamento/Nº de Série: Sem identificação'` (linha 191) e o tratamento de `new Date('invalido')` como `'INDEFINIDO'` (linhas 145-148) não aparecem no CA-02 e estavam marcados na matriz (PR-08) como *não cobertos por falta de requisito*; foram copiados diretamente de `termo-pdf.service.ts:28-31, 141-145`.
+- **Regra de permissão para upload e confirmação:** a suíte afirma que o `ADMIN` é bloqueado por ser "somente leitura" ao anexar e confirmar, replicando `assertGestorDoEstoque` em `emprestimos.service.ts`, embora a matriz (PR-08) registre que as issues não definem quem pode executar essas ações.
+- **Exceções internas em vez de contratos HTTP:** sem código HTTP nem mensagem fixados na matriz, a LLM conferiu o nome das classes internas (`AccessDeniedException`, `BusinessException`, `NotFoundException`) por `nomeClasse(e)` e colocou a verificação do status 400 dentro de um `if` condicional (spec, linha 697) para não falhar contra o código.
+- **Assimetria de fuso horário espelhada da implementação (ACH-09):** a fronteira de dia (`00:00:00Z` e `23:59:59Z`) foi testada só na data de abertura porque `termo-pdf.service.ts:134` fixa `timeZone: 'UTC'` nela, enquanto `dataFechamento` (linha 135) fica sem fuso explícito e sem teste de virada de dia.
+
+Nos pontos em que o critério de aceitação já era explícito e coincidia com o código — formato `"Nº XX/ano"` (CA-01), `"INDEFINIDO"` para data prevista nula (CA-02), rejeição de arquivo não-PDF (CA-06) e bloqueio de confirmação sem anexo (CA-07) — os oráculos atenderam ao requisito.
