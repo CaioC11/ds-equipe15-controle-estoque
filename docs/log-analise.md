@@ -8,9 +8,9 @@ Issue de tech-debt. Prazo: 12/11. Escopo: `controle-estoque-emprestimos-back/src
 |---|---|
 | Propriedades de projeto (integridade conceitual, information hiding, acoplamento) | ACH-01, ACH-02, ACH-03, ACH-04, ACH-15 |
 | SOLID e coesão | ACH-05, ACH-06 |
-| Code smells | ACH-07, ACH-08, ACH-09, ACH-10, ACH-13 |
+| Code smells | ACH-07, ACH-08, ACH-09, ACH-10, ACH-11, ACH-12, ACH-13 |
 
-Total: **12 achados** e **9 falsos positivos** (seção 4). A meta do time era cerca de 8.
+Total: **14 achados** e **12 falsos positivos** (seção 4). A meta do time era cerca de 8.
 
 **Como ler o campo "Confirmação":**
 - **Leitura**: o trecho foi lido e o problema aparece no código.
@@ -129,6 +129,26 @@ Total: **12 achados** e **9 falsos positivos** (seção 4). A meta do time era c
 - **Confirmado por:** Randell em 13/11
 - **Ideia de correção:** remover `todos`/`team` (ou esconder da navegação), redirecionar para `/estoques`, ligar `isGestor` à role real e decidir o destino de `CANCELADO` e `semTombamento`.
 
+#### ACH-11 — Efeito de categorias repete a consulta no modo de desenvolvimento
+- **Onde:** `controle-estoque-emprestimos-front/src/pages/categorias/index.tsx`, `carregarCategorias` (L22-33) e `useEffect` (L35-37); `src/main.tsx` (L7-10).
+- **Categoria:** code smell (efeito com trabalho repetível sem limpeza/deduplicação).
+- **Problema:** o efeito chama `carregarCategorias`, que inicia `categoriaService.listar()` e atualiza estado, sem cancelar ou deduplicar a operação. A aplicação envolve `<App />` em `<StrictMode>`. Em desenvolvimento, o React repete o ciclo de setup do efeito para detectar efeitos sem limpeza; assim a montagem dispara duas listagens. O `setLoading(true)` síncrono dentro do efeito também é apontado pelo ESLint (`react-hooks/set-state-in-effect`).
+- **Por que atrapalha:** durante desenvolvimento, cada montagem pode fazer duas requisições GET de categorias e duas atualizações concorrentes, adicionando tráfego e podendo exibir resultado de uma resposta mais antiga se a ordem variar. A análise do código e do StrictMode sustenta a duplicação; não foi feita captura de rede para medir o número de chamadas.
+- **Como foi encontrado:** ESLint 9.39.5 apontou `react-hooks/set-state-in-effect` nessa linha; leitura de `carregarCategorias`, do efeito e do `<StrictMode>` no ponto de entrada. O comportamento de replay em desenvolvimento segue a documentação oficial do React: https://react.dev/reference/react/StrictMode.
+- **Confirmação:** leitura e inferência do comportamento documentado; contagem de requisições não medida em runtime.
+- **Confirmado por:** ______ em __/__
+- **Ideia de correção:** tornar o carregamento seguro para repetição, por exemplo com cancelamento/deduplicação da requisição e estado de loading inicial coerente, sem ocultar a regra do lint.
+
+#### ACH-12 — O comando de lint inclui documentação fora do escopo
+- **Onde:** `controle-estoque-emprestimos-front/package.json` (`scripts.lint`, L12) e `eslint.config.js` (L9-16).
+- **Categoria:** code smell de configuração/manutenção de ferramentas.
+- **Problema:** o escopo da análise exclui `docs-site` por ser documentação gerada, mas o script executa `eslint .`; a configuração só ignora `dist` e aplica regras a todo `**/*.{ts,tsx}`, sem excluir `docs-site`. A execução encontrou nove erros nessa pasta (seis `react-refresh/only-export-components`, dois usos de regras não definidas `@next/next/no-img-element` e `react/no-danger`, e um `react-hooks/set-state-in-effect`).
+- **Por que atrapalha:** `npm run lint` termina com erro por arquivos que não pertencem ao código do produto analisado, misturando resultados da aplicação e da documentação e dificultando localizar os erros do escopo.
+- **Como foi encontrado:** execução somente leitura de `npm run lint` (ESLint 9.39.5), contagem dos arquivos/diagnósticos e leitura do script e da configuração local.
+- **Confirmação:** reproduzido pelo comando; nenhuma alteração de código foi feita.
+- **Confirmado por:** ______ em __/__
+- **Ideia de correção:** excluir `docs-site` explicitamente do lint ou separar o comando de lint do produto do comando de lint da documentação.
+
 #### ACH-13 — Permissão do formulário de itens fixada em `true` no front (stub esquecido)
 - **Onde:** `front/src/pages/estoques/index.tsx`, `EstoquesPage`: `const usuarioLogadoEhGestor = true;` (L49), passada em `<GerenciamentoEstoque isGestor={usuarioLogadoEhGestor} />`. O componente usa essa prop para exibir o formulário (L134) ou o aviso de restrição (L268).
 - **Categoria:** code smell (valor fixo/stub esquecido, generalidade especulativa). Mesmo padrão do `isGestor = true` de `categorias/index.tsx` L9 (ACH-10), mas em outro arquivo e com efeito sobre o cadastro de itens do estoque.
@@ -173,6 +193,9 @@ Pontos vistos durante a leitura que são defeitos ou lacunas funcionais, não de
 | FP-07 | "Blocos de `import` repetidos em 5 páginas do front" (`docs/ferramentas-analise/dup.py`) | A ferramenta casou listas de `import` (`Table`, `TableBody`, `ErrorScreen`). Não há lógica duplicada. |
 | FP-08 | "`eslint-disable react-hooks/exhaustive-deps` em `useAsync.ts` L59" (grep) | Desabilitação deliberada: o hook recebe a lista de dependências do chamador (`[...deps, reloadToken]`), e o linter não consegue analisar isso. Está comentado e é o padrão de hooks genéricos. |
 | FP-09 | "`TERMO_ASSINADO_MAX_BYTES` é número mágico" (heurística) | Conferido por Randell em 13/11. É uma constante nomeada, com comentário, em `termo-assinado.constants.ts`, e compartilhada pelo controller e pelo service. |
+| FP-10 | `noGlobalIsNan` em `termo-pdf.service.ts` (Biome) | `isNaN` recebe `d.getTime()`, que retorna número; não há coerção de entrada heterogênea neste ponto. O alerta não demonstra defeito concreto no fluxo atual. |
+| FP-11 | `useConsistentArrayType` (Biome) | Só recomenda padronização de sintaxe de tipo; é estilo e não evidencia problema de comportamento ou manutenção neste caso. |
+| FP-12 | `react-hooks/incompatible-library` em `GerenciamentoEstoque.tsx` (ESLint) | O aviso trata da otimização pelo React Compiler; a configuração Vite atual não habilita o React Compiler. Não há efeito de runtime demonstrado nesta configuração. |
 
 ## 5. Ferramentas, comandos e prompts (para o log)
 
@@ -197,12 +220,14 @@ Pontos vistos durante a leitura que são defeitos ou lacunas funcionais, não de
 | `Get-ChildItem` + `Select-String` (PowerShell, front) | Buscar `isGestor\|EhGestor\|gestor` em `front/src` | Encontrou `const usuarioLogadoEhGestor = true` em `estoques/index.tsx` L49 (ACH-13) |
 | `git rev-parse --short HEAD` | commit analisado | `b9b67c5` |
 | `Select-String` (PowerShell, back) | `movimentacao`, `ENTRADA`, `saldo\|calcularSaldo\|insuficiente`, `saldo\|disponiveis\|emprestados\|totalItens`, `calcularSaldoItem\|consultarSaldoEstoque`, `StatusItem\|AGUARDANDO_TERMO` | sustentou ACH-01 e ACH-02 |
-| `Get-Content -Encoding UTF8` + numeração (função `Num`, PowerShell) | leitura de trechos com número de linha | linhas citadas em ACH-01 a ACH-04 |
+| `Get-Content -Encoding UTF8` + numeração (função `Num`, PowerShell) | leitura de trechos com número de linha | linhas citadas nos achados |
 | `Select-String` + `Group-Object` (PowerShell, back) | exceções nativas × família `AppException`, `Pipe`, `class-validator\|nestjs-zod\|from 'zod'` | 17 contra 44 usos; só o `ZodValidationPipe` global (ACH-04) |
 | `Select-String` (PowerShell, front) | `\.detail\|problem\+json` em `front/src` e em `api.test.ts` | sem resultados (ACH-03) |
 | `docs/ferramentas-analise/ach04.test.ts` (vitest, back) | pipe global contra `RegistrarMovimentacaoDto` | pipe não lançou erro; `class-validator` apontaria 2 erros (ACH-04) |
+| Biome 2.4.16 (back) | `npx biome ci src/ test/` (sem `--write`) | 74 arquivos; 32 erros de formatação, 6 avisos (4 `noExplicitAny`, já cobertos no ACH-09; 1 `noGlobalIsNan`, FP-10; 1 `useConsistentArrayType`, FP-11). Os erros de formatação são apenas estilo; nenhum foi aplicado. |
+| ESLint 9.39.5 (front) | `npm run lint` (`eslint .`, sem `--fix`) | 14 erros e 1 aviso: quatro `@typescript-eslint/no-explicit-any` (ACH-09), dois `react-hooks/set-state-in-effect` (um no produto, ACH-11; outro no docs-site), seis `react-refresh/only-export-components` e dois diagnósticos de regras Next não definidas no docs-site (ACH-12); um aviso `react-hooks/incompatible-library` (FP-12). Saídas redirecionadas a `%TEMP%`; status do repositório confirmou ausência de alterações de fonte. |
 
-**Ferramentas que não rodaram:** Biome (back) e ESLint (front), `tsc --noEmit` e os testes, porque o ambiente não tinha `node_modules` do projeto nem acesso à rede para instalar. Rodar `npm run lint` nos dois pacotes e comparar com esta lista é um passo que ainda falta.
+**Ferramentas que não rodaram:** `tsc --noEmit` e as suítes de testes nesta etapa.
 
 **Saídas dos scripts e testes:**
 ```
@@ -236,6 +261,7 @@ $ TZ=America/Recife node docs/ferramentas-analise/data-fuso-pdf.mjs
 4. Randell (ACH-09, ACH-10, ACH-15, FP-03 e FP-09): prompt com o roteiro da S3B-07 colado, pedindo apoio para conferir ACH-09 e ACH-10, propor um achado em termo em PDF/storage e validar os trechos no código local (`8de43cf`). O script `data-fuso-pdf.mjs` foi executado em `TZ=UTC` e `TZ=America/Recife`, e todos os trechos citados foram lidos diretamente nos arquivos antes da assinatura.
 
 5. Mateus (ACH-01 a ACH-04): prompt com o contexto da S3B-07 pedindo para conferir os blocos ACH-01 a ACH-04 contra o código local (`b9b67c5`) e interpretar as saídas do PowerShell; os testes `erro.test.ts` e `ach04.test.ts` foram escritos com apoio da LLM e executados localmente.
+6. Mateus (ACH-11 e ACH-12): prompt com a descrição da S3B-07 pedindo para executar Biome e ESLint sem aplicar correções, triar os resultados contra o código real e registrar candidatos somente após leitura dos trechos locais (`b9b67c5`). As saídas foram salvas em `%TEMP%`.
 
 > Quem usar outra LLM ou ferramenta para a própria parte deve acrescentar aqui o prompt e a ferramenta, uma linha por uso.
 
@@ -253,7 +279,7 @@ Sugestão para fechar "2 ou mais achados confirmados por pessoa". Cada um confir
 
 | Critério da issue | Situação |
 |---|---|
-| 2 ou mais achados confirmados por pessoa (meta de cerca de 8 no time) | 10 achados prontos, **faltam as confirmações humanas** (campo "Confirmado por") |
+| 2 ou mais achados confirmados por pessoa (meta de cerca de 8 no time) | 14 achados registrados; ainda faltam confirmações humanas para os campos "Confirmado por" em branco |
 | Achado com arquivo/função, problema, categoria, consequência e como foi encontrado | feito |
-| Falsos positivos anotados com o motivo | feito (9) |
+| Falsos positivos anotados com o motivo | feito (12) |
 | Prompts e ferramentas registrados | feito (seção 5) |
