@@ -88,37 +88,44 @@ Pontos que as issues #20 e #83 não definem. Se a resposta for diferente, ajusta
 
 ## 6. Matriz de rastreabilidade
 
+Legenda da coluna "Coberto pela v1?" (preenchida na S3B-09, suíte `tests/v1-llm/us05-termo.spec.ts`, commit `24954a2`):
+
+- **Sim:** coberto por teste sem simular a lógica sob teste (o PDF é gerado de verdade).
+- **Sim\*:** coberto só com Prisma e/ou `TermoStorageService` simulados (mocks).
+- **Parcial:** coberto em parte (nenhum CT ficou nesta categoria; só o limite LM-01).
+- **Não:** nenhum teste da suíte cobre; o motivo vem na célula.
+
 | Requisito / critério | Variável | Partição ou limite | Caso de teste esperado | Coberto pela v1? | Coberto pela v2? |
 |----------------------|----------|--------------------|------------------------|------------------|------------------|
-| CA-01 | número do termo | PNT-01 | CT-05-01: gerar o termo do 1º empréstimo do ano → PDF gerado com número sequencial 1 do ano | (preencher na Etapa 3) | (preencher na Etapa 4) |
-| CA-01 | número do termo | PNT-02 | CT-05-02: gerar o termo de um novo empréstimo após um termo existente → número = anterior + 1 | | |
-| CA-01 (PR-05*) | número do termo | PNT-03, LM-03 (lado válido) | CT-05-03*: gerar o termo de um empréstimo aberto em 01/01 do ano seguinte → número reinicia em 1 do novo ano | | |
-| CA-01 (PR-05*) | número do termo | LM-03 (lado inválido) | CT-05-04*: gerar o termo de um empréstimo aberto em 31/12 após o termo N → número é N + 1 do mesmo ano, sem reiniciar | | |
-| CA-01 | número do termo | PNT-04 | CT-05-05: gerar dois termos seguidos → números distintos; apenas 1 termo por número no ano | | |
-| CA-01 (PR-05*) | número do termo | LM-04 (lado inválido) | CT-05-06*: primeiro termo do ano → número é 1, nunca 0 | | |
-| CA-01 (PR-06*) | número do termo | PNT-05 | CT-05-07*: consultar duas vezes o termo do mesmo empréstimo → mesmo número nas duas consultas; o contador não avança | | |
-| CA-02 | dados do responsável, data prevista, bens | PRS-01, PDP-01, PBE-01 | CT-05-08: termo de item com tombamento e data prevista informada → PDF com responsável (nome, Siape, lotação, cargo), unidade de acautelamento (estoque), data de abertura, data prevista, tombamento e denominação do bem, e declaração de responsabilidade | | |
-| CA-02 | data prevista | PDP-02 | CT-05-09: termo de empréstimo sem data prevista → PDF mostra "INDEFINIDO" no campo da data prevista | | |
-| CA-02 | bens | PBE-02 | CT-05-10: termo de item sem tombamento, com nº de série → bem identificado pelo nº de série e pela denominação | | |
-| CA-03 | perfil, empréstimo | PPF-01, PEE-01 | CT-05-11: gestor do estoque do empréstimo visualiza e baixa o PDF → PDF devolvido | | |
-| CA-03 | perfil, empréstimo | PPF-02, PEE-01 | CT-05-12: ADMIN consulta o PDF de qualquer empréstimo → PDF devolvido (leitura) | | |
-| CA-03 (PR-03*) | perfil | PPF-03 | CT-05-13*: gestor de outro estoque tenta ver o PDF → 403, nenhum PDF devolvido | | |
-| CA-03 (PR-03*) | perfil | PPF-04 | CT-05-14*: requisitante tenta ver o PDF → 403, nenhum PDF devolvido | | |
-| CA-04 | empréstimo | PEE-02 | CT-05-15: consultar o PDF de empréstimo inexistente → erro tratado (não encontrado), nenhum PDF gerado | | |
-| CA-05 | perfil, empréstimo | PPF-01, PEE-01 | CT-05-16: na tela do termo, usuário com acesso vê o PDF do termo gerado e consegue baixá-lo | | |
-| CA-06, CA-08 (PR-04*, PR-02*) | anexo, tamanho, estado do empréstimo | PAX-01, PTM-01, PEM-01 | CT-05-17*: anexar PDF de 2 MB a empréstimo pendente → upload aceito, com mensagem de sucesso | | |
-| CA-06, CA-08 | anexo | PAX-02 | CT-05-18: anexar arquivo que não é PDF → recusado, com mensagem de erro; nenhum anexo registrado | | |
-| CA-06, CA-08 | anexo | PAX-03 | CT-05-19: enviar sem selecionar arquivo → recusado, com mensagem de erro | | |
-| CA-06, CA-08 (PR-04*) | anexo, tamanho | PAX-04, LM-01 (lado inválido) | CT-05-20*: anexar PDF de 0 bytes → recusado, com mensagem de erro; nenhum anexo registrado | | |
-| CA-06 (PR-04*) | tamanho | PTM-01, LM-01 (lado válido) | CT-05-21*: anexar PDF com 1 byte → aceito pela regra de tamanho | | |
-| CA-06 (PR-04*) | tamanho | PTM-01, LM-02 (lado válido) | CT-05-22*: anexar PDF com exatamente 5 MB → aceito | | |
-| CA-06, CA-08 (PR-04*) | tamanho | PTM-02, LM-02 (lado inválido) | CT-05-23*: anexar PDF com 5 MB + 1 byte → recusado, com mensagem de erro | | |
-| CA-07 | confirmação da entrega | PCF-02 | CT-05-24: empréstimo sem anexo → botão "Confirmar entrega" desabilitado | | |
-| CA-07 | confirmação da entrega | PCF-01 | CT-05-25: depois de anexar um PDF válido → botão "Confirmar entrega" habilitado | | |
-| CA-07, CA-08 (PR-02*) | confirmação da entrega, estado do empréstimo | PCF-01, PEM-01 | CT-05-26*: confirmar a entrega com anexo → entrega confirmada, empréstimo ativo e mensagem de sucesso | | |
-| CA-06, CA-07 | anexo, confirmação da entrega | PAX-02, PAX-01, PCF-02 | CT-05-27: upload inválido seguido de upload válido → o botão só é habilitado depois do upload válido | | |
-| CA-06, CA-07, CA-08 (PR-07*) | estado do empréstimo | PEM-02 | CT-05-28*: anexar ou confirmar em empréstimo com entrega já confirmada → recusado, com mensagem de erro; estado inalterado | | |
-| CA-07, CA-08 (PR-01*) | confirmação da entrega | PCF-02 | CT-05-29*: tentar confirmar a entrega sem anexo, sem usar o botão → recusado, com mensagem de erro; entrega não confirmada | | |
+| CA-01 | número do termo | PNT-01 | CT-05-01: gerar o termo do 1º empréstimo do ano → PDF gerado com número sequencial 1 do ano | Não — numeração por ano nasce em `EmprestimosService.create` (`emprestimos.service.ts:130-135`), sem teste na suíte da US05. | (preencher na Etapa 4) |
+| CA-01 | número do termo | PNT-02 | CT-05-02: gerar o termo de um novo empréstimo após um termo existente → número = anterior + 1 | Não — numeração por ano nasce em `EmprestimosService.create` (`emprestimos.service.ts:130-135`), sem teste na suíte da US05. | |
+| CA-01 (PR-05*) | número do termo | PNT-03, LM-03 (lado válido) | CT-05-03*: gerar o termo de um empréstimo aberto em 01/01 do ano seguinte → número reinicia em 1 do novo ano | Não — numeração por ano nasce em `EmprestimosService.create` (`emprestimos.service.ts:130-135`), sem teste na suíte da US05. Virada de ano não exercitada. | |
+| CA-01 (PR-05*) | número do termo | LM-03 (lado inválido) | CT-05-04*: gerar o termo de um empréstimo aberto em 31/12 após o termo N → número é N + 1 do mesmo ano, sem reiniciar | Não — numeração por ano nasce em `EmprestimosService.create` (`emprestimos.service.ts:130-135`), sem teste na suíte da US05. Virada de ano não exercitada. | |
+| CA-01 | número do termo | PNT-04 | CT-05-05: gerar dois termos seguidos → números distintos; apenas 1 termo por número no ano | Não — numeração por ano nasce em `EmprestimosService.create` (`emprestimos.service.ts:130-135`), sem teste na suíte da US05. O `it.each` de `termo-pdf.service.ts:117` só imprime a string recebida, não prova unicidade. | |
+| CA-01 (PR-05*) | número do termo | LM-04 (lado inválido) | CT-05-06*: primeiro termo do ano → número é 1, nunca 0 | Não — numeração por ano nasce em `EmprestimosService.create` (`emprestimos.service.ts:130-135`), sem teste na suíte da US05. Número 0 nunca é produzido nem verificado. | |
+| CA-01 (PR-06*) | número do termo | PNT-05 | CT-05-07*: consultar duas vezes o termo do mesmo empréstimo → mesmo número nas duas consultas; o contador não avança | Não — nenhum teste verifica que `obterPdf` (`emprestimos.service.ts:185`) deixa o `contadorTermo` intacto. | |
+| CA-02 | dados do responsável, data prevista, bens | PRS-01, PDP-01, PBE-01 | CT-05-08: termo de item com tombamento e data prevista informada → PDF com responsável (nome, Siape, lotação, cargo), unidade de acautelamento (estoque), data de abertura, data prevista, tombamento e denominação do bem, e declaração de responsabilidade | Sim — `devolve bytes de um PDF válido`; `exibe o número sequencial no formato "Nº XX/ano"…`; `contém dados do responsável, unidade, datas, bem e declaração` (`termo-pdf.service.ts:117-150`). | |
+| CA-02 | data prevista | PDP-02 | CT-05-09: termo de empréstimo sem data prevista → PDF mostra "INDEFINIDO" no campo da data prevista | Sim — `mostra "INDEFINIDO" quando a data prevista de fechamento é nula` e `…é uma Date inválida` (`termo-pdf.service.ts:28-31, 135-138`). | |
+| CA-02 | bens | PBE-02 | CT-05-10: termo de item sem tombamento, com nº de série → bem identificado pelo nº de série e pela denominação | Sim — `usa o nº de série quando não há tombamento`; `usa o tombamento quando…`; `mostra "Sem identificação"…` (`termo-pdf.service.ts:141-145`). | |
+| CA-03 | perfil, empréstimo | PPF-01, PEE-01 | CT-05-11: gestor do estoque do empréstimo visualiza e baixa o PDF → PDF devolvido | Sim* — `gestor do estoque recebe o PDF gerado e o nome do arquivo` (`obterPdf`, `emprestimos.service.ts:185`; Prisma e storage simulados). Controller sem teste. | |
+| CA-03 | perfil, empréstimo | PPF-02, PEE-01 | CT-05-12: ADMIN consulta o PDF de qualquer empréstimo → PDF devolvido (leitura) | Sim* — `ADMIN acessa mesmo sem ser gestor e sem consultar o vínculo` (Prisma e storage simulados). | |
+| CA-03 (PR-03*) | perfil | PPF-03 | CT-05-13*: gestor de outro estoque tenta ver o PDF → 403, nenhum PDF devolvido | Sim* — `recusa usuário não gestor e não ADMIN` (AccessDeniedException; o código HTTP 403 não é verificado). | |
+| CA-03 (PR-03*) | perfil | PPF-04 | CT-05-14*: requisitante tenta ver o PDF → 403, nenhum PDF devolvido | Sim* — `recusa usuário não gestor e não ADMIN` e `recusa quando não há usuário autenticado` (perfil REQUISITANTE; 403 não verificado). | |
+| CA-04 | empréstimo | PEE-02 | CT-05-15: consultar o PDF de empréstimo inexistente → erro tratado (não encontrado), nenhum PDF gerado | Sim* — `trata empréstimo inexistente como recurso não encontrado` e `estoque inexistente resulta em não encontrado`. | |
+| CA-05 | perfil, empréstimo | PPF-01, PEE-01 | CT-05-16: na tela do termo, usuário com acesso vê o PDF do termo gerado e consegue baixá-lo | Não — depende da tela (front-end); a suíte cobre só o back. | |
+| CA-06, CA-08 (PR-04*, PR-02*) | anexo, tamanho, estado do empréstimo | PAX-01, PTM-01, PEM-01 | CT-05-17*: anexar PDF de 2 MB a empréstimo pendente → upload aceito, com mensagem de sucesso | Sim* — `valida, grava e anexa o PDF assinado ao empréstimo` (`anexarTermoAssinado`, `emprestimos.service.ts:209`). Mensagem de sucesso fica no controller (0%). | |
+| CA-06, CA-08 | anexo | PAX-02 | CT-05-18: anexar arquivo que não é PDF → recusado, com mensagem de erro; nenhum anexo registrado | Sim* — `rejeita mimetype "image/png"/"text/plain"/…` e `rejeita mimetype application/pdf com conteúdo que não é PDF` (`validarPdf`, `emprestimos.service.ts:332-350`). | |
+| CA-06, CA-08 | anexo | PAX-03 | CT-05-19: enviar sem selecionar arquivo → recusado, com mensagem de erro | Sim* — `rejeita requisição sem arquivo` (`emprestimos.service.ts:336-338`). | |
+| CA-06, CA-08 (PR-04*) | anexo, tamanho | PAX-04, LM-01 (lado inválido) | CT-05-20*: anexar PDF de 0 bytes → recusado, com mensagem de erro; nenhum anexo registrado | Sim* — `rejeita arquivo com buffer vazio (0 bytes)` (`emprestimos.service.ts:336`). | |
+| CA-06 (PR-04*) | tamanho | PTM-01, LM-01 (lado válido) | CT-05-21*: anexar PDF com 1 byte → aceito pela regra de tamanho | Não — um PDF de 1 byte nunca é aceito: `validarPdf` exige `%PDF-` (`emprestimos.service.ts:344-348`). O menor aceito é `aceita buffer de exatamente 5 bytes "%PDF-"`; a premissa PR-04 não se sustenta como escrita. | |
+| CA-06 (PR-04*) | tamanho | PTM-01, LM-02 (lado válido) | CT-05-22*: anexar PDF com exatamente 5 MB → aceito | Sim* — `aceita arquivo com exatamente 5 MB` e `…5 MB - 1 byte`; o `size` vem do mock, o buffer real tem poucos bytes. | |
+| CA-06, CA-08 (PR-04*) | tamanho | PTM-02, LM-02 (lado inválido) | CT-05-23*: anexar PDF com 5 MB + 1 byte → recusado, com mensagem de erro | Sim* — `rejeita arquivo com 5 MB + 1 byte` (`size` simulado; `emprestimos.service.ts:339`). | |
+| CA-07 | confirmação da entrega | PCF-02 | CT-05-24: empréstimo sem anexo → botão "Confirmar entrega" desabilitado | Não — depende do botão no front-end. | |
+| CA-07 | confirmação da entrega | PCF-01 | CT-05-25: depois de anexar um PDF válido → botão "Confirmar entrega" habilitado | Não — depende do botão no front-end. | |
+| CA-07, CA-08 (PR-02*) | confirmação da entrega, estado do empréstimo | PCF-01, PEM-01 | CT-05-26*: confirmar a entrega com anexo → entrega confirmada, empréstimo ativo e mensagem de sucesso | Sim* — `confirma a entrega: empréstimo vira ATIVO e item vira EMPRESTADO` (`confirmarEntrega`, `emprestimos.service.ts:286`). Mensagem de sucesso fica no controller (0%). | |
+| CA-06, CA-07 | anexo, confirmação da entrega | PAX-02, PAX-01, PCF-02 | CT-05-27: upload inválido seguido de upload válido → o botão só é habilitado depois do upload válido | Não — depende do estado do botão no front-end. | |
+| CA-06, CA-07, CA-08 (PR-07*) | estado do empréstimo | PEM-02 | CT-05-28*: anexar ou confirmar em empréstimo com entrega já confirmada → recusado, com mensagem de erro; estado inalterado | Sim* — `recusa anexar quando o status é ATIVO`/`DEVOLVIDO`; `bloqueia a confirmação quando o status é ATIVO`/`DEVOLVIDO`; `informa que a entrega já foi confirmada…`. | |
+| CA-07, CA-08 (PR-01*) | confirmação da entrega | PCF-02 | CT-05-29*: tentar confirmar a entrega sem anexo, sem usar o botão → recusado, com mensagem de erro; entrega não confirmada | Sim* — `bloqueia a confirmação enquanto o termo assinado não foi anexado`; `trata caminho assinado vazio como não anexado`. | |
 
 ## 7. Totais (contados nesta matriz)
 
@@ -128,3 +135,37 @@ Pontos que as issues #20 e #83 não definem. Se a resposta for diferente, ajusta
 | Partições de equivalência | 26 |
 | Fronteiras de valor-limite | 4 (8 valores) |
 | Casos de teste esperados | 29 (14 dependem de premissa: CT-05-03, 04, 06, 07, 13, 14, 17, 20, 21, 22, 23, 26, 28, 29) |
+
+## 8. Cobertura da suíte v1 (S3B-09)
+
+Medição: `npx vitest run --config vitest.us05.config.ts tests/v1-llm/us05-termo.spec.ts --coverage`, commit `24954a2`. Relatório HTML em `docs/testes/relatorios/v1/us05/index.html`.
+
+| Indicador | Resultado |
+|-----------|-----------|
+| Casos de teste cobertos (CT-05-01 a 29) | 17/29 (58,62%): 3 Sim, 14 Sim\*, 0 Parcial, 12 Não |
+| CTs não cobertos | CT-05-01 a 07 (numeração), 16, 24, 25, 27 (front-end), 21 (1 byte, contradiz a regra `%PDF-`) |
+| Partições de equivalência | 21/26 (80,77%): 5 Sim, 16 Sim\*, 5 Não (PNT-01 a PNT-05) |
+| Valores-limite | 1/4 fronteiras completas (LM-02, Sim\*); LM-01 Parcial (0 byte rejeitado, 1 byte não testável); LM-03 e LM-04 Não |
+
+### Partições (cobertura da v1)
+
+| Partição | Coberto? | Teste ou motivo |
+|----------|----------|-----------------|
+| PNT-01 a PNT-05 | Não | A numeração fica em `create` (`emprestimos.service.ts:130-135`), fora da suíte |
+| PEE-01, PEE-02 | Sim\* | `gestor do estoque recebe o PDF…`; `trata empréstimo inexistente…` |
+| PPF-01, PPF-02 | Sim\* | `gestor do estoque recebe o PDF…`; `ADMIN acessa mesmo sem ser gestor…` |
+| PPF-03, PPF-04 | Sim\* | `recusa usuário não gestor e não ADMIN` (vínculo nulo; papel REQUISITANTE) |
+| PRS-01, PDP-01, PDP-02, PBE-01, PBE-02 | Sim | `contém dados do responsável…`; `mostra "INDEFINIDO"…`; `usa o tombamento…`; `usa o nº de série…` |
+| PAX-01 a PAX-04 | Sim\* | `valida, grava e anexa…`; `rejeita mimetype…`; `rejeita requisição sem arquivo`; `rejeita arquivo com buffer vazio (0 bytes)` |
+| PTM-01, PTM-02 | Sim\* | `aceita arquivo com exatamente 5 MB`; `…5 MB - 1 byte`; `rejeita arquivo com 5 MB + 1 byte` |
+| PCF-01, PCF-02 | Sim\* | `confirma a entrega…`; `bloqueia a confirmação enquanto o termo assinado não foi anexado` |
+| PEM-01, PEM-02 | Sim\* | `valida, grava e anexa…`; `recusa anexar quando o status é ATIVO`/`DEVOLVIDO` |
+
+### Valores-limite (cobertura da v1)
+
+| Limite | Coberto? | Teste ou motivo |
+|--------|----------|-----------------|
+| LM-01 | Parcial | Lado inválido (0 byte): `rejeita arquivo com buffer vazio (0 bytes)`. Lado válido (1 byte): não há teste, e um PDF de 1 byte é rejeitado por `%PDF-` (`emprestimos.service.ts:344-348`) |
+| LM-02 | Sim\* | `aceita arquivo com exatamente 5 MB`; `rejeita arquivo com 5 MB + 1 byte` (só o `size` do mock muda) |
+| LM-03 | Não | Virada de ano é do `create`, fora da suíte |
+| LM-04 | Não | Número 0 × 1 é do `create`, fora da suíte |
