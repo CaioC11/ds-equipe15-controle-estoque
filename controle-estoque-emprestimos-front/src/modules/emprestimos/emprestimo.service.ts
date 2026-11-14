@@ -1,5 +1,11 @@
 import { API_URL, fetchApi, getApiErrorMessage } from '../../services/api';
-import type { CreateEmprestimoDto, Emprestimo, Estoque, Item } from './emprestimo.types';
+import type {
+  CreateEmprestimoDto,
+  Emprestimo,
+  Estoque,
+  Item,
+  Responsavel,
+} from './emprestimo.types';
 
 /** Envelope aplicado a toda resposta pelo TransformInterceptor do backend. */
 interface ApiEnvelope<T> {
@@ -60,7 +66,9 @@ export class EmprestimoService {
       `/estoques/${encodeURIComponent(estoqueId)}/itens?limit=${LIMITE_PAGINA}`,
       'Erro ao buscar itens do estoque',
     );
-    return pagina.items.filter((item) => item.tipo === 'PATRIMONIAL' && item.status === 'DISPONIVEL');
+    return pagina.items.filter(
+      (item) => item.tipo === 'PATRIMONIAL' && item.status === 'DISPONIVEL',
+    );
   }
 
   /** Empréstimos aguardando termo e ativos, com `atrasado` já calculado pelo backend. */
@@ -70,6 +78,37 @@ export class EmprestimoService {
       'Erro ao buscar empréstimos',
     );
     return pagina.items;
+  }
+
+  // Percorre todas as páginas: não esconde responsáveis ou devoluções após os 500 primeiros.
+  private async listarTodasPaginas<T>(path: string, fallback: string): Promise<T[]> {
+    const items: T[] = [];
+    let page = 1;
+    let totalPages = 1;
+    do {
+      const pagina = await request<PaginatedResponse<T>>(
+        `${path}?limit=${LIMITE_PAGINA}&page=${page}`,
+        fallback,
+      );
+      items.push(...pagina.items);
+      totalPages = pagina.meta.totalPages;
+      page += 1;
+    } while (page <= totalPages);
+    return items;
+  }
+
+  listarResponsaveis(estoqueId: string): Promise<Responsavel[]> {
+    return this.listarTodasPaginas(
+      `/estoques/${encodeURIComponent(estoqueId)}/emprestimos/responsaveis`,
+      'Erro ao buscar responsáveis',
+    );
+  }
+
+  historicoResponsavel(estoqueId: string, responsavelId: string): Promise<Emprestimo[]> {
+    return this.listarTodasPaginas(
+      `/estoques/${encodeURIComponent(estoqueId)}/emprestimos/responsaveis/${encodeURIComponent(responsavelId)}/historico`,
+      'Erro ao buscar histórico do responsável',
+    );
   }
 
   async registrar(estoqueId: string, dto: CreateEmprestimoDto): Promise<Emprestimo> {
@@ -117,22 +156,37 @@ export class EmprestimoService {
   }
 
   obterTermoAssinadoBlob(estoqueId: string, emprestimoId: string): Promise<Blob> {
-    return this.pdfBlob(`${this.base(estoqueId, emprestimoId)}/termo/assinado`, 'Erro ao baixar o termo assinado');
+    return this.pdfBlob(
+      `${this.base(estoqueId, emprestimoId)}/termo/assinado`,
+      'Erro ao baixar o termo assinado',
+    );
   }
 
-  async anexarTermoAssinado(estoqueId: string, emprestimoId: string, arquivo: File): Promise<Emprestimo> {
+  async anexarTermoAssinado(
+    estoqueId: string,
+    emprestimoId: string,
+    arquivo: File,
+  ): Promise<Emprestimo> {
     const form = new FormData();
     form.append('arquivo', arquivo); // nome do campo exigido pelo FileInterceptor
-    return request<Emprestimo>(`${this.base(estoqueId, emprestimoId)}/termo/assinado`, 'Erro ao anexar o termo assinado', {
-      method: 'POST',
-      body: form,
-    });
+    return request<Emprestimo>(
+      `${this.base(estoqueId, emprestimoId)}/termo/assinado`,
+      'Erro ao anexar o termo assinado',
+      {
+        method: 'POST',
+        body: form,
+      },
+    );
   }
 
   async confirmarEntrega(estoqueId: string, emprestimoId: string): Promise<Emprestimo> {
-    return request<Emprestimo>(`${this.base(estoqueId, emprestimoId)}/confirmar-entrega`, 'Erro ao confirmar a entrega', {
-      method: 'POST',
-    });
+    return request<Emprestimo>(
+      `${this.base(estoqueId, emprestimoId)}/confirmar-entrega`,
+      'Erro ao confirmar a entrega',
+      {
+        method: 'POST',
+      },
+    );
   }
 }
 

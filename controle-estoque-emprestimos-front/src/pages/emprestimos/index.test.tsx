@@ -6,13 +6,16 @@ import { emprestimoService, HttpError } from '../../modules/emprestimos/empresti
 import type { Emprestimo } from '../../modules/emprestimos/emprestimo.types';
 
 vi.mock('../../modules/emprestimos/emprestimo.service', async (importOriginal) => {
-  const original = await importOriginal<typeof import('../../modules/emprestimos/emprestimo.service')>();
+  const original =
+    await importOriginal<typeof import('../../modules/emprestimos/emprestimo.service')>();
   return {
     ...original,
     emprestimoService: {
       listarEstoques: vi.fn(),
       listarItensEmprestaveis: vi.fn(),
       listarPendentes: vi.fn(),
+      listarResponsaveis: vi.fn(),
+      historicoResponsavel: vi.fn(),
       registrar: vi.fn(),
       devolver: vi.fn(),
     },
@@ -21,7 +24,14 @@ vi.mock('../../modules/emprestimos/emprestimo.service', async (importOriginal) =
 
 const service = vi.mocked(emprestimoService);
 
-const responsavel = { id: 'r1', nome: 'Maria Silva', siape: '1234567', cpf: null, lotacao: 'CIn', cargo: 'Professora' };
+const responsavel = {
+  id: 'r1',
+  nome: 'Maria Silva',
+  siape: '1234567',
+  cpf: null,
+  lotacao: 'CIn',
+  cargo: 'Professora',
+};
 const criarEmprestimo = (extra: Partial<Emprestimo>): Emprestimo => ({
   id: 'emp',
   itemId: 'item',
@@ -29,9 +39,18 @@ const criarEmprestimo = (extra: Partial<Emprestimo>): Emprestimo => ({
   dataRetirada: '2030-01-10T12:00:00.000Z',
   prazoDevolucao: '2030-02-10T23:59:59.000Z',
   dataDevolucaoEfetiva: null,
-  item: { id: 'item', tipo: 'PATRIMONIAL', nome: 'Notebook', tombamento: '1', numeroSerie: null, status: 'DISPONIVEL' },
+  item: {
+    id: 'item',
+    tipo: 'PATRIMONIAL',
+    nome: 'Notebook',
+    tombamento: '1',
+    numeroSerie: null,
+    status: 'DISPONIVEL',
+  },
   responsavel,
   atrasado: false,
+  termo: null,
+  termoAssinadoAnexado: false,
   ...extra,
 });
 
@@ -40,18 +59,39 @@ const aguardando = criarEmprestimo({
   itemId: 'i1',
   status: 'AGUARDANDO_TERMO',
   prazoDevolucao: null,
-  item: { id: 'i1', tipo: 'PATRIMONIAL', nome: 'Projetor', tombamento: '111', numeroSerie: null, status: 'DISPONIVEL' },
+  item: {
+    id: 'i1',
+    tipo: 'PATRIMONIAL',
+    nome: 'Projetor',
+    tombamento: '111',
+    numeroSerie: null,
+    status: 'DISPONIVEL',
+  },
 });
 const ativoAtrasado = criarEmprestimo({
   id: 'emp-2',
   itemId: 'i2',
   atrasado: true,
-  item: { id: 'i2', tipo: 'PATRIMONIAL', nome: 'Notebook Dell', tombamento: '222', numeroSerie: null, status: 'EMPRESTADO' },
+  item: {
+    id: 'i2',
+    tipo: 'PATRIMONIAL',
+    nome: 'Notebook Dell',
+    tombamento: '222',
+    numeroSerie: null,
+    status: 'EMPRESTADO',
+  },
 });
 const ativoNoPrazo = criarEmprestimo({
   id: 'emp-3',
   itemId: 'i3',
-  item: { id: 'i3', tipo: 'PATRIMONIAL', nome: 'Câmera', tombamento: '333', numeroSerie: null, status: 'EMPRESTADO' },
+  item: {
+    id: 'i3',
+    tipo: 'PATRIMONIAL',
+    nome: 'Câmera',
+    tombamento: '333',
+    numeroSerie: null,
+    status: 'EMPRESTADO',
+  },
 });
 
 const renderPage = () =>
@@ -64,6 +104,8 @@ const renderPage = () =>
 beforeEach(() => {
   vi.resetAllMocks();
   service.listarEstoques.mockResolvedValue([{ id: 'est-1', nome: 'Almoxarifado', ativo: true }]);
+  service.listarResponsaveis.mockResolvedValue([responsavel]);
+  service.historicoResponsavel.mockResolvedValue([]);
   service.listarItensEmprestaveis.mockResolvedValue([]);
   service.listarPendentes.mockResolvedValue([aguardando, ativoAtrasado, ativoNoPrazo]);
 });
@@ -117,7 +159,9 @@ describe('<EmprestimosPage>', () => {
 
     const linhaAtiva = screen.getByText('Câmera').closest('tr') as HTMLElement;
     fireEvent.click(within(linhaAtiva).getByText('Devolver'));
-    fireEvent.click(await screen.findByRole('button', { name: 'Registrar devolução', hidden: true }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Registrar devolução', hidden: true }),
+    );
 
     await waitFor(() => expect(service.devolver).toHaveBeenCalledWith('est-1', 'emp-3'));
     await waitFor(() => expect(service.listarPendentes).toHaveBeenCalledTimes(2));
@@ -146,7 +190,7 @@ describe('<EmprestimosPage>', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Registrar Empréstimo' }));
 
     expect(await screen.findByText('O nome do responsável é obrigatório.')).toBeInTheDocument();
-    expect(screen.getByText('O Siape é obrigatório.')).toBeInTheDocument();
+    expect(screen.getByText('Informe o Siape ou o CPF.')).toBeInTheDocument();
     expect(screen.getByText('A lotação é obrigatória.')).toBeInTheDocument();
     expect(screen.getByText('O cargo é obrigatório.')).toBeInTheDocument();
     expect(service.registrar).not.toHaveBeenCalled();
@@ -155,8 +199,22 @@ describe('<EmprestimosPage>', () => {
   it('não oferece item que já tem empréstimo em aberto', async () => {
     // i1 está aguardando termo; só "Mouse" deve restar
     service.listarItensEmprestaveis.mockResolvedValue([
-      { id: 'i1', tipo: 'PATRIMONIAL', nome: 'Projetor', tombamento: '111', numeroSerie: null, status: 'DISPONIVEL' },
-      { id: 'i9', tipo: 'PATRIMONIAL', nome: 'Mouse', tombamento: '999', numeroSerie: null, status: 'DISPONIVEL' },
+      {
+        id: 'i1',
+        tipo: 'PATRIMONIAL',
+        nome: 'Projetor',
+        tombamento: '111',
+        numeroSerie: null,
+        status: 'DISPONIVEL',
+      },
+      {
+        id: 'i9',
+        tipo: 'PATRIMONIAL',
+        nome: 'Mouse',
+        tombamento: '999',
+        numeroSerie: null,
+        status: 'DISPONIVEL',
+      },
     ]);
     renderPage();
     await screen.findByText('Projetor');
@@ -164,8 +222,10 @@ describe('<EmprestimosPage>', () => {
     fireEvent.click(screen.getByRole('button', { name: /novo empréstimo/i }));
 
     // 2º combobox = o select de item do formulário (o 1º é o de estoque)
-    await waitFor(() => expect(screen.getAllByRole('combobox')).toHaveLength(2));
-    fireEvent.click(screen.getAllByRole('combobox')[1]);
+    const form = screen
+      .getByRole('button', { name: 'Registrar Empréstimo' })
+      .closest('form') as HTMLElement;
+    fireEvent.click(within(form).getAllByRole('combobox')[0]);
 
     expect(await screen.findByText('Mouse (tomb. 999)')).toBeInTheDocument();
     expect(screen.queryByText('Projetor (tomb. 111)')).not.toBeInTheDocument();
@@ -173,23 +233,32 @@ describe('<EmprestimosPage>', () => {
 
   it('registra o empréstimo com item e responsável digitado (prazo vazio = indefinido)', async () => {
     service.listarItensEmprestaveis.mockResolvedValue([
-      { id: 'i9', tipo: 'PATRIMONIAL', nome: 'Mouse', tombamento: '999', numeroSerie: null, status: 'DISPONIVEL' },
+      {
+        id: 'i9',
+        tipo: 'PATRIMONIAL',
+        nome: 'Mouse',
+        tombamento: '999',
+        numeroSerie: null,
+        status: 'DISPONIVEL',
+      },
     ]);
     service.registrar.mockResolvedValue(aguardando);
     renderPage();
     await screen.findByText('Projetor');
 
     fireEvent.click(screen.getByRole('button', { name: /novo empréstimo/i }));
-    await waitFor(() => expect(screen.getAllByRole('combobox')).toHaveLength(2));
-    fireEvent.click(screen.getAllByRole('combobox')[1]);
+    const form = screen
+      .getByRole('button', { name: 'Registrar Empréstimo' })
+      .closest('form') as HTMLElement;
+    fireEvent.click(within(form).getAllByRole('combobox')[0]);
     fireEvent.click(await screen.findByText('Mouse (tomb. 999)'));
 
-    fireEvent.change(screen.getByPlaceholderText('Ex: Maria Silva'), { target: { value: '  João Souza ' } });
-    const campos = screen.getAllByRole('textbox');
-    // ordem no formulário: nome, siape, lotação, cargo
-    fireEvent.change(campos[1], { target: { value: '7654321' } });
-    fireEvent.change(campos[2], { target: { value: 'CIn' } });
-    fireEvent.change(campos[3], { target: { value: 'Técnico' } });
+    fireEvent.change(screen.getByPlaceholderText('Ex: Maria Silva'), {
+      target: { value: '  João Souza ' },
+    });
+    fireEvent.change(screen.getByLabelText(/Siape \(ou informe/), { target: { value: '7654321' } });
+    fireEvent.change(screen.getByLabelText('Lotação *'), { target: { value: 'CIn' } });
+    fireEvent.change(screen.getByLabelText('Cargo *'), { target: { value: 'Técnico' } });
     fireEvent.click(screen.getByRole('button', { name: 'Registrar Empréstimo' }));
 
     await waitFor(() => expect(service.registrar).toHaveBeenCalledTimes(1));
@@ -210,5 +279,77 @@ describe('<EmprestimosPage>', () => {
     fireEvent.click(screen.getByRole('button', { name: /novo empréstimo/i }));
 
     expect(await screen.findByText(/nenhum item disponível para empréstimo/i)).toBeInTheDocument();
+  });
+});
+
+describe('S3-21 — seleção e histórico', () => {
+  it('seleciona o responsável por nome e identificação e envia somente seu id', async () => {
+    service.listarItensEmprestaveis.mockResolvedValue([{ ...aguardando.item, id: 'livre' }]);
+    service.registrar.mockResolvedValue(aguardando);
+    renderPage();
+    await screen.findByText('Projetor');
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /novo empréstimo/i })).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /novo empréstimo/i }));
+    const form = screen
+      .getByRole('button', { name: 'Registrar Empréstimo' })
+      .closest('form') as HTMLElement;
+    fireEvent.click(within(form).getAllByRole('combobox')[0]);
+    fireEvent.click(await screen.findByText('Projetor (tomb. 111)'));
+    const select = screen.getByLabelText('Responsável cadastrado');
+    expect(within(select).getByText('Maria Silva — Siape 1234567')).toBeInTheDocument();
+    fireEvent.change(select, { target: { value: responsavel.id } });
+    expect(screen.queryByPlaceholderText('Ex: Maria Silva')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Registrar Empréstimo' }));
+    await waitFor(() =>
+      expect(service.registrar).toHaveBeenCalledWith('est-1', {
+        itemId: 'livre',
+        responsavelId: 'r1',
+        prazoDevolucao: undefined,
+      }),
+    );
+  });
+
+  it('mostra histórico com empréstimos ativos e devolvidos, mesmo sem pendências', async () => {
+    service.listarPendentes.mockResolvedValue([]);
+    service.historicoResponsavel.mockResolvedValue([
+      ativoNoPrazo,
+      criarEmprestimo({
+        id: 'devolvido',
+        status: 'DEVOLVIDO',
+        dataDevolucaoEfetiva: '2030-01-20T12:00:00Z',
+      }),
+    ]);
+    renderPage();
+    fireEvent.change(await screen.findByLabelText('Responsável'), { target: { value: 'r1' } });
+    expect(await screen.findByText('Devolvido')).toBeInTheDocument();
+    expect(screen.getByText('Ativo')).toBeInTheDocument();
+    expect(screen.getByText('20/01/2030')).toBeInTheDocument();
+    expect(service.historicoResponsavel).toHaveBeenCalledWith('est-1', 'r1');
+  });
+
+  it('mostra histórico vazio para responsável sem empréstimos', async () => {
+    renderPage();
+    fireEvent.change(await screen.findByLabelText('Responsável'), { target: { value: 'r1' } });
+    expect(
+      await screen.findByText('Nenhum empréstimo deste responsável neste estoque.'),
+    ).toBeInTheDocument();
+  });
+
+  it('mostra o 403 do histórico sem exibir dados e permite tentar novamente', async () => {
+    service.historicoResponsavel.mockRejectedValue(
+      new HttpError('Sem permissão para consultar histórico', 403),
+    );
+    renderPage();
+    fireEvent.change(await screen.findByLabelText('Responsável'), { target: { value: 'r1' } });
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Sem permissão para consultar histórico',
+    );
+    service.historicoResponsavel.mockResolvedValue([]);
+    fireEvent.click(screen.getByRole('button', { name: 'Tentar novamente' }));
+    expect(
+      await screen.findByText('Nenhum empréstimo deste responsável neste estoque.'),
+    ).toBeInTheDocument();
   });
 });

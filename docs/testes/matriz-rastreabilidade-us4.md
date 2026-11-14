@@ -107,7 +107,7 @@ Pontos que os critérios da US04 não definem. Se a resposta for diferente, ajus
 | PR-03 | Prazo anterior à data de retirada é inválido; prazo no mesmo dia da retirada é válido; valor que não é data é inválido | Os critérios dizem só que o prazo é guardado ou fica "indefinido" |
 | PR-04 | Atraso: o empréstimo está atrasado quando a data atual é posterior ao dia do prazo (no dia do prazo ainda não há atraso). Empréstimo ativo com prazo indefinido nunca fica em atraso | O fluxo diz "ativo com prazo vencido", sem definir o dia exato do vencimento nem o caso do prazo indefinido |
 | PR-05 | O bloqueio por atraso (A5) está em vigor. Se ele ficar para a Sprint 3 (P1), CT-04-33, CT-04-36 e CT-04-37 passam a esperar só o aviso, sem impedir o registro | A5 diz que, se não der tempo, vale só o aviso |
-| PR-06 | A justificativa de permanência libera novo empréstimo ao responsável, e seus campos não são testados | O critério cita a justificativa, mas não diz o que ela contém. **Implementada na Issue 1 (ver seção 8):** texto livre obrigatório, uma por empréstimo |
+| PR-06 | A justificativa de permanência libera novo empréstimo ao responsável, e seus campos não são testados | O critério cita a justificativa, mas não diz o que ela contém. **Implementada na [S3-20 (#100)](https://github.com/CaioC11/ds-equipe15-controle-estoque/issues/100) (ver seção 8):** texto livre obrigatório, uma por empréstimo |
 | PR-07 | Novo responsável cadastrado no ato exige ao menos nome e Siape ou CPF; sem eles o registro é recusado | O critério lista nome e Siape ou CPF para a seleção, mas não diz o que é obrigatório |
 | PR-08 | Anexar o termo sem confirmar a entrega mantém o empréstimo "aguardando termo assinado" | O critério descreve anexar e confirmar juntos |
 | PR-09 | Devolver um empréstimo que não está ativo (aguardando termo ou já devolvido) é recusado e o estado fica como estava | Os critérios só descrevem a devolução de empréstimo ativo |
@@ -124,12 +124,12 @@ Os casos usam "hoje" como a data de registro do empréstimo.
 | CA-01 | item (tipo) | PIT-02 | CT-04-02: item patrimonial sem tombamento, com nº de série, disponível → empréstimo "aguardando termo assinado" | Não — o item usado em todos os testes tem tombamento | Sim* — '[v2] registra empréstimo de item patrimonial sem tombamento, identificado pelo nº de série' (termo gerado com tombamento nulo) |
 | CA-01 (A3) | responsável (origem e dados) | PRO-02, PRD-01 | CT-04-03: gestor cadastra o responsável no próprio ato (nome, Siape ou CPF, lotação, cargo, e-mail) e registra o empréstimo → empréstimo "aguardando termo assinado" e responsável gravado no cadastro | Sim* — 'cadastra o responsável no ato quando ele ainda não existe' (create com nome, Siape, lotação e cargo; e-mail não enviado; Prisma simulado) | Sim* — v1 mantido: 'cadastra o responsável no ato quando ele ainda não existe' |
 | CA-01 | responsável (origem) | PRO-03 | CT-04-04: registrar empréstimo sem informar o responsável → recusado, nenhum empréstimo criado | Não — o objeto responsável está sempre presente na entrada | Sim — '[v2] rejeita a entrada com o responsável ausente / nulo' (schema) |
-| CA-01 (PR-01*) | responsável (origem) | PRO-04 | CT-04-05*: registrar empréstimo com identificador de responsável que não existe → recusado (não encontrado), nenhum empréstimo criado | Não — o módulo não aceita identificador de responsável, só dados digitados | Não — `it.todo` (o módulo não aceita identificador de responsável; Issue 2) |
+| CA-01 (PR-01*) | responsável (origem) | PRO-04 | CT-04-05*: registrar empréstimo com identificador de responsável que não existe → recusado (não encontrado), nenhum empréstimo criado | Não — o módulo não aceita identificador de responsável, só dados digitados | Sim* — S3-21: identificador inexistente retorna 404 sem criar empréstimo, movimentação ou PDF |
 | CA-01 (PR-07*) | responsável (dados do novo cadastro) | PRD-02 | CT-04-06*: cadastrar responsável no ato sem nome → recusado, nenhum cadastro nem empréstimo criado | Sim — schema: nome ausente, vazio e só com espaços são rejeitados | Sim — v1 mantido (schema: nome ausente, vazio e só com espaços) |
 | CA-01 (PR-07*) | responsável (dados do novo cadastro) | PRD-03 | CT-04-07*: cadastrar responsável no ato sem Siape e sem CPF → recusado, nenhum cadastro nem empréstimo criado | Sim — schema: 'rejeita responsável sem Siape e sem CPF' | Sim — v1 mantido (schema: sem Siape e sem CPF) |
 | CA-01 (PR-01*) | item (existência) | PIE-02 | CT-04-08*: registrar empréstimo de item inexistente → recusado (não encontrado), nenhum empréstimo criado | Sim* — 'recusa item inexistente (ou de outro estoque) com 404' (não confere que nada foi criado) | Sim* — v1 reforçado: 'recusa item inexistente (ou de outro estoque) com 404' agora confere que nenhum empréstimo foi criado |
-| CA-02 (A3) | responsável (origem) | PRO-01, PRO-02 | CT-04-09: depois do CT-04-03, a lista de responsáveis traz o responsável recém-cadastrado, com nome e Siape ou CPF | Não — `it.todo` (consulta ausente no módulo; Issue 2) | Não — `it.todo` (consulta de responsáveis ausente; Issue 2) |
-| CA-02 (A3) | responsável (origem) | PRO-01 | CT-04-10: novo empréstimo para o mesmo responsável, selecionado na lista, sem enviar seus dados de novo → empréstimo "aguardando termo assinado" ligado ao mesmo cadastro, sem cadastro duplicado | Parcial — 'reaproveita o responsável já cadastrado (encontrado por Siape) sem duplicar', mas o gestor reenvia os dados | Parcial — v1 mantido (reaproveita o responsável por Siape, sem duplicar); `it.todo` para selecionar sem reenviar os dados (Issue 2) |
+| CA-02 (A3) | responsável (origem) | PRO-01, PRO-02 | CT-04-09: depois do CT-04-03, a lista de responsáveis traz o responsável recém-cadastrado, com nome e Siape ou CPF | Não — `it.todo` (consulta ausente no módulo; [S3-21 (#101)](https://github.com/CaioC11/ds-equipe15-controle-estoque/issues/101)) | Sim* — S3-21: cadastro feito no empréstimo aparece na consulta com nome e Siape; consulta também exercita cadastro só por CPF |
+| CA-02 (A3) | responsável (origem) | PRO-01 | CT-04-10: novo empréstimo para o mesmo responsável, selecionado na lista, sem enviar seus dados de novo → empréstimo "aguardando termo assinado" ligado ao mesmo cadastro, sem cadastro duplicado | Parcial — 'reaproveita o responsável já cadastrado (encontrado por Siape) sem duplicar', mas o gestor reenvia os dados | Sim* — S3-21: seleciona por responsavelId, sem reenviar os dados, criar duplicata ou atualizar o cadastro; bloqueio por atraso continua ativo |
 | CA-03 | prazo | PPZ-01 | CT-04-11: registrar com prazo de devolução 7 dias após hoje → prazo guardado exatamente como informado | Sim* — 'guarda o prazo de devolução quando informado' (prazo a 37 dias, mesma partição) | Sim* — v1 mantido: 'guarda o prazo de devolução quando informado' |
 | CA-03 | prazo | PPZ-02 | CT-04-12: registrar sem informar o prazo → empréstimo criado com prazo "indefinido" (não é erro) | Sim* — 'deixa o prazo indefinido (null) quando omitido/nulo': a asserção do dado gravado passa e o teste falha na leitura do retorno do mock (erro do teste) | Sim* — '[v2] deixa o prazo indefinido (null) quando omitido / nulo' corrigido: confere o dado gravado, sem ler o retorno do mock |
 | CA-03 (PR-03*) | prazo | PPZ-03, LM-01 (lado recusado) | CT-04-13*: registrar com prazo um dia antes de hoje → recusado, nenhum empréstimo criado | Sim — schema e service: prazo 1 ms antes da retirada é recusado e o create não é chamado | Sim — v1 mantido (schema e service: prazo 1 ms antes da retirada é recusado) |
@@ -152,13 +152,13 @@ Os casos usam "hoje" como a data de registro do empréstimo.
 | CA-08 (PR-04*) | empréstimo na listagem | PAT-03 | CT-04-30*: empréstimo ativo com prazo indefinido, mesmo após muitos dias → listado sem destaque de atraso | Sim* — listagem e `estaAtrasado`: prazo indefinido não é atraso | Sim* — v1 mantido (listagem e `estaAtrasado`: prazo indefinido) |
 | CA-08 | empréstimo na listagem | PAT-04 | CT-04-31: empréstimo aguardando termo com prazo já vencido → listado sem destaque de atraso (atraso é de empréstimo ativo) | Sim* — listagem e `estaAtrasado`: aguardando termo com prazo vencido não é atraso | Sim* — v1 mantido (listagem e `estaAtrasado`: aguardando termo com prazo vencido) |
 | CA-08 | empréstimo na listagem | PAT-05 | CT-04-32: empréstimo devolvido, com prazo que já passou → listado sem destaque de atraso | Sim* — `estaAtrasado` com DEVOLVIDO; a listagem exclui devolvidos (where conferido) em vez de listá-los sem destaque | Sim* — v1 mantido e '[v2] não destaca atraso de empréstimo devolvido' na listagem |
-| CA-09 (PR-05*) | responsável (situação) | PRS-02, LM-03 (lado recusado) | CT-04-33*: responsável com 1 empréstimo em atraso, gestor registra novo empréstimo para ele → impedido, com informação da pendência; nenhum empréstimo criado | Sim* — 'impede novo empréstimo para responsável com item em atraso' e 'informa a pendência na mensagem de erro': os dois FALHAM (defeito real, Issue 1) | Sim* — '[v2] impede novo empréstimo para responsável com item em atraso' e '[v2] informa a pendência na mensagem' (passam com a Issue 1 implementada) |
+| CA-09 (PR-05*) | responsável (situação) | PRS-02, LM-03 (lado recusado) | CT-04-33*: responsável com 1 empréstimo em atraso, gestor registra novo empréstimo para ele → impedido, com informação da pendência; nenhum empréstimo criado | Sim* — 'impede novo empréstimo para responsável com item em atraso' e 'informa a pendência na mensagem de erro': os dois FALHAM (defeito real, [S3-20 (#100)](https://github.com/CaioC11/ds-equipe15-controle-estoque/issues/100)) | Sim* — '[v2] impede novo empréstimo para responsável com item em atraso' e '[v2] informa a pendência na mensagem' (passam com a [S3-20 (#100)](https://github.com/CaioC11/ds-equipe15-controle-estoque/issues/100) implementada) |
 | CA-09 | responsável (situação) | PRS-05, LM-03 (lado aceito) | CT-04-34: responsável com empréstimo ativo ainda dentro do prazo (0 em atraso), novo empréstimo → aceito | Não — nenhum teste monta responsável com outro empréstimo ativo dentro do prazo | Sim* — '[v2] aceita novo empréstimo quando o responsável tem empréstimo ativo dentro do prazo / com prazo indefinido / aguardando termo / devolvido' |
 | CA-09 | responsável (situação) | PRS-03 | CT-04-35: responsável em atraso devolve o item em atraso e depois recebe novo empréstimo → aceito | Não — sem teste de devolução seguida de novo empréstimo ao mesmo responsável | Sim* — '[v2] aceita novo empréstimo depois que o responsável devolve o item em atraso' (bloqueia, devolve, libera; Prisma simulado) |
 | CA-09 (PR-05*, PR-06*) | responsável (situação) | PRS-04 | CT-04-36*: responsável em atraso com justificativa de permanência registrada, novo empréstimo → aceito | Não — a justificativa de permanência não existe no service | Sim* — '[v2] libera o novo empréstimo depois que o gestor registra a justificativa de permanência', mais os testes de `registrarJustificativaPermanencia` e do schema |
 | CA-09 (PR-05*) | responsável (situação) | PRS-02 | CT-04-37*: o atraso de um responsável não impede o empréstimo de outro responsável sem atraso, para o mesmo estoque → aceito | Não — nenhum teste usa dois responsáveis | Sim* — '[v2] o atraso de um responsável não impede o empréstimo de outro responsável' |
-| CA-10 | histórico do responsável | PHR-01 | CT-04-38: responsável com um empréstimo ativo e um devolvido, gestor consulta o histórico → os dois aparecem, cada um com o item e a situação (ativo ou devolvido) | Não — `it.todo` (histórico ausente no módulo; Issue 2) | Não — `it.todo` (histórico do responsável ausente; Issue 2) |
-| CA-10 (PR-10*) | histórico do responsável | PHR-02 | CT-04-39*: responsável sem nenhum empréstimo → histórico vazio, sem erro | Não — idem CT-04-38 | Não — `it.todo` (histórico do responsável ausente; Issue 2) |
+| CA-10 | histórico do responsável | PHR-01 | CT-04-38: responsável com um empréstimo ativo e um devolvido, gestor consulta o histórico → os dois aparecem, cada um com o item e a situação (ativo ou devolvido) | Não — `it.todo` (histórico ausente no módulo; [S3-21 (#101)](https://github.com/CaioC11/ds-equipe15-controle-estoque/issues/101)) | Sim* — S3-21: histórico mostra item e estado de empréstimo ativo e devolvido, com data da devolução; filtra responsável e estoque |
+| CA-10 (PR-10*) | histórico do responsável | PHR-02 | CT-04-39*: responsável sem nenhum empréstimo → histórico vazio, sem erro | Não — idem CT-04-38 | Sim* — S3-21: responsável cadastrado sem empréstimos recebe histórico vazio, sem erro |
 | CA-11 | perfil | PPF-02 | CT-04-40: ADMIN tenta registrar empréstimo → 403, nenhum empréstimo criado | Não — `create` recebe só o userId e nenhum teste usa o papel ADMIN | Sim* — '[v2] registro de empréstimo: ADMIN recebe 403 e nada é criado' (controller e service reais, Prisma simulado) |
 | CA-11 | perfil | PPF-03 | CT-04-41: gestor de outro estoque tenta registrar empréstimo → 403, nenhum empréstimo criado | Sim* — 'nega acesso a usuário sem vínculo de gestor' (403; create não chamado) | Sim* — '[v2] registro de empréstimo: gestor de outro estoque recebe 403' e v1 mantido |
 | CA-11 | perfil | PPF-04 | CT-04-42: requisitante tenta registrar empréstimo → 403, nenhum empréstimo criado | Parcial — só o caso genérico sem vínculo; o papel de requisitante não é testado | Sim* — '[v2] registro de empréstimo: requisitante (perfil USER sem vínculo) recebe 403' |
@@ -166,6 +166,14 @@ Os casos usam "hoje" como a data de registro do empréstimo.
 | CA-11 | perfil, estado do empréstimo | PPF-03, PED-01 | CT-04-44: gestor de outro estoque tenta registrar a devolução → 403; empréstimo continua "ativo" | Sim* — 'devolver > nega acesso a quem não é gestor do estoque' | Sim* — '[v2] devolução: gestor de outro estoque recebe 403' e v1 mantido |
 | CA-11 | perfil, estado do empréstimo | PPF-04, PED-01 | CT-04-45: requisitante tenta registrar a devolução → 403; empréstimo continua "ativo" | Parcial — idem CT-04-42, para a devolução | Sim* — '[v2] devolução: requisitante recebe 403 e o empréstimo continua ativo' |
 | CA-01, CA-03, CA-04, CA-07 | fluxo completo | PPF-01, PIS-01, PTA-01, PED-01 | CT-04-46: gestor registra o empréstimo com prazo, anexa o termo assinado, confirma a entrega e registra a devolução → estados em sequência: aguardando termo, ativo, devolvido; item disponível, emprestado, disponível | Não — só testes unitários por método, sem fluxo encadeado | Sim* — '[v2] Fluxo completo do empréstimo': registra, anexa o termo, confirma a entrega e devolve, com estado simulado em memória (não é banco real) |
+| CA-02, RNF01 | perfil na consulta | gestor do estoque | CT-04-47: lista de responsáveis, gestor do estoque → consulta autorizada | Não avaliado na medição histórica | Sim* — S3-21: gestor do estoque consulta a lista pelo controller e service reais |
+| CA-02, RNF01 | perfil na consulta | ADMIN | CT-04-48: lista de responsáveis, ADMIN → consulta autorizada | Não avaliado na medição histórica | Sim* — S3-21: ADMIN sem vínculo consulta a lista |
+| CA-02, RNF01 | perfil na consulta | requisitante | CT-04-49: lista de responsáveis, requisitante → 403, sem expor dados | Não avaliado na medição histórica | Sim* — S3-21: requisitante recebe 403 antes da leitura de responsáveis |
+| CA-02, RNF01 | perfil na consulta | gestor de outro estoque | CT-04-50: lista de responsáveis, gestor de outro estoque → 403, sem expor dados | Não avaliado na medição histórica | Sim* — S3-21: gestor de outro estoque recebe 403 antes da leitura de responsáveis |
+| CA-10, RNF01 | perfil na consulta | gestor do estoque | CT-04-51: histórico do responsável, gestor do estoque → consulta autorizada | Não avaliado na medição histórica | Sim* — S3-21: gestor consulta histórico com ativo e devolvido, restrito ao estoque |
+| CA-10, RNF01 | perfil na consulta | ADMIN | CT-04-52: histórico do responsável, ADMIN → consulta autorizada | Não avaliado na medição histórica | Sim* — S3-21: ADMIN consulta histórico no estoque solicitado |
+| CA-10, RNF01 | perfil na consulta | requisitante | CT-04-53: histórico do responsável, requisitante → 403, sem expor dados | Não avaliado na medição histórica | Sim* — S3-21: requisitante recebe 403 sem consultar ou expor o histórico |
+| CA-10, RNF01 | perfil na consulta | gestor de outro estoque | CT-04-54: histórico do responsável, gestor de outro estoque → 403, sem expor dados | Não avaliado na medição histórica | Sim* — S3-21: gestor de outro estoque recebe 403 sem consultar ou expor o histórico |
 
 Legenda da coluna "Coberto pela v1?" (medição de 13/11/2026, suíte `tests/v1-llm/us04-emprestimos.spec.ts`):
 
@@ -174,7 +182,7 @@ Legenda da coluna "Coberto pela v1?" (medição de 13/11/2026, suíte `tests/v1-
 - **Parcial**: há teste relacionado, mas ele não distingue a partição ou não confere parte do resultado esperado.
 - **Não**: nenhum teste exercita o caso.
 
-Resumo dos 46 casos: **27 Sim** (5 Sim e 22 Sim\*, 58,70%), **6 Parcial** (13,04%) e **13 Não** (28,26%: CT-04-02, 04, 05, 09, 34, 35, 36, 37, 38, 39, 40, 43 e 46).
+Resumo histórico da v1 nos 46 casos originais (CT-04-01 a 46; os oito complementares estão fora desta medição histórica): **27 Sim** (5 Sim e 22 Sim\*, 58,70%), **6 Parcial** (13,04%) e **13 Não** (28,26%: CT-04-02, 04, 05, 09, 34, 35, 36, 37, 38, 39, 40, 43 e 46).
 
 ## 7. Totais (contados nesta matriz)
 
@@ -183,9 +191,9 @@ Resumo dos 46 casos: **27 Sim** (5 Sim e 22 Sim\*, 58,70%), **6 Parcial** (13,04
 | Critérios de aceitação (CA-01 a CA-11) | 11 |
 | Partições de equivalência | 43 |
 | Fronteiras de valor-limite | 5 (10 valores) |
-| Casos de teste esperados | 46 (18 dependem de premissa: CT-04-05, 06, 07, 08, 13, 14, 15, 18, 20, 24, 25, 28, 29, 30, 33, 36, 37, 39) |
+| Casos de teste esperados | 54: 46 originais + 8 complementares de permissão S3-21 (18 dos originais dependem de premissa: CT-04-05, 06, 07, 08, 13, 14, 15, 18, 20, 24, 25, 28, 29, 30, 33, 36, 37, 39) |
 
-## 8. Atualização após a Issue 1 (bloqueio por atraso, A5)
+## 8. Atualização após a [S3-20 (#100)](https://github.com/CaioC11/ds-equipe15-controle-estoque/issues/100) (bloqueio por atraso, A5)
 
 As seções 1 a 7 e a coluna "Coberto pela v1?" registram a medição de 13/11/2026 e **não foram alteradas**. Esta seção registra o efeito da correção.
 
@@ -209,24 +217,41 @@ As seções 1 a 7 e a coluna "Coberto pela v1?" registram a medição de 13/11/2
 
 Os testes novos usam Prisma simulado, como os demais do módulo, então valem como "Sim\*" pela legenda da seção 6. O fluxo encadeado (CT-04-35 completo e CT-04-46) segue dependendo de teste com banco real.
 
-## 9. Cobertura pela v2 (`tests/v2/us04-emprestimos.spec.ts`)
+## 9. Cobertura pela v2 após a S3-21 (`tests/v2/us04-emprestimos.spec.ts`)
 
-A coluna "Coberto pela v2?" da seção 6 usa a mesma legenda da v1. Execução de 14/11/2026: **200 testes, 194 passando, 0 falhando e 6 `it.todo`**, então a coluna reflete testes que rodaram e passaram. O código sob teste é o da Issue 1 (seção 8), com o bloqueio por atraso e a justificativa de permanência.
+Execução de 14/11/2026: **217 testes, 216 passando, 0 falhando e 1 `it.todo`** (CT-04-28, PR-04). As pendências da S3-21 foram transformadas em testes executáveis. A coluna v1 e as seções históricas anteriores registram a medição original e não foram reclassificadas.
 
-| Indicador | v1 | v2 |
-|-----------|----|----|
-| Casos (CTs) cobertos (Sim + Sim\*) | 27/46 (58,70%) | 40/46 (86,96%) |
-| Casos `Parcial` | 6 | 2 (CT-04-10 e CT-04-28) |
-| Casos `Não` | 13 | 4 (CT-04-05, 09, 38 e 39, todos com `it.todo` da Issue 2) |
-| Partições cobertas | 30/43 (69,77%) | 39/43 (90,70%) |
-| Valores-limite cobertos | 8/10 (80,00%) | 9/10 (90,00%) |
-| Fronteiras com os dois lados cobertos | 3/5 (60,00%) | 4/5 (80,00%) |
-| Critérios (CAs) com ao menos um teste | 10/11 (90,91%) | 10/11 (90,91%) |
-| Critérios com todos os casos em `Sim`/`Sim\*` | 3/11 (27,27%) | 7/11 (63,64%) |
-| Linhas cobertas (controller, service e DTO da US04) | 98,29% (172/175, código anterior) | 100% (201/201) |
-| Branches cobertos | 95,70% (89/93, código anterior) | 98,17% (107/109) |
+| Indicador | v1 (avaliação funcional histórica) | v2 após S3-21 |
+|---|---|---|
+| CTs originais cobertos (CT-04-01 a 46) | 27/46 (58,70%) | 45/46 (97,83%) |
+| CTs originais parciais | 6 | 1 (CT-04-28) |
+| CTs originais sem teste | 13 | 0 |
+| CTs complementares de permissão (47 a 54) | Não avaliados na medição histórica | 8/8 Sim* |
+| Total ampliado de CTs cobertos | — | 53/54 (98,15%), 1 Parcial |
+| Partições cobertas | 30/43 (69,77%) | 43/43 (100%) |
+| Valores-limite | 8/10 (80,00%) | 9/10 (90,00%) |
+| Fronteiras com dois lados | 3/5 (60,00%) | 4/5 (80,00%) |
+| CAs com ao menos um teste | 10/11 | 11/11 |
+| CAs com todos os CTs originais em Sim/Sim* | 3/11 | 10/11 (falta CA-08 por CT-04-28) |
 
-**O que continua fora da meta de 100%** (todos dependem de funcionalidade que o sistema ainda não tem ou de decisão da equipe):
+Comparação estrutural sobre **o mesmo código, após S3-21**, mesmas ferramentas (Vitest 4.1.8/v8), mesma configuração e recorte (controller, service e `create-emprestimo.dto.ts`):
 
-- **CA-10** (histórico do responsável), **CA-02** (selecionar na lista) e **PRO-04**, **PHR-01**, **PHR-02**: dependem da Issue 2 (consultas de responsáveis e histórico). Ficam como `it.todo`.
-- **CT-04-28 / LM-02 lado "hoje"**: depende de confirmar a PR-04. O código compara o instante (`prazoDevolucao < agora`), e a matriz espera que no dia do prazo ainda não haja atraso.
+| Indicador | v1 no código atual | v2 no código atual |
+|---|---|---|
+| Linhas | 83,64% (184/220) | 100% (220/220) |
+| Branches | 81,51% (97/119) | 99,16% (118/119) |
+| Statements | 82,82% (188/227) | 99,12% (225/227) |
+| Funções | 77,08% (37/48) | 95,83% (46/48) |
+
+Fontes: `relatorios/v1/us04-codigo-atual/coverage-summary.json` e `relatorios/v2/us04/coverage-summary.json`, regenerados após a implementação. O total global do HTML inclui outros módulos e não é o recorte US04 acima.
+
+## 10. S3-21 implementada — seleção e histórico
+
+- [S3-21 (#101)](https://github.com/CaioC11/ds-equipe15-controle-estoque/issues/101): CA-02 e CA-10 agora cobertos. CT-04-05, 09, 10, 38, 39 e 47 a 54 deixaram de ser pendentes na v2. A v1 permanece congelada, inclusive seus `it.todo`.
+- Lista paginada do cadastro global com nome, Siape/CPF e id para seleção; empréstimo aceita `responsavelId` sem os dados do cadastro. Não cria duplicata nem altera os dados do responsável selecionado.
+- Histórico paginado inclui todos os estados, o item e a data efetiva da devolução. A consulta é por responsável e estoque: não expõe empréstimos de outros responsáveis ou estoques. Responsável cadastrado sem empréstimos retorna lista vazia; identificador inexistente retorna 404.
+- Permissões (RNF01): ADMIN consulta; gestor consulta seu estoque; requisitante, gestor de outro estoque e usuário ausente recebem 403 antes da leitura dos dados. ADMIN continua sem autorização para registrar empréstimos se não for gestor do estoque.
+- [S3-20 (#100)](https://github.com/CaioC11/ds-equipe15-controle-estoque/issues/100): selecionar responsável existente não contorna o bloqueio por atraso; a contraprova está na v2.
+- Frontend: seleção de cadastro ou novo cadastro no modal; painel de histórico acessível mesmo sem empréstimos pendentes; paginação completa, estados de carregamento, vazio e erro, e limpeza do histórico ao trocar estoque.
+- **Única pendência remanescente: CT-04-28 / PR-04**, sobre considerar o dia inteiro do prazo como sem atraso. O código continua comparando instantes. A meta global de todos os limites ainda não foi cumprida.
+- Os testes do backend usam Prisma simulado (`Sim*`): verificam comportamento, filtros, permissões e ausência de gravações, sem equivaler a uma execução com banco real.

@@ -49,19 +49,20 @@ export interface Emprestimo {
 }
 
 /**
- * Plano B (#8): o gestor digita os dados do responsável no próprio empréstimo.
- * Quando o PO decidir a origem (Keycloak/LDAP), só este bloco muda.
+ * Cadastro no ato (A3). Alternativa: selecionar cadastro existente por responsavelId (S3-21).
  */
 export interface ResponsavelInput {
   nome: string;
-  siape: string;
+  siape?: string;
+  cpf?: string;
   lotacao: string;
   cargo: string;
 }
 
 export interface CreateEmprestimoDto {
   itemId: string;
-  responsavel: ResponsavelInput;
+  responsavel?: ResponsavelInput;
+  responsavelId?: string;
   /** ISO 8601. Omitido = prazo indefinido. */
   prazoDevolucao?: string;
 }

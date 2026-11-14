@@ -2432,29 +2432,28 @@ INSTRUÇÕES
 |---|---|---|---|---|
 | EmprestimosService.create > deixa o prazo indefinido (null) quando omitido | `expected undefined to be null` (linha 470) | erro do teste (setup do mock) | A asserção da linha 468, que exige `prazoDevolucao: null` na chamada de `tx.emprestimo.create`, passou, então o service grava `null` (`dto.prazoDevolucao ?? null`). A linha 470 lê o retorno de `create`, que é o resultado do `tx.emprestimo.update` mockado repassado por `comFlagTermo`. O mock do update não traz `prazoDevolucao`, daí `undefined`. | não se aplica |
 | EmprestimosService.create > deixa o prazo indefinido (null) quando nulo | igual ao anterior | erro do teste (setup do mock) | Mesma causa e mesma linha. | não se aplica |
-| EmprestimosService.create > responsável com item em atraso > impede novo empréstimo para responsável com item em atraso | a promise resolveu (`AGUARDANDO_TERMO`) em vez de rejeitar | defeito real | `create` não consulta empréstimos ativos vencidos do responsável. `estaAtrasado` só é usado em `findPendentes` e não há menção a atraso ou pendência no fluxo de criação. O CA9 (premissa A5) não está implementado. O campo `justificativaPermanencia` já existe no schema, sem uso. | Issue 1 |
-| EmprestimosService.create > responsável com item em atraso > informa a pendência na mensagem de erro | `Esperava que a promessa fosse rejeitada` | defeito real (mesma causa do anterior) | Como não há bloqueio, nenhum erro é lançado, então não existe mensagem de pendência. | Issue 1 |
+| EmprestimosService.create > responsável com item em atraso > impede novo empréstimo para responsável com item em atraso | a promise resolveu (`AGUARDANDO_TERMO`) em vez de rejeitar | defeito real | `create` não consulta empréstimos ativos vencidos do responsável. `estaAtrasado` só é usado em `findPendentes` e não há menção a atraso ou pendência no fluxo de criação. O CA9 (premissa A5) não está implementado. O campo `justificativaPermanencia` já existe no schema, sem uso. | [S3-20 (#100)](https://github.com/CaioC11/ds-equipe15-controle-estoque/issues/100) |
+| EmprestimosService.create > responsável com item em atraso > informa a pendência na mensagem de erro | `Esperava que a promessa fosse rejeitada` | defeito real (mesma causa do anterior) | Como não há bloqueio, nenhum erro é lançado, então não existe mensagem de pendência. | [S3-20 (#100)](https://github.com/CaioC11/ds-equipe15-controle-estoque/issues/100) |
 
 ## US04 — Suíte v2 (Theo)
 
-> Trecho para colar no `docs/testes/llm-log.md`, depois da seção da v1 da US04. Revise os campos marcados antes do commit.
 
 #### Rodada v2-1
 - Data e hora: 14/11/2026 (escrita da suíte; a execução fica registrada abaixo)
-- Modelo e contexto: Claude Sonnet 5.5, na mesma conversa da v1 da US04, com o zip atualizado do projeto anexado (código com a Issue 1 implementada, `tests/v1-llm/us04-emprestimos.spec.ts` já commitada e a matriz com a coluna "Coberto pela v1?" preenchida).
+- Modelo e contexto: Claude Sonnet 5.5, na mesma conversa da v1 da US04, com o zip atualizado do projeto anexado (código com a [S3-20 (#100)](https://github.com/CaioC11/ds-equipe15-controle-estoque/issues/100) implementada, `tests/v1-llm/us04-emprestimos.spec.ts` já commitada e a matriz com a coluna "Coberto pela v1?" preenchida).
 - Prompt das lacunas: texto da task S3B (suíte v2 em `tests/v2/`, cada mudança ligada a uma lacuna da matriz, meta de 100% dos CAs, partições e limites, e branches acima da v1) mais a ordem de analisar o projeto antes. As lacunas informadas vieram da coluna "Coberto pela v1?":
   - 13 casos `Não`: CT-04-02, 04, 05, 09, 34, 35, 36, 37, 38, 39, 40, 43 e 46.
   - 6 casos `Parcial`: CT-04-01, 10, 21, 28, 42 e 45.
   - 2 testes da v1 que falhavam por oráculo errado (prazo indefinido, CT-04-12) e 4 testes triviais (`toBeDefined`).
   - 3 branches descobertos do `emprestimos.service.ts` (linhas 196, 265 e 273).
-- Resumo da resposta: arquivo `tests/v2/us04-emprestimos.spec.ts` com todos os testes da v1 (mantidos ou corrigidos) e os novos, cada um com o comentário `[v2] Lacuna CT-04-xx`. Novos grupos: perfis de acesso pelo controller com o service real (ADMIN, requisitante e gestor de outro estoque), fluxo completo com estado simulado, `registrarJustificativaPermanencia` e seu schema, bloqueio por atraso com as partições da matriz e os branches de `obterPdf` e `obterPdfAssinado`. `it.todo` para o que depende da Issue 2 (CT-04-05, 09, 10, 38 e 39) e para a PR-04 (CT-04-28).
+- Resumo da resposta: arquivo `tests/v2/us04-emprestimos.spec.ts` com todos os testes da v1 (mantidos ou corrigidos) e os novos, cada um com o comentário `[v2] Lacuna CT-04-xx`. Novos grupos: perfis de acesso pelo controller com o service real (ADMIN, requisitante e gestor de outro estoque), fluxo completo com estado simulado, `registrarJustificativaPermanencia` e seu schema, bloqueio por atraso com as partições da matriz e os branches de `obterPdf` e `obterPdfAssinado`. `it.todo` para o que depende da [S3-21 (#101)](https://github.com/CaioC11/ds-equipe15-controle-estoque/issues/101) (CT-04-05, 09, 10, 38 e 39) e para a PR-04 (CT-04-28).
 - Problemas observados:
-  - A primeira versão do arquivo foi escrita contra o código anterior, em que o bloqueio por atraso não existia, e usava `it.fails` para o CA-09. O zip atualizado mostrou a Issue 1 implementada, então esses testes viraram testes normais e foram acrescentados os da ação `justificativa-permanencia`.
+  - A primeira versão do arquivo foi escrita contra o código anterior, em que o bloqueio por atraso não existia, e usava `it.fails` para o CA-09. O zip atualizado mostrou a [S3-20 (#100)](https://github.com/CaioC11/ds-equipe15-controle-estoque/issues/100) implementada, então esses testes viraram testes normais e foram acrescentados os da ação `justificativa-permanencia`.
   - O simulador de empréstimos existentes teve de respeitar os filtros novos do service (`prazoDevolucao.lt` e `justificativaPermanencia` nula), senão os casos "aceita" falhariam.
   - A LLM não executou a suíte. A execução e a contagem abaixo são do integrante.
-- Revisão contra o requisito (marque ao concluir):
-  - [ ] Cada teste `[v2]` confere o resultado esperado do CT que cita, e não só o que o código faz.
-  - [ ] Os testes que usam o estado simulado (fluxo completo, devolver e emprestar de novo, justificativa e liberação) foram lidos contra a matriz.
+- Revisão contra o requisito (concluída na rodada de correções abaixo):
+  - [x] Cada teste `[v2]` confere o resultado esperado do CT que cita, e não só o que o código faz.
+  - [x] Os testes que usam o estado simulado (fluxo completo, devolver e emprestar de novo, justificativa e liberação) foram lidos contra a matriz.
 
 #### Execução e contagem
 Execução de 14/11/2026, 10:55 (`vitest run tests/v2/us04-emprestimos.spec.ts --config vitest.llm.config.ts`, Vitest v4.1.8, cobertura v8). Primeira rodada da v2, sem ajustes depois da execução.
@@ -2464,7 +2463,7 @@ Execução de 14/11/2026, 10:55 (`vitest run tests/v2/us04-emprestimos.spec.ts -
 | 194 | 0 | 0 | 6 |
 
 #### Investigação das falhas
-Não houve falhas na v2. Os 6 `it.todo` não são falhas: CT-04-05, 09, 10, 38 e 39 dependem da Issue 2, e o CT-04-28 depende de confirmar a premissa PR-04.
+Não houve falhas na v2. Os 6 `it.todo` não são falhas: CT-04-05, 09, 10, 38 e 39 dependem da [S3-21 (#101)](https://github.com/CaioC11/ds-equipe15-controle-estoque/issues/101), e o CT-04-28 depende de confirmar a premissa PR-04.
 
 
 
@@ -2474,10 +2473,24 @@ Não houve falhas na v2. Os 6 `it.todo` não são falhas: CT-04-05, 09, 10, 38 e
 #### Lacunas sinalizadas pela LLM (`it.todo`)
 | Teste | CA | Verificação no código | Issue |
 |---|---|---|---|
-| lista responsáveis cadastrados com nome e Siape/CPF para seleção | CA2 | O controller só expõe criar, listar pendentes, devolução, termo e confirmar entrega. Não há consulta de responsáveis. | Issue 2 |
-| retorna o histórico de empréstimos e devoluções de um responsável | CA10 | Também não há consulta de histórico por responsável. | Issue 2 |
+| lista responsáveis cadastrados com nome e Siape/CPF para seleção | CA2 | O controller só expõe criar, listar pendentes, devolução, termo e confirmar entrega. Não há consulta de responsáveis. | [S3-21 (#101)](https://github.com/CaioC11/ds-equipe15-controle-estoque/issues/101) |
+| retorna o histórico de empréstimos e devoluções de um responsável | CA10 | Também não há consulta de histórico por responsável. | [S3-21 (#101)](https://github.com/CaioC11/ds-equipe15-controle-estoque/issues/101) |
 
 Observação (fora dos CAs): as linhas 196, 265 e 273 do `emprestimos.service.ts` ficaram sem cobertura (caminhos de 404 em `obterPdf` e `obterPdfAssinado`).
+
+
+#### Rodada v2-2 — correções do feedback (14/11/2026)
+
+- Ferramenta: ChatGPT/Codex. Pedido: aplicar o feedback de aprovação — comparar com v1 no código atual, limpar lembretes, usar S3-20 (#100) e S3-21 (#101), completar bloqueio só por CPF, revisar 403 da justificativa e registrar CTs de permissão das consultas como `it.todo`.
+- Revisão realizada: conferidos os testes novos/corrigidos, suas asserções e os fluxos com estado simulado contra a seção 6 da matriz e `docs/permissoes.md`. Os mocks não comprovam integração com banco real; os resultados continuam `Sim*`. CA-02 e CA-10 seguem pendentes da S3-21; CT-04-28 da PR-04.
+- Acrescentado CT-04-33 com responsável só por CPF: confere busca por CPF, vínculo com o responsável em atraso, 409, mensagem de pendência e ausência de criação, movimentação e escrita do PDF.
+- Os testes parametrizados de justificativa já incluíam ADMIN e requisitante; reforçados para conferir ausência de leitura do empréstimo e de gravações de item/movimentação, além do 403 e de `updateMany` não chamado.
+- Acrescentados oito `it.todo` CT-04-47 a 54: gestor e ADMIN autorizados; requisitante e gestor de outro estoque com 403 para lista e histórico. Sem inventar métodos para APIs ausentes.
+- Execução: `npx vitest run tests/v2/us04-emprestimos.spec.ts --config vitest.llm.config.ts --coverage --coverage.reporter=text --coverage.reporter=html --coverage.reporter=json-summary --coverage.reportsDirectory=../docs/testes/relatorios/v2/us04`.
+- Resultado revisado: **209 testes, 195 passando, 0 falhando, 14 todo** (13 S3-21 e 1 PR-04). Vitest 4.1.8, provider v8. HTML e resumo JSON regenerados.
+- Mesmo recorte de 3 arquivos: linhas **201/201 (100%)**, branches **107/109 (98,17%)**, statements **205/207 (99,03%)**, funções **40/42 (95,24%)**.
+- Referência v1 no código atual: `relatorios/v1/us04-codigo-atual/coverage-summary.json`: linhas **182/201 (90,55%)**, branches **94/109 (86,24%)**. Reexecução da suíte v1 confirmou 134 passando, 2 falhando (mock da linha 470) e 2 todo; os números antigos acima documentam a primeira rodada, não a execução revisada.
+
 
 ## US05 — Termo de Responsabilidade (Randell)
 
@@ -2979,3 +2992,32 @@ Os itens 1 e 2 estão confirmados pela cobertura; os demais são de leitura do c
 #### Investigação das falhas
 | Teste | Erro | Classificação (oráculo errado, API inventada, setup, defeito real) | Evidência | Issue (se defeito real) |
 |---|---|---|---|---|
+
+## US04 — Implementação da S3-21 (#101), 14/11/2026
+
+### Pedido e escopo
+
+Pedido do integrante: implementar a task que lista responsáveis com nome e Siape/CPF para seleção; aceitar um cadastro existente sem redigitar; mostrar histórico de empréstimos e devoluções; restringir consultas a ADMIN ou gestor do estoque; atualizar matriz e substituir os todo de CA-02 e CA-10 na v2 por testes executáveis. A autorização para implementar foi dada explicitamente nesta rodada.
+
+### Implementação e revisão
+
+- Backend: GET `estoques/:estoqueId/emprestimos/responsaveis` e GET `estoques/:estoqueId/emprestimos/responsaveis/:responsavelId/historico`, paginados. Cadastro global, histórico restrito ao estoque da rota e ao responsável; autorização antes da leitura.
+- POST do empréstimo aceita exatamente uma das alternativas: `responsavel` (cadastro no ato, compatível com o fluxo anterior) ou `responsavelId` (seleção, sem atualizar ou duplicar cadastro). Identificador inexistente retorna 404 e o bloqueio da S3-20 permanece ativo.
+- Frontend: seleção nome + Siape/CPF, alternativa de cadastro novo e painel de histórico incluindo devoluções; percorre todas as páginas e trata vazio/erro/carregamento/troca de estoque.
+- [x] CT-04-05, 09, 10, 38, 39 e 47 a 54 revisados contra CA-02/CA-10, matriz e `docs/permissoes.md`, sem oráculos baseados apenas no retorno do mock.
+- [x] Testes verificam ausência de duplicação/alteração, isolamento de dados e 403 antes das consultas. O fluxo de seleção também verifica que o atraso continua impedindo novo empréstimo.
+- [x] V1 histórica preservada; CA-02 e CA-10 não são mais pendências da v2. PR-04 permanece pendente e não foi decidida nesta task.
+
+### Execução
+
+Comando backend v2: `npx vitest run tests/v2/us04-emprestimos.spec.ts --config vitest.llm.config.ts --coverage --coverage.reporter=html --coverage.reporter=json-summary --coverage.reportsDirectory=../docs/testes/relatorios/v2/us04`.
+
+- V2: **217 testes, 216 passando, 0 falhando, 1 todo** (CT-04-28 / PR-04).
+- V1 sobre o mesmo código: **134 passando, 2 falhando (mock da linha 470), 2 todo**, preservados; relatório regenerado em `relatorios/v1/us04-codigo-atual/`.
+- Mesmo recorte de 3 arquivos: v2 **220/220 linhas (100%)**, **118/119 branches (99,16%)**, **225/227 statements (99,12%)**, **46/48 funções (95,83%)**. V1: **184/220 linhas (83,64%)**, **97/119 branches (81,51%)**.
+- Regressão backend (`npm test`): **151 passando**. Builds backend e frontend: concluídos.
+- Frontend: **27 testes específicos passando** (página, serviço e hook de responsáveis), com API simulada. A regressão geral identifica três falhas preexistentes em `cinnamon-v2.test.tsx` (dois textos esperados) e `components/auth/Can.test.tsx` (papel esperado). As mesmas três falhas foram reproduzidas nos arquivos originais do ZIP, com as mesmas dependências; não são regressões da S3-21.
+
+### Limites
+
+Sem alteração de schema ou migração. Os testes usam Prisma/API simulados: não substituem uma validação ponta a ponta com PostgreSQL e login real. O histórico é por estoque autorizado; ADMIN pode consultar cada estoque, sem ampliar implicitamente o escopo da rota.

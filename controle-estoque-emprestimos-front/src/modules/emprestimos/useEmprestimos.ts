@@ -52,3 +52,21 @@ export function useEmprestimos(estoqueId: string | undefined) {
 
   return { emprestimos, isLoading, error, reload, registrar, devolver };
 }
+
+/** Não reutiliza os dados do estoque anterior durante troca ou erro de autorização. */
+export function useResponsaveis(estoqueId: string | undefined) {
+  const state = useAsync(
+    async () => ({
+      estoqueId,
+      items: estoqueId ? await emprestimoService.listarResponsaveis(estoqueId) : [],
+    }),
+    [estoqueId],
+  );
+  return {
+    responsaveis:
+      state.data && state.data.estoqueId === estoqueId && !state.error ? state.data.items : [],
+    isLoading: state.isLoading,
+    error: state.error,
+    reload: state.reload,
+  };
+}
