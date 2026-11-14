@@ -21,14 +21,15 @@ export const ItemBaseSchema = z.object({
     .optional(),
 });
 
-export const CreateItemSchema = ItemBaseSchema.superRefine((data, ctx) => {
-  if (data.tipo === 'PATRIMONIAL' && !data.tombamento) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['tombamento'],
-      message: 'Tombamento é obrigatório para item patrimonial',
-    });
-  }
+// No cadastro, tombamento vazio é aceito em item patrimonial (fica pendente de tombamento).
+// Na edição (UpdateItemSchema) continua valendo o min(1): não dá para esvaziar.
+export const CreateItemSchema = ItemBaseSchema.extend({
+  tombamento: z
+    .string()
+    .trim()
+    .optional()
+    .transform((valor) => (valor === '' ? undefined : valor)),
+}).superRefine((data, ctx) => {
   if (data.tipo === 'CONSUMO' && data.tombamento) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,

@@ -10,6 +10,7 @@ describe('ItensController', () => {
     create: vi.fn(),
     findAllByEstoque: vi.fn(),
     update: vi.fn(),
+    completarTombamento: vi.fn(),
   };
 
   beforeEach(async () => {
@@ -49,5 +50,11 @@ describe('ItensController', () => {
       } as never,
     );
     expect(service.update).toHaveBeenCalledWith('est-1', 'i-1', { nome: 'X' }, 'u1');
+  });
+
+  it('repassa o userId do usuário logado ao completar tombamento', async () => {
+    const dto = { tombamento: 'TOMB-999' } as never;
+    await controller.completarTombamento('est-1', 'i-1', dto, { userId: 'u1' } as never);
+    expect(service.completarTombamento).toHaveBeenCalledWith('est-1', 'i-1', dto, 'u1');
   });
 });
