@@ -300,12 +300,12 @@ INSTRUÇÕES
 6. Responda com um único bloco de código.
 
 
-- Resultado: 106 testes · 105 passando · 1 falhando · 0 não compilam
-- Problemas observados: o arquivo carregou e rodou sem erro de import ou de setup (incluindo o teste do controller com `Reflect.getMetadata`). Uma falha de asserção.
-
+#### Rodada 1
+- Data e hora: 13/11/2026, 08:48
+- Prompt completo: o da seção acima.
 - Resumo da resposta: A LLM devolveu um único arquivo, `tests/v1-llm/us03-itens.spec.ts`, em três blocos: schemas Zod (`CreateItemSchema` e `UpdateItemSchema`), `ItensService` com o Prisma mockado via `vi.fn()` e `ItensController` instanciado direto, sem módulo Nest. Cada teste traz um comentário com a técnica (partição, valor-limite ou critério) e o requisito. Cobre CA1 a CA7 e inclui casos que não vêm dos CAs: estoque desativado, categoria inexistente, variações de P2002 (tombamento, número de série, outro campo, sem meta), paginação e a ordem das verificações no service.
-- Execução: 13/11/2026, 08:48, com `npx vitest run --config vitest.tests.config.ts tests/v1-llm` (o config base só incluía `src/`, então foi criado um config separado; isso não alterou nenhum teste).
-- Problemas observados: o arquivo carregou e rodou sem erro de import ou de setup, incluindo o teste do controller que usa `Reflect.getMetadata`. Houve uma falha de asserção. Nenhuma rodada extra foi necessária.
+- Execução: `npx vitest run --config vitest.tests.config.ts tests/v1-llm` (o config base só incluía `src/`, então foi criado um config separado; isso não alterou nenhum teste).
+- Problemas observados: o arquivo carregou e rodou sem erro de import ou de setup, incluindo o teste do controller que usa `Reflect.getMetadata`. Uma falha de asserção. Nenhuma rodada extra foi necessária.
 - Resultado: 106 testes · 105 passando · 1 falhando · 0 não compilam
 
 #### Contagem final
@@ -324,6 +324,1336 @@ INSTRUÇÕES
 | CreateItemSchema > tipo > rejeita tipo fora do enum | a lista de mensagens não contém 'Tipo deve ser PATRIMONIAL ou CONSUMO' | oráculo errado | `invalid_type_error` do Zod só vale para tipo de dado errado. Para um texto fora do enum o Zod devolve a mensagem padrão (`Invalid enum value. Expected 'A' \| 'B', received 'X'`, verificado com um enum de exemplo). Nenhum CA define a mensagem para tipo inválido. | não se aplica |
 
 Observação (fora dos CAs): para tipo inválido o sistema devolve a mensagem padrão do Zod, em inglês, inconsistente com as demais mensagens, que são em português.
+
+### US03 — v2 (S3B-10)
+
+#### Prompt Completo (v2, prompt das lacunas)
+O prompt traz a suíte v1, o código do módulo `itens`, o trecho do schema do `Item`, o requisito vigente, as duas correções (C1, C2) e as dez lacunas (L1 a L10) da matriz. A matriz em si não foi mostrada à LLM.
+
+````
+Você vai evoluir uma suíte de testes Vitest (TypeScript, NestJS 11, Prisma 5) da US03 — Itens com tombamento.
+
+SUÍTE v1 (arquivo atual, tests/v1-llm/us03-itens.spec.ts)
+// tests/v1-llm/us03-itens.spec.ts
+import { HttpStatus } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { AccessDeniedException } from '../../src/common/exceptions/access-denied.exception';
+import { AppException } from '../../src/common/exceptions/app.exception';
+import { ResourceConflictException } from '../../src/common/exceptions/resource-conflict.exception';
+import { ResourceNotFoundException } from '../../src/common/exceptions/resource-not-found.exception';
+import { AuthGuard } from '../../src/common/auth/guards/auth.guard';
+import { RolesGuard } from '../../src/common/auth/guards/roles.guard';
+import { CreateItemSchema } from '../../src/modules/itens/dto/create-item.dto';
+import { UpdateItemSchema } from '../../src/modules/itens/dto/update-item.dto';
+import { ItensController } from '../../src/modules/itens/itens.controller';
+import { ItensService } from '../../src/modules/itens/itens.service';
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+const patrimonialValido = {
+  tipo: 'PATRIMONIAL' as const,
+  nome: 'Notebook',
+  categoriaId: 'cat-1',
+  tombamento: 'TOMB-001',
+};
+
+const consumoValido = {
+  tipo: 'CONSUMO' as const,
+  nome: 'Papel A4',
+  categoriaId: 'cat-1',
+};
+
+function mensagens(result: { success: boolean; error?: { issues: { message: string; path: (string | number)[] }[] } }) {
+  return result.error?.issues.map((i) => i.message) ?? [];
+}
+
+function caminhos(result: { success: boolean; error?: { issues: { message: string; path: (string | number)[] }[] } }) {
+  return result.error?.issues.map((i) => i.path.join('.')) ?? [];
+}
+
+/** Executa a promise, exige que rejeite com a classe esperada e devolve o erro. */
+async function esperarErro(
+  promise: Promise<unknown>,
+  classe: new (...args: any[]) => Error,
+  trecho?: string,
+  status?: number,
+) {
+  let erro: any;
+  try {
+    await promise;
+  } catch (e) {
+    erro = e;
+  }
+  expect(erro, 'era esperado que a chamada lançasse erro').toBeDefined();
+  expect(erro).toBeInstanceOf(classe);
+  if (trecho) {
+    const resposta = typeof erro.getResponse === 'function' ? JSON.stringify(erro.getResponse()) : '';
+    expect(`${erro.message} ${resposta}`).toContain(trecho);
+  }
+  if (status !== undefined && typeof erro.getStatus === 'function') {
+    expect(erro.getStatus()).toBe(status);
+  }
+  return erro;
+}
+
+function erroP2002(target: unknown) {
+  return new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+    code: 'P2002',
+    clientVersion: '5.0.0',
+    meta: target === undefined ? undefined : { target },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Schemas (DTOs)
+// ---------------------------------------------------------------------------
+
+describe('US03 - CreateItemSchema', () => {
+  describe('tipo', () => {
+    // Partição válida (PATRIMONIAL) - CA1
+    it('aceita tipo PATRIMONIAL com tombamento', () => {
+      expect(CreateItemSchema.safeParse(patrimonialValido).success).toBe(true);
+    });
+
+    // Partição válida (CONSUMO) - CA4
+    it('aceita tipo CONSUMO sem tombamento', () => {
+      expect(CreateItemSchema.safeParse(consumoValido).success).toBe(true);
+    });
+
+    // Partição inválida (valor fora do enum) - CA1
+    it('rejeita tipo fora do enum', () => {
+      const r = CreateItemSchema.safeParse({ ...patrimonialValido, tipo: 'OUTRO' });
+      expect(r.success).toBe(false);
+      expect(mensagens(r)).toContain('Tipo deve ser PATRIMONIAL ou CONSUMO');
+    });
+
+    // Partição inválida (ausente) - CA1
+    it('rejeita tipo ausente com mensagem de obrigatório', () => {
+      const { tipo: _tipo, ...semTipo } = patrimonialValido;
+      const r = CreateItemSchema.safeParse(semTipo);
+      expect(r.success).toBe(false);
+      expect(mensagens(r)).toContain('Tipo é obrigatório');
+    });
+
+    // Partição inválida (tipo de dado errado) - CA1
+    it('rejeita tipo numérico', () => {
+      const r = CreateItemSchema.safeParse({ ...patrimonialValido, tipo: 1 });
+      expect(r.success).toBe(false);
+    });
+
+    // Partição inválida (caixa diferente do enum) - CA1
+    it('rejeita tipo em minúsculas (enum é case-sensitive)', () => {
+      const r = CreateItemSchema.safeParse({ ...patrimonialValido, tipo: 'patrimonial' });
+      expect(r.success).toBe(false);
+    });
+  });
+
+  describe('nome', () => {
+    // Partição inválida (ausente) - CA1
+    it('rejeita nome ausente', () => {
+      const { nome: _n, ...semNome } = patrimonialValido;
+      const r = CreateItemSchema.safeParse(semNome);
+      expect(r.success).toBe(false);
+      expect(mensagens(r)).toContain('Nome é obrigatório');
+    });
+
+    // Valor-limite: tamanho 0 (abaixo do mínimo) - CA1
+    it('rejeita nome vazio (0 caracteres)', () => {
+      const r = CreateItemSchema.safeParse({ ...patrimonialValido, nome: '' });
+      expect(r.success).toBe(false);
+      expect(mensagens(r)).toContain('Nome é obrigatório');
+    });
+
+    // Valor-limite: só espaços vira 0 após trim - CA1
+    it('rejeita nome só com espaços (0 após trim)', () => {
+      const r = CreateItemSchema.safeParse({ ...patrimonialValido, nome: '   ' });
+      expect(r.success).toBe(false);
+    });
+
+    // Valor-limite: tamanho 1 (no mínimo) - CA1
+    it('aceita nome com 1 caractere', () => {
+      const r = CreateItemSchema.safeParse({ ...patrimonialValido, nome: 'A' });
+      expect(r.success).toBe(true);
+    });
+
+    // Partição válida: trim aplicado - CA1
+    it('remove espaços nas pontas do nome', () => {
+      const r = CreateItemSchema.safeParse({ ...patrimonialValido, nome: '  Notebook  ' });
+      expect(r.success && r.data.nome).toBe('Notebook');
+    });
+
+    // Partição inválida (tipo de dado) - CA1
+    it('rejeita nome numérico', () => {
+      expect(CreateItemSchema.safeParse({ ...patrimonialValido, nome: 123 }).success).toBe(false);
+    });
+  });
+
+  describe('categoriaId', () => {
+    // Partição inválida (ausente) - CA1
+    it('rejeita categoriaId ausente', () => {
+      const { categoriaId: _c, ...semCategoria } = patrimonialValido;
+      const r = CreateItemSchema.safeParse(semCategoria);
+      expect(r.success).toBe(false);
+      expect(mensagens(r)).toContain('Categoria é obrigatória');
+    });
+
+    // Valor-limite: tamanho 0 - CA1
+    it('rejeita categoriaId vazio', () => {
+      const r = CreateItemSchema.safeParse({ ...patrimonialValido, categoriaId: '' });
+      expect(r.success).toBe(false);
+      expect(mensagens(r)).toContain('Categoria é obrigatória');
+    });
+
+    // Valor-limite: só espaços - CA1
+    it('rejeita categoriaId só com espaços', () => {
+      expect(CreateItemSchema.safeParse({ ...patrimonialValido, categoriaId: '  ' }).success).toBe(false);
+    });
+
+    // Valor-limite: tamanho 1 - CA1
+    it('aceita categoriaId com 1 caractere', () => {
+      expect(CreateItemSchema.safeParse({ ...patrimonialValido, categoriaId: 'x' }).success).toBe(true);
+    });
+  });
+
+  describe('tombamento x tipo', () => {
+    // Critério CA2: patrimonial sem tombamento (campo ausente)
+    it('CA2: rejeita patrimonial sem tombamento', () => {
+      const { tombamento: _t, ...semTomb } = patrimonialValido;
+      const r = CreateItemSchema.safeParse(semTomb);
+      expect(r.success).toBe(false);
+      expect(mensagens(r)).toContain('Tombamento é obrigatório para item patrimonial');
+      expect(caminhos(r)).toContain('tombamento');
+    });
+
+    // Valor-limite CA2: 0 caracteres (abaixo do mínimo)
+    it('CA2: rejeita patrimonial com tombamento vazio', () => {
+      const r = CreateItemSchema.safeParse({ ...patrimonialValido, tombamento: '' });
+      expect(r.success).toBe(false);
+      expect(mensagens(r)).toContain('Tombamento inválido');
+    });
+
+    // Valor-limite CA2: só espaços vira vazio após trim
+    it('CA2: rejeita patrimonial com tombamento só de espaços', () => {
+      const r = CreateItemSchema.safeParse({ ...patrimonialValido, tombamento: '   ' });
+      expect(r.success).toBe(false);
+    });
+
+    // Valor-limite CA1: 1 caractere (limite válido)
+    it('CA1: aceita patrimonial com tombamento de 1 caractere', () => {
+      const r = CreateItemSchema.safeParse({ ...patrimonialValido, tombamento: '1' });
+      expect(r.success).toBe(true);
+    });
+
+    // Partição válida: trim - CA1
+    it('CA1: remove espaços nas pontas do tombamento', () => {
+      const r = CreateItemSchema.safeParse({ ...patrimonialValido, tombamento: '  TOMB-9  ' });
+      expect(r.success && r.data.tombamento).toBe('TOMB-9');
+    });
+
+    // Partição inválida (tipo de dado) - CA2
+    it('CA2: rejeita tombamento numérico', () => {
+      const r = CreateItemSchema.safeParse({ ...patrimonialValido, tombamento: 123 });
+      expect(r.success).toBe(false);
+    });
+
+    // Critério CA4: consumo sem tombamento é válido
+    it('CA4: aceita consumo sem tombamento', () => {
+      const r = CreateItemSchema.safeParse(consumoValido);
+      expect(r.success).toBe(true);
+      expect(r.success && r.data.tombamento).toBeUndefined();
+    });
+
+    // Partição inválida CA4: consumo com tombamento
+    it('CA4: rejeita consumo com tombamento informado', () => {
+      const r = CreateItemSchema.safeParse({ ...consumoValido, tombamento: 'TOMB-1' });
+      expect(r.success).toBe(false);
+      expect(mensagens(r)).toContain('Item de consumo não possui tombamento');
+      expect(caminhos(r)).toContain('tombamento');
+    });
+  });
+
+  describe('numeroSerie e nivelMinimo opcionais', () => {
+    // Critério CA5: omitidos
+    it('CA5: aceita cadastro sem número de série e sem nível mínimo', () => {
+      const r = CreateItemSchema.safeParse(patrimonialValido);
+      expect(r.success).toBe(true);
+      if (r.success) {
+        expect(r.data.numeroSerie).toBeUndefined();
+        expect(r.data.nivelMinimo).toBeUndefined();
+      }
+    });
+
+    // Critério CA5: informados são mantidos
+    it('CA5: mantém número de série e nível mínimo informados', () => {
+      const r = CreateItemSchema.safeParse({ ...consumoValido, numeroSerie: 'SN-1', nivelMinimo: 5 });
+      expect(r.success).toBe(true);
+      if (r.success) {
+        expect(r.data.numeroSerie).toBe('SN-1');
+        expect(r.data.nivelMinimo).toBe(5);
+      }
+    });
+
+    // Valor-limite numeroSerie: 0 caracteres
+    it('CA5: rejeita número de série vazio quando informado', () => {
+      const r = CreateItemSchema.safeParse({ ...consumoValido, numeroSerie: '' });
+      expect(r.success).toBe(false);
+      expect(mensagens(r)).toContain('Nº de série inválido');
+    });
+
+    // Valor-limite numeroSerie: só espaços
+    it('CA5: rejeita número de série só com espaços', () => {
+      expect(CreateItemSchema.safeParse({ ...consumoValido, numeroSerie: '   ' }).success).toBe(false);
+    });
+
+    // Valor-limite numeroSerie: 1 caractere
+    it('CA5: aceita número de série com 1 caractere', () => {
+      expect(CreateItemSchema.safeParse({ ...consumoValido, numeroSerie: 'S' }).success).toBe(true);
+    });
+
+    // Valor-limite nivelMinimo: -1 (abaixo da fronteira)
+    it('CA5: rejeita nível mínimo -1', () => {
+      const r = CreateItemSchema.safeParse({ ...consumoValido, nivelMinimo: -1 });
+      expect(r.success).toBe(false);
+      expect(mensagens(r)).toContain('Nível mínimo não pode ser negativo');
+    });
+
+    // Valor-limite nivelMinimo: 0 (na fronteira)
+    it('CA5: aceita nível mínimo 0', () => {
+      const r = CreateItemSchema.safeParse({ ...consumoValido, nivelMinimo: 0 });
+      expect(r.success).toBe(true);
+      expect(r.success && r.data.nivelMinimo).toBe(0);
+    });
+
+    // Valor-limite nivelMinimo: 1 (acima da fronteira)
+    it('CA5: aceita nível mínimo 1', () => {
+      expect(CreateItemSchema.safeParse({ ...consumoValido, nivelMinimo: 1 }).success).toBe(true);
+    });
+
+    // Partição inválida: não inteiro
+    it('CA5: rejeita nível mínimo decimal', () => {
+      const r = CreateItemSchema.safeParse({ ...consumoValido, nivelMinimo: 1.5 });
+      expect(r.success).toBe(false);
+      expect(mensagens(r)).toContain('Nível mínimo deve ser inteiro');
+    });
+
+    // Valor-limite: próximo ao inteiro
+    it('CA5: rejeita nível mínimo 0.1 (logo acima de 0, não inteiro)', () => {
+      expect(CreateItemSchema.safeParse({ ...consumoValido, nivelMinimo: 0.1 }).success).toBe(false);
+    });
+
+    // Partição inválida: string numérica
+    it('CA5: rejeita nível mínimo como string', () => {
+      const r = CreateItemSchema.safeParse({ ...consumoValido, nivelMinimo: '5' });
+      expect(r.success).toBe(false);
+      expect(mensagens(r)).toContain('Nível mínimo deve ser um número');
+    });
+
+    // Partição inválida: NaN
+    it('CA5: rejeita nível mínimo NaN', () => {
+      expect(CreateItemSchema.safeParse({ ...consumoValido, nivelMinimo: Number.NaN }).success).toBe(false);
+    });
+
+    // Partição válida: valor grande
+    it('CA5: aceita nível mínimo grande', () => {
+      expect(CreateItemSchema.safeParse({ ...consumoValido, nivelMinimo: 1_000_000 }).success).toBe(true);
+    });
+  });
+
+  describe('descricao', () => {
+    // Partição válida: omitida
+    it('CA1: aceita descrição omitida', () => {
+      expect(CreateItemSchema.safeParse(patrimonialValido).success).toBe(true);
+    });
+
+    // Partição válida: informada com trim
+    it('CA1: aceita descrição e remove espaços nas pontas', () => {
+      const r = CreateItemSchema.safeParse({ ...patrimonialValido, descricao: '  Dell  ' });
+      expect(r.success && r.data.descricao).toBe('Dell');
+    });
+
+    // Valor-limite: vazia é aceita (sem min)
+    it('CA1: aceita descrição vazia', () => {
+      expect(CreateItemSchema.safeParse({ ...patrimonialValido, descricao: '' }).success).toBe(true);
+    });
+
+    // Partição inválida: tipo de dado
+    it('CA1: rejeita descrição numérica', () => {
+      expect(CreateItemSchema.safeParse({ ...patrimonialValido, descricao: 10 }).success).toBe(false);
+    });
+  });
+
+  // Partição inválida: corpo vazio - CA1
+  it('CA1: rejeita objeto vazio acumulando erros dos campos obrigatórios', () => {
+    const r = CreateItemSchema.safeParse({});
+    expect(r.success).toBe(false);
+    const campos = caminhos(r);
+    expect(campos).toEqual(expect.arrayContaining(['tipo', 'nome', 'categoriaId']));
+  });
+});
+
+describe('US03 - UpdateItemSchema', () => {
+  // Partição válida: objeto vazio (tudo opcional) - CA5
+  it('aceita objeto vazio (todos os campos opcionais)', () => {
+    expect(UpdateItemSchema.safeParse({}).success).toBe(true);
+  });
+
+  // Partição válida: atualização parcial - CA5
+  it('aceita atualização parcial de campos', () => {
+    const r = UpdateItemSchema.safeParse({ nome: 'Novo nome', nivelMinimo: 3, numeroSerie: 'SN-2' });
+    expect(r.success).toBe(true);
+    expect(r.success && r.data).toEqual({ nome: 'Novo nome', nivelMinimo: 3, numeroSerie: 'SN-2' });
+  });
+
+  // Critério: tipo não muda depois de cadastrado
+  it('descarta o campo tipo (não pode ser alterado)', () => {
+    const r = UpdateItemSchema.safeParse({ tipo: 'CONSUMO', nome: 'X' });
+    expect(r.success).toBe(true);
+    expect(r.success && 'tipo' in r.data).toBe(false);
+  });
+
+  // Valor-limite nome: vazio inválido
+  it('rejeita nome vazio quando informado', () => {
+    const r = UpdateItemSchema.safeParse({ nome: '' });
+    expect(r.success).toBe(false);
+    expect(mensagens(r)).toContain('Nome é obrigatório');
+  });
+
+  // Valor-limite nome: 1 caractere
+  it('aceita nome com 1 caractere', () => {
+    expect(UpdateItemSchema.safeParse({ nome: 'A' }).success).toBe(true);
+  });
+
+  // Valor-limite categoriaId: vazio inválido
+  it('rejeita categoriaId vazio quando informado', () => {
+    expect(UpdateItemSchema.safeParse({ categoriaId: '' }).success).toBe(false);
+  });
+
+  // Valor-limite tombamento: vazio inválido
+  it('rejeita tombamento vazio quando informado', () => {
+    const r = UpdateItemSchema.safeParse({ tombamento: '' });
+    expect(r.success).toBe(false);
+    expect(mensagens(r)).toContain('Tombamento inválido');
+  });
+
+  // Valor-limite tombamento: 1 caractere
+  it('aceita tombamento com 1 caractere', () => {
+    expect(UpdateItemSchema.safeParse({ tombamento: 'T' }).success).toBe(true);
+  });
+
+  // Valor-limite numeroSerie: vazio inválido / 1 caractere válido
+  it('valida número de série nos limites (0 e 1 caractere)', () => {
+    expect(UpdateItemSchema.safeParse({ numeroSerie: '' }).success).toBe(false);
+    expect(UpdateItemSchema.safeParse({ numeroSerie: 'S' }).success).toBe(true);
+  });
+
+  // Valor-limite nivelMinimo: -1 / 0 / 1
+  it.each([
+    [-1, false],
+    [0, true],
+    [1, true],
+  ])('nível mínimo %s => válido=%s', (valor, esperado) => {
+    expect(UpdateItemSchema.safeParse({ nivelMinimo: valor }).success).toBe(esperado);
+  });
+
+  // Partição inválida nivelMinimo: decimal e string
+  it('rejeita nível mínimo decimal e string', () => {
+    expect(UpdateItemSchema.safeParse({ nivelMinimo: 2.5 }).success).toBe(false);
+    expect(UpdateItemSchema.safeParse({ nivelMinimo: '2' }).success).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Service
+// ---------------------------------------------------------------------------
+
+describe('US03 - ItensService', () => {
+  const estoqueId = 'est-1';
+  const userId = 'user-1';
+
+  let prisma: {
+    estoque: { findUnique: ReturnType<typeof vi.fn> };
+    estoqueGestor: { findUnique: ReturnType<typeof vi.fn> };
+    categoria: { findUnique: ReturnType<typeof vi.fn> };
+    item: {
+      create: ReturnType<typeof vi.fn>;
+      findMany: ReturnType<typeof vi.fn>;
+      findFirst: ReturnType<typeof vi.fn>;
+      update: ReturnType<typeof vi.fn>;
+      count: ReturnType<typeof vi.fn>;
+    };
+  };
+  let service: ItensService;
+
+  beforeEach(() => {
+    prisma = {
+      estoque: { findUnique: vi.fn().mockResolvedValue({ id: estoqueId, ativo: true }) },
+      estoqueGestor: { findUnique: vi.fn().mockResolvedValue({ estoqueId, usuarioId: userId }) },
+      categoria: { findUnique: vi.fn().mockResolvedValue({ id: 'cat-1' }) },
+      item: {
+        create: vi.fn().mockImplementation(async ({ data }) => ({ id: 'item-1', ...data })),
+        findMany: vi.fn().mockResolvedValue([]),
+        findFirst: vi.fn(),
+        update: vi.fn().mockImplementation(async ({ where, data }) => ({ id: where.id, ...data })),
+        count: vi.fn().mockResolvedValue(0),
+      },
+    };
+    service = new ItensService(prisma as any);
+  });
+
+  describe('create', () => {
+    // Critério CA1: gestor cadastra patrimonial com categoria e tombamento novo
+    it('CA1: cria item patrimonial vinculado ao estoque e inclui a categoria', async () => {
+      const resultado: any = await service.create(estoqueId, patrimonialValido, userId);
+
+      expect(prisma.item.create).toHaveBeenCalledTimes(1);
+      expect(prisma.item.create).toHaveBeenCalledWith({
+        data: {
+          tipo: 'PATRIMONIAL',
+          nome: 'Notebook',
+          descricao: undefined,
+          tombamento: 'TOMB-001',
+          numeroSerie: undefined,
+          nivelMinimo: undefined,
+          categoriaId: 'cat-1',
+          estoqueId,
+        },
+        include: { categoria: true },
+      });
+      expect(resultado.id).toBe('item-1');
+      expect(resultado.estoqueId).toBe(estoqueId);
+    });
+
+    // Critério CA1/CA7: verificação do vínculo por chave composta estoque+usuário
+    it('CA7: consulta o vínculo de gestor pela chave composta estoque + usuário', async () => {
+      await service.create(estoqueId, patrimonialValido, userId);
+      expect(prisma.estoqueGestor.findUnique).toHaveBeenCalledWith({
+        where: { estoqueId_usuarioId: { estoqueId, usuarioId: userId } },
+      });
+    });
+
+    // Critério CA4: consumo sem tombamento
+    it('CA4: cria item de consumo sem tombamento', async () => {
+      await service.create(estoqueId, consumoValido, userId);
+      const arg = prisma.item.create.mock.calls[0][0];
+      expect(arg.data.tipo).toBe('CONSUMO');
+      expect(arg.data.tombamento).toBeUndefined();
+    });
+
+    // Critério CA5: omitidos
+    it('CA5: aceita cadastro com número de série e nível mínimo omitidos', async () => {
+      await service.create(estoqueId, consumoValido, userId);
+      const arg = prisma.item.create.mock.calls[0][0];
+      expect(arg.data.numeroSerie).toBeUndefined();
+      expect(arg.data.nivelMinimo).toBeUndefined();
+    });
+
+    // Critério CA5: informados são salvos
+    it('CA5: salva número de série e nível mínimo quando informados', async () => {
+      await service.create(
+        estoqueId,
+        { ...patrimonialValido, numeroSerie: 'SN-9', nivelMinimo: 4, descricao: 'Desc' },
+        userId,
+      );
+      const arg = prisma.item.create.mock.calls[0][0];
+      expect(arg.data.numeroSerie).toBe('SN-9');
+      expect(arg.data.nivelMinimo).toBe(4);
+      expect(arg.data.descricao).toBe('Desc');
+    });
+
+    // Valor-limite nivelMinimo: 0 deve ser repassado (não confundir com ausente)
+    it('CA5: repassa nível mínimo 0 ao banco', async () => {
+      await service.create(estoqueId, { ...consumoValido, nivelMinimo: 0 }, userId);
+      expect(prisma.item.create.mock.calls[0][0].data.nivelMinimo).toBe(0);
+    });
+
+    // Critério CA7: usuário sem vínculo
+    it('CA7: lança AccessDeniedException (403) quando o usuário não é gestor do estoque', async () => {
+      prisma.estoqueGestor.findUnique.mockResolvedValue(null);
+      await esperarErro(
+        service.create(estoqueId, patrimonialValido, userId),
+        AccessDeniedException,
+        'Apenas gestores deste estoque',
+        HttpStatus.FORBIDDEN,
+      );
+      expect(prisma.item.create).not.toHaveBeenCalled();
+    });
+
+    // Partição inválida userId: ausente
+    it('CA7: lança AccessDeniedException quando não há usuário e não consulta vínculo', async () => {
+      await esperarErro(service.create(estoqueId, patrimonialValido, undefined), AccessDeniedException);
+      expect(prisma.estoqueGestor.findUnique).not.toHaveBeenCalled();
+      expect(prisma.item.create).not.toHaveBeenCalled();
+    });
+
+    // Partição inválida userId: string vazia (falsy)
+    it('CA7: trata userId vazio como sem vínculo', async () => {
+      await esperarErro(service.create(estoqueId, patrimonialValido, ''), AccessDeniedException);
+      expect(prisma.item.create).not.toHaveBeenCalled();
+    });
+
+    // Partição inválida estoque: inexistente
+    it('lança ResourceNotFoundException quando o estoque não existe', async () => {
+      prisma.estoque.findUnique.mockResolvedValue(null);
+      await esperarErro(service.create(estoqueId, patrimonialValido, userId), ResourceNotFoundException);
+      expect(prisma.item.create).not.toHaveBeenCalled();
+    });
+
+    // Critério: estoque inexistente é verificado antes da autorização
+    it('verifica a existência do estoque antes de checar o gestor', async () => {
+      prisma.estoque.findUnique.mockResolvedValue(null);
+      await esperarErro(service.create(estoqueId, patrimonialValido, userId), ResourceNotFoundException);
+      expect(prisma.estoqueGestor.findUnique).not.toHaveBeenCalled();
+    });
+
+    // Partição inválida estoque: desativado
+    it('recusa cadastro em estoque desativado com 400', async () => {
+      prisma.estoque.findUnique.mockResolvedValue({ id: estoqueId, ativo: false });
+      await esperarErro(
+        service.create(estoqueId, patrimonialValido, userId),
+        AppException,
+        'Estoque desativado não aceita novos itens',
+        HttpStatus.BAD_REQUEST,
+      );
+      expect(prisma.item.create).not.toHaveBeenCalled();
+    });
+
+    // Partição inválida categoria: inexistente
+    it('lança ResourceNotFoundException quando a categoria não existe', async () => {
+      prisma.categoria.findUnique.mockResolvedValue(null);
+      await esperarErro(service.create(estoqueId, patrimonialValido, userId), ResourceNotFoundException);
+      expect(prisma.categoria.findUnique).toHaveBeenCalledWith({ where: { id: 'cat-1' } });
+      expect(prisma.item.create).not.toHaveBeenCalled();
+    });
+
+    // Critério CA3: tombamento duplicado
+    it('CA3: converte P2002 em tombamento para ResourceConflictException com mensagem clara', async () => {
+      prisma.item.create.mockRejectedValue(erroP2002(['tombamento']));
+      await esperarErro(
+        service.create(estoqueId, patrimonialValido, userId),
+        ResourceConflictException,
+        'Já existe um item com este tombamento.',
+        HttpStatus.CONFLICT,
+      );
+    });
+
+    // Partição: target como string em vez de array
+    it('CA3: reconhece tombamento duplicado quando meta.target é string', async () => {
+      prisma.item.create.mockRejectedValue(erroP2002('Item_tombamento_key'));
+      await esperarErro(
+        service.create(estoqueId, patrimonialValido, userId),
+        ResourceConflictException,
+        'Já existe um item com este tombamento.',
+      );
+    });
+
+    // Partição: número de série duplicado
+    it('CA5: converte P2002 em numeroSerie para conflito com mensagem de número de série', async () => {
+      prisma.item.create.mockRejectedValue(erroP2002(['numeroSerie']));
+      await esperarErro(
+        service.create(estoqueId, patrimonialValido, userId),
+        ResourceConflictException,
+        'Já existe um item com este número de série.',
+      );
+    });
+
+    // Partição: P2002 em outro campo
+    it('converte P2002 em outro campo para mensagem genérica de duplicado', async () => {
+      prisma.item.create.mockRejectedValue(erroP2002(['outro_campo']));
+      await esperarErro(service.create(estoqueId, patrimonialValido, userId), ResourceConflictException, 'Item duplicado.');
+    });
+
+    // Partição: P2002 sem meta
+    it('converte P2002 sem meta para mensagem genérica de duplicado', async () => {
+      prisma.item.create.mockRejectedValue(erroP2002(undefined));
+      await esperarErro(service.create(estoqueId, patrimonialValido, userId), ResourceConflictException, 'Item duplicado.');
+    });
+
+    // Partição: erro Prisma com outro código é propagado
+    it('propaga erros Prisma que não sejam P2002', async () => {
+      const erro = new Prisma.PrismaClientKnownRequestError('Falha', { code: 'P2025', clientVersion: '5.0.0' });
+      prisma.item.create.mockRejectedValue(erro);
+      await expect(service.create(estoqueId, patrimonialValido, userId)).rejects.toBe(erro);
+    });
+
+    // Partição: erro genérico é propagado
+    it('propaga erros inesperados sem traduzir', async () => {
+      const erro = new Error('boom');
+      prisma.item.create.mockRejectedValue(erro);
+      await expect(service.create(estoqueId, patrimonialValido, userId)).rejects.toBe(erro);
+    });
+  });
+
+  describe('findAllByEstoque', () => {
+    // Critério CA6: filtro pelo estoque
+    it('CA6: busca e conta apenas itens do estoque informado', async () => {
+      await service.findAllByEstoque(estoqueId, { page: 1, limit: 10 } as any);
+      expect(prisma.item.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { estoqueId } }),
+      );
+      expect(prisma.item.count).toHaveBeenCalledWith({ where: { estoqueId } });
+    });
+
+    // Critério CA1: item criado aparece na listagem
+    it('CA1: retorna na listagem os itens do estoque com categoria incluída e ordenados por nome', async () => {
+      const itens = [{ id: 'i1', nome: 'A', estoqueId }, { id: 'i2', nome: 'B', estoqueId }];
+      prisma.item.findMany.mockResolvedValue(itens);
+      prisma.item.count.mockResolvedValue(2);
+
+      const resultado = await service.findAllByEstoque(estoqueId, { page: 1, limit: 10 } as any);
+
+      expect(prisma.item.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ include: { categoria: true }, orderBy: { nome: 'asc' } }),
+      );
+      const serializado = JSON.stringify(resultado);
+      expect(serializado).toContain('i1');
+      expect(serializado).toContain('i2');
+    });
+
+    // Valor-limite page: 1 (primeira página) => skip 0
+    it('página 1 usa skip 0 e take igual ao limite', async () => {
+      await service.findAllByEstoque(estoqueId, { page: 1, limit: 10 } as any);
+      expect(prisma.item.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 0, take: 10 }));
+    });
+
+    // Valor-limite page: 2 (logo após a fronteira)
+    it('página 2 usa skip igual ao limite', async () => {
+      await service.findAllByEstoque(estoqueId, { page: 2, limit: 10 } as any);
+      expect(prisma.item.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 10, take: 10 }));
+    });
+
+    // Partição: página alta e limite diferente
+    it('página 3 com limite 5 usa skip 10', async () => {
+      await service.findAllByEstoque(estoqueId, { page: 3, limit: 5 } as any);
+      expect(prisma.item.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 10, take: 5 }));
+    });
+
+    // Valor-limite limite: 1
+    it('limite 1 usa take 1', async () => {
+      await service.findAllByEstoque(estoqueId, { page: 1, limit: 1 } as any);
+      expect(prisma.item.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 0, take: 1 }));
+    });
+
+    // Partição: estoque sem itens
+    it('estoque sem itens retorna listagem vazia sem erro', async () => {
+      const resultado = await service.findAllByEstoque(estoqueId, { page: 1, limit: 10 } as any);
+      expect(resultado).toBeDefined();
+    });
+
+    // Partição inválida: estoque inexistente
+    it('lança ResourceNotFoundException quando o estoque não existe e não consulta itens', async () => {
+      prisma.estoque.findUnique.mockResolvedValue(null);
+      await esperarErro(
+        service.findAllByEstoque(estoqueId, { page: 1, limit: 10 } as any),
+        ResourceNotFoundException,
+      );
+      expect(prisma.item.findMany).not.toHaveBeenCalled();
+      expect(prisma.item.count).not.toHaveBeenCalled();
+    });
+
+    // Critério: leitura não exige gestor
+    it('CA7: a leitura não consulta vínculo de gestor (qualquer autenticado lê)', async () => {
+      await service.findAllByEstoque(estoqueId, { page: 1, limit: 10 } as any);
+      expect(prisma.estoqueGestor.findUnique).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('update', () => {
+    const itemPatrimonial = { id: 'item-1', estoqueId, tipo: 'PATRIMONIAL' };
+    const itemConsumo = { id: 'item-2', estoqueId, tipo: 'CONSUMO' };
+
+    // Critério CA7: edição por não gestor
+    it('CA7: lança AccessDeniedException (403) quando não é gestor do estoque', async () => {
+      prisma.estoqueGestor.findUnique.mockResolvedValue(null);
+      await esperarErro(
+        service.update(estoqueId, 'item-1', { nome: 'X' }, userId),
+        AccessDeniedException,
+        'Apenas gestores deste estoque',
+        HttpStatus.FORBIDDEN,
+      );
+      expect(prisma.item.update).not.toHaveBeenCalled();
+    });
+
+    // Partição inválida userId: ausente
+    it('CA7: lança AccessDeniedException quando não há usuário', async () => {
+      await esperarErro(service.update(estoqueId, 'item-1', { nome: 'X' }, undefined), AccessDeniedException);
+      expect(prisma.item.update).not.toHaveBeenCalled();
+    });
+
+    // Partição inválida estoque inexistente
+    it('lança ResourceNotFoundException quando o estoque não existe', async () => {
+      prisma.estoque.findUnique.mockResolvedValue(null);
+      await esperarErro(service.update(estoqueId, 'item-1', { nome: 'X' }, userId), ResourceNotFoundException);
+      expect(prisma.item.update).not.toHaveBeenCalled();
+    });
+
+    // Partição inválida item inexistente / de outro estoque
+    it('lança ResourceNotFoundException quando o item não pertence ao estoque', async () => {
+      prisma.item.findFirst.mockResolvedValue(null);
+      await esperarErro(service.update(estoqueId, 'item-x', { nome: 'X' }, userId), ResourceNotFoundException);
+      expect(prisma.item.findFirst).toHaveBeenCalledWith({ where: { id: 'item-x', estoqueId } });
+      expect(prisma.item.update).not.toHaveBeenCalled();
+    });
+
+    // Critério CA5: atualiza número de série e nível mínimo
+    it('CA5: atualiza item repassando os campos informados e incluindo a categoria', async () => {
+      prisma.item.findFirst.mockResolvedValue(itemPatrimonial);
+      const dto = { nome: 'Novo', numeroSerie: 'SN-5', nivelMinimo: 2 };
+
+      await service.update(estoqueId, 'item-1', dto, userId);
+
+      expect(prisma.item.update).toHaveBeenCalledWith({
+        where: { id: 'item-1' },
+        data: dto,
+        include: { categoria: true },
+      });
+    });
+
+    // Partição válida: patrimonial altera tombamento
+    it('CA1: permite alterar tombamento de item patrimonial', async () => {
+      prisma.item.findFirst.mockResolvedValue(itemPatrimonial);
+      await service.update(estoqueId, 'item-1', { tombamento: 'TOMB-NOVO' }, userId);
+      expect(prisma.item.update.mock.calls[0][0].data.tombamento).toBe('TOMB-NOVO');
+    });
+
+    // Partição inválida: consumo com tombamento (CA4)
+    it('CA4: recusa tombamento em item de consumo com 400', async () => {
+      prisma.item.findFirst.mockResolvedValue(itemConsumo);
+      await esperarErro(
+        service.update(estoqueId, 'item-2', { tombamento: 'TOMB-1' }, userId),
+        AppException,
+        'Item de consumo não possui tombamento',
+        HttpStatus.BAD_REQUEST,
+      );
+      expect(prisma.item.update).not.toHaveBeenCalled();
+    });
+
+    // Partição válida: consumo sem tombamento no dto
+    it('CA4: permite editar item de consumo sem enviar tombamento', async () => {
+      prisma.item.findFirst.mockResolvedValue(itemConsumo);
+      await service.update(estoqueId, 'item-2', { nome: 'Papel A3' }, userId);
+      expect(prisma.item.update).toHaveBeenCalledTimes(1);
+    });
+
+    // Valor-limite: dto vazio em item de consumo (tombamento === undefined)
+    it('CA4: permite dto vazio em item de consumo', async () => {
+      prisma.item.findFirst.mockResolvedValue(itemConsumo);
+      await service.update(estoqueId, 'item-2', {}, userId);
+      expect(prisma.item.update).toHaveBeenCalledTimes(1);
+    });
+
+    // Partição: categoria informada é validada
+    it('valida a existência da nova categoria quando categoriaId é informado', async () => {
+      prisma.item.findFirst.mockResolvedValue(itemPatrimonial);
+      await service.update(estoqueId, 'item-1', { categoriaId: 'cat-2' }, userId);
+      expect(prisma.categoria.findUnique).toHaveBeenCalledWith({ where: { id: 'cat-2' } });
+    });
+
+    // Partição inválida: categoria inexistente
+    it('lança ResourceNotFoundException quando a nova categoria não existe', async () => {
+      prisma.item.findFirst.mockResolvedValue(itemPatrimonial);
+      prisma.categoria.findUnique.mockResolvedValue(null);
+      await esperarErro(service.update(estoqueId, 'item-1', { categoriaId: 'cat-x' }, userId), ResourceNotFoundException);
+      expect(prisma.item.update).not.toHaveBeenCalled();
+    });
+
+    // Partição: sem categoriaId não consulta categoria
+    it('não consulta categoria quando categoriaId não é informado', async () => {
+      prisma.item.findFirst.mockResolvedValue(itemPatrimonial);
+      await service.update(estoqueId, 'item-1', { nome: 'X' }, userId);
+      expect(prisma.categoria.findUnique).not.toHaveBeenCalled();
+    });
+
+    // Critério CA3: duplicidade na edição
+    it('CA3: converte P2002 de tombamento na edição em ResourceConflictException', async () => {
+      prisma.item.findFirst.mockResolvedValue(itemPatrimonial);
+      prisma.item.update.mockRejectedValue(erroP2002(['tombamento']));
+      await esperarErro(
+        service.update(estoqueId, 'item-1', { tombamento: 'TOMB-001' }, userId),
+        ResourceConflictException,
+        'Já existe um item com este tombamento.',
+      );
+    });
+
+    // Partição: duplicidade de número de série na edição
+    it('converte P2002 de número de série na edição em conflito', async () => {
+      prisma.item.findFirst.mockResolvedValue(itemPatrimonial);
+      prisma.item.update.mockRejectedValue(erroP2002(['numeroSerie']));
+      await esperarErro(
+        service.update(estoqueId, 'item-1', { numeroSerie: 'SN-1' }, userId),
+        ResourceConflictException,
+        'Já existe um item com este número de série.',
+      );
+    });
+
+    // Partição: erro inesperado propagado
+    it('propaga erros inesperados na edição', async () => {
+      prisma.item.findFirst.mockResolvedValue(itemPatrimonial);
+      const erro = new Error('boom');
+      prisma.item.update.mockRejectedValue(erro);
+      await expect(service.update(estoqueId, 'item-1', { nome: 'X' }, userId)).rejects.toBe(erro);
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Controller
+// ---------------------------------------------------------------------------
+
+describe('US03 - ItensController', () => {
+  let itensService: {
+    create: ReturnType<typeof vi.fn>;
+    findAllByEstoque: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
+  };
+  let controller: ItensController;
+
+  beforeEach(() => {
+    itensService = {
+      create: vi.fn().mockResolvedValue({ id: 'item-1' }),
+      findAllByEstoque: vi.fn().mockResolvedValue({ data: [] }),
+      update: vi.fn().mockResolvedValue({ id: 'item-1' }),
+    };
+    controller = new ItensController(itensService as any);
+  });
+
+  // Critério CA7: proteção por guards no controller
+  it('CA7: aplica AuthGuard e RolesGuard ao controller', () => {
+    const guards = Reflect.getMetadata('__guards__', ItensController) as unknown[];
+    expect(guards).toEqual(expect.arrayContaining([AuthGuard, RolesGuard]));
+  });
+
+  // Critério CA1: delega criação com estoque, dto e userId
+  it('CA1: create delega ao service com estoqueId, dto e userId do usuário atual', async () => {
+    const dto = { ...patrimonialValido } as any;
+    await controller.create('est-1', dto, { userId: 'u1' } as any);
+    expect(itensService.create).toHaveBeenCalledWith('est-1', dto, 'u1');
+  });
+
+  // Partição inválida: sem usuário
+  it('CA7: create repassa userId undefined quando não há usuário atual', async () => {
+    const dto = { ...patrimonialValido } as any;
+    await controller.create('est-1', dto, undefined);
+    expect(itensService.create).toHaveBeenCalledWith('est-1', dto, undefined);
+  });
+
+  // Critério CA6: listagem delega com estoque e query
+  it('CA6: findAll delega ao service com estoqueId e query de paginação', async () => {
+    const query = { page: 2, limit: 5 } as any;
+    await controller.findAll('est-1', query);
+    expect(itensService.findAllByEstoque).toHaveBeenCalledWith('est-1', query);
+  });
+
+  // Critério CA7: edição delega com userId
+  it('CA7: update delega ao service com estoqueId, id, dto e userId', async () => {
+    const dto = { nome: 'Novo' } as any;
+    await controller.update('est-1', 'item-1', dto, { userId: 'u1' } as any);
+    expect(itensService.update).toHaveBeenCalledWith('est-1', 'item-1', dto, 'u1');
+  });
+
+  // Partição inválida: edição sem usuário
+  it('CA7: update repassa userId undefined quando não há usuário atual', async () => {
+    const dto = { nome: 'Novo' } as any;
+    await controller.update('est-1', 'item-1', dto, undefined);
+    expect(itensService.update).toHaveBeenCalledWith('est-1', 'item-1', dto, undefined);
+  });
+
+  // Critério: propaga a exceção 403 do service
+  it('CA7: propaga AccessDeniedException lançada pelo service', async () => {
+    itensService.create.mockRejectedValue(new AccessDeniedException('negado'));
+    await esperarErro(
+      controller.create('est-1', { ...patrimonialValido } as any, { userId: 'u2' } as any),
+      AccessDeniedException,
+    );
+  });
+});
+
+CÓDIGO DO MÓDULO (não altere)
+
+// ARQUIVO: .\src\modules\itens\dto\create-item.dto.ts
+import { createZodDto } from 'nestjs-zod';
+import { z } from 'zod';
+
+const texto = (obrigatorio: string) =>
+  z.string({ required_error: obrigatorio }).trim().min(1, obrigatorio);
+
+export const ItemBaseSchema = z.object({
+  tipo: z.enum(['PATRIMONIAL', 'CONSUMO'], {
+    required_error: 'Tipo é obrigatório',
+    invalid_type_error: 'Tipo deve ser PATRIMONIAL ou CONSUMO',
+  }),
+  nome: texto('Nome é obrigatório'),
+  categoriaId: texto('Categoria é obrigatória'),
+  descricao: z.string().trim().optional(),
+  tombamento: z.string().trim().min(1, 'Tombamento inválido').optional(),
+  numeroSerie: z.string().trim().min(1, 'Nº de série inválido').optional(),
+  nivelMinimo: z
+    .number({ invalid_type_error: 'Nível mínimo deve ser um número' })
+    .int('Nível mínimo deve ser inteiro')
+    .min(0, 'Nível mínimo não pode ser negativo')
+    .optional(),
+});
+
+export const CreateItemSchema = ItemBaseSchema.superRefine((data, ctx) => {
+  if (data.tipo === 'PATRIMONIAL' && !data.tombamento) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['tombamento'],
+      message: 'Tombamento é obrigatório para item patrimonial',
+    });
+  }
+  if (data.tipo === 'CONSUMO' && data.tombamento) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['tombamento'],
+      message: 'Item de consumo não possui tombamento',
+    });
+  }
+});
+
+export class CreateItemDto extends createZodDto(CreateItemSchema) {}
+
+
+// ARQUIVO: .\src\modules\itens\dto\update-item.dto.ts
+import { createZodDto } from 'nestjs-zod';
+import { ItemBaseSchema } from './create-item.dto';
+
+// O tipo do item não muda depois de cadastrado.
+// As regras que dependem do tipo são checadas no service.
+export const UpdateItemSchema = ItemBaseSchema.omit({ tipo: true }).partial();
+
+export class UpdateItemDto extends createZodDto(UpdateItemSchema) {}
+
+
+// ARQUIVO: .\src\modules\itens\itens.controller.ts
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import type { CurrentUser } from '../../common/auth/current-user.interface';
+import { GetCurrentUser } from '../../common/auth/decorators/current-user.decorator';
+import { AuthGuard } from '../../common/auth/guards/auth.guard';
+import { RolesGuard } from '../../common/auth/guards/roles.guard';
+import { PaginationQueryDto } from '../../common/pagination/pagination-query.dto';
+import { CreateItemDto } from './dto/create-item.dto';
+import { UpdateItemDto } from './dto/update-item.dto';
+import { ItensService } from './itens.service';
+
+@Controller('estoques/:estoqueId/itens')
+@UseGuards(AuthGuard, RolesGuard)
+export class ItensController {
+  constructor(private readonly itensService: ItensService) {}
+
+  // Cadastro e edição: só o gestor daquele estoque (403 para os demais)
+  @Post()
+  create(
+    @Param('estoqueId') estoqueId: string,
+    @Body() dto: CreateItemDto,
+    @GetCurrentUser() user?: CurrentUser,
+  ) {
+    return this.itensService.create(estoqueId, dto, user?.userId);
+  }
+
+  // Leitura: qualquer usuário autenticado
+  @Get()
+  findAll(@Param('estoqueId') estoqueId: string, @Query() query: PaginationQueryDto) {
+    return this.itensService.findAllByEstoque(estoqueId, query);
+  }
+
+  @Patch(':id')
+  update(
+    @Param('estoqueId') estoqueId: string,
+    @Param('id') id: string,
+    @Body() dto: UpdateItemDto,
+    @GetCurrentUser() user?: CurrentUser,
+  ) {
+    return this.itensService.update(estoqueId, id, dto, user?.userId);
+  }
+}
+
+
+// ARQUIVO: .\src\modules\itens\itens.service.ts
+import { HttpStatus, Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { AccessDeniedException } from '../../common/exceptions/access-denied.exception';
+import { AppException } from '../../common/exceptions/app.exception';
+import { ErrorCode } from '../../common/exceptions/error-code.enum';
+import { ResourceConflictException } from '../../common/exceptions/resource-conflict.exception';
+import { ResourceNotFoundException } from '../../common/exceptions/resource-not-found.exception';
+import { PaginatedResponseDto } from '../../common/pagination/paginated-response.dto';
+import type { PaginationQueryDto } from '../../common/pagination/pagination-query.dto';
+import { PrismaService } from '../../database/prisma.service';
+import type { CreateItemDto } from './dto/create-item.dto';
+import type { UpdateItemDto } from './dto/update-item.dto';
+
+@Injectable()
+export class ItensService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async create(estoqueId: string, dto: CreateItemDto, userId?: string) {
+    const estoque = await this.findEstoqueOrFail(estoqueId);
+    await this.assertGestorDoEstoque(estoqueId, userId);
+    if (!estoque.ativo) {
+      throw new AppException(
+        ErrorCode.VALIDATION_FAILED,
+        'Estoque desativado não aceita novos itens',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    await this.assertCategoriaExiste(dto.categoriaId);
+
+    try {
+      return await this.prisma.item.create({
+        data: {
+          tipo: dto.tipo,
+          nome: dto.nome,
+          descricao: dto.descricao,
+          tombamento: dto.tombamento,
+          numeroSerie: dto.numeroSerie,
+          nivelMinimo: dto.nivelMinimo,
+          categoriaId: dto.categoriaId,
+          estoqueId,
+        },
+        include: { categoria: true },
+      });
+    } catch (error) {
+      this.traduzirErroDeUnicidade(error);
+    }
+  }
+
+  async findAllByEstoque(estoqueId: string, query: PaginationQueryDto) {
+    await this.findEstoqueOrFail(estoqueId);
+
+    const where = { estoqueId };
+    const skip = (query.page - 1) * query.limit;
+
+    const [items, total] = await Promise.all([
+      this.prisma.item.findMany({
+        where,
+        include: { categoria: true },
+        orderBy: { nome: 'asc' },
+        skip,
+        take: query.limit,
+      }),
+      this.prisma.item.count({ where }),
+    ]);
+
+    return PaginatedResponseDto.of(items, total, query);
+  }
+
+  async update(estoqueId: string, itemId: string, dto: UpdateItemDto, userId?: string) {
+    await this.findEstoqueOrFail(estoqueId);
+    await this.assertGestorDoEstoque(estoqueId, userId);
+
+    const item = await this.prisma.item.findFirst({
+      where: { id: itemId, estoqueId },
+    });
+    if (!item) {
+      throw new ResourceNotFoundException('Item', itemId);
+    }
+
+    if (item.tipo === 'CONSUMO' && dto.tombamento !== undefined) {
+      throw new AppException(
+        ErrorCode.VALIDATION_FAILED,
+        'Item de consumo não possui tombamento',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    if (dto.categoriaId) {
+      await this.assertCategoriaExiste(dto.categoriaId);
+    }
+
+    try {
+      return await this.prisma.item.update({
+        where: { id: itemId },
+        data: dto,
+        include: { categoria: true },
+      });
+    } catch (error) {
+      this.traduzirErroDeUnicidade(error);
+    }
+  }
+
+  private async findEstoqueOrFail(estoqueId: string) {
+    const estoque = await this.prisma.estoque.findUnique({
+      where: { id: estoqueId },
+    });
+    if (!estoque) {
+      throw new ResourceNotFoundException('Estoque', estoqueId);
+    }
+    return estoque;
+  }
+
+  private async assertCategoriaExiste(categoriaId: string) {
+    const categoria = await this.prisma.categoria.findUnique({
+      where: { id: categoriaId },
+    });
+    if (!categoria) {
+      throw new ResourceNotFoundException('Categoria', categoriaId);
+    }
+  }
+
+  // Papel de gestor é por estoque (docs/permissoes.md, regra 2)
+  private async assertGestorDoEstoque(estoqueId: string, userId?: string) {
+    const vinculo = userId
+      ? await this.prisma.estoqueGestor.findUnique({
+          where: { estoqueId_usuarioId: { estoqueId, usuarioId: userId } },
+        })
+      : null;
+
+    if (!vinculo) {
+      throw new AccessDeniedException(
+        'Apenas gestores deste estoque podem cadastrar ou editar itens.',
+      );
+    }
+  }
+
+  private traduzirErroDeUnicidade(error: unknown): never {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      const campos = String(error.meta?.target ?? '');
+      if (campos.includes('tombamento')) {
+        throw new ResourceConflictException('Já existe um item com este tombamento.');
+      }
+      if (campos.includes('numeroSerie')) {
+        throw new ResourceConflictException('Já existe um item com este número de série.');
+      }
+      throw new ResourceConflictException('Item duplicado.');
+    }
+    throw error;
+  }
+}
+
+
+// ARQUIVO: .\src\common\pagination\paginated-response.dto.ts
+import { ApiProperty } from '@nestjs/swagger';
+import type { PaginationQueryDto } from './pagination-query.dto';
+
+export class PaginationMetaDto {
+  @ApiProperty({ example: 1, description: 'Página atual' })
+  page: number;
+
+  @ApiProperty({ example: 20, description: 'Itens por página' })
+  limit: number;
+
+  @ApiProperty({ example: 150, description: 'Total de itens' })
+  total: number;
+
+  @ApiProperty({ example: 8, description: 'Total de páginas' })
+  totalPages: number;
+}
+
+export class PaginatedResponseDto<T> {
+  @ApiProperty({ type: 'array', description: 'Lista de itens' })
+  items: T[];
+
+  @ApiProperty({ description: 'Metadados de paginação' })
+  meta: PaginationMetaDto;
+
+  static of<T>(items: T[], total: number, query: PaginationQueryDto): PaginatedResponseDto<T> {
+    return {
+      items,
+      meta: {
+        page: query.page,
+        limit: query.limit,
+        total,
+        totalPages: Math.ceil(total / query.limit),
+      },
+    };
+  }
+}
+
+
+TRECHO DO SCHEMA PRISMA (para o fake em memória)
+model Item {
+  id          String   @id @default(uuid())
+  tipo        TipoItem            // PATRIMONIAL | CONSUMO
+  tombamento  String?  @unique    // único globalmente, opcional
+  numeroSerie String?  @unique
+  nome        String
+  nivelMinimo Int?
+  categoriaId String
+  estoqueId   String
+}
+No Postgres, valores NULL não colidem em colunas @unique.
+
+REQUISITO VIGENTE (não mude estas regras)
+- Item patrimonial exige tombamento, único globalmente (entre todos os estoques); item de consumo não tem tombamento.
+- Só o gestor do estoque (vínculo EstoqueGestor) cadastra e edita; qualquer outro usuário recebe 403, seja requisitante ou ADMIN sem vínculo.
+- Nível mínimo: inteiro >= 0. Listagem: só itens do estoque pedido, no formato { items, meta: { page, limit, total, totalPages } }.
+
+TAREFA
+Gere o arquivo completo tests/v2/us03-itens.spec.ts (imports apontando para ../../src/...).
+Mantenha todos os testes da v1 exatamente como estão, exceto pelas correções (C) e inclusões (L) abaixo.
+Cada teste novo ou alterado leva o comentário "// LACUNA: CT-03-xx" e o ID de partição ou limite.
+Não fixe textos de mensagem de erro novos: use a classe da exceção, o status HTTP e o path do campo.
+
+CORREÇÕES
+C1 (CT-03-04): o teste "rejeita tipo fora do enum" falha porque espera a mensagem 'Tipo deve ser PATRIMONIAL ou CONSUMO'. Troque por: success false e path contendo 'tipo'.
+C2 (CT-03-26): o teste "estoque sem itens retorna listagem vazia sem erro" só faz toBeDefined(). Verifique que items é [] e meta.total é 0.
+
+LACUNAS A INCLUIR
+L1 (CT-03-27): estoque com exatamente 1 item: items com 1 elemento e meta.total 1.
+L2 (CT-03-24): estoque com 3 itens: devolve exatamente os 3.
+L3 (CT-03-25): dois estoques com itens: a listagem de um não traz itens do outro (fake em memória que respeite o where).
+L4 (CT-03-32/33): requisitante (userId sem vínculo de gestor) tenta cadastrar e editar: 403, nada criado nem alterado.
+L5 (CT-03-34): usuário ADMIN sem vínculo de gestor no estoque tenta cadastrar: 403.
+L6 (CT-03-14): dois patrimoniais com tombamentos distintos: ambos criados.
+L7 (CT-03-15): dois itens de consumo sem tombamento no mesmo estoque: ambos criados (ausência de tombamento não é duplicado).
+L8 (CT-03-13): tombamento já usado por item de outro estoque: recusado com conflito (409).
+L9 (CT-03-37): editar patrimonial mantendo o próprio tombamento: aceito, sem conflito.
+L10 (CT-03-35): editar patrimonial enviando tombamento vazio: recusado pela validação (UpdateItemSchema) e o tombamento anterior permanece.
+Para L6 a L9 use um fake em memória de prisma.item com unicidade global de tombamento (valores nulos/undefined não colidem), documentado no próprio arquivo.
+
+Responda com um único bloco de código.
+````
+
+#### Rodada 1 (v2)
+- Data: 14/11/2026
+- LLM e configuração: a mesma da v1 (Claude Sonnet 5.5, claude.ai), conversa nova, sem anexos, busca na web desligada.
+- Prompt completo: o da seção acima.
+- Resumo da resposta: um único arquivo, `tests/v2/us03-itens.spec.ts`, com os 106 testes da v1 mais 11 testes novos. As duas correções entraram nos testes existentes: C1 (CT-03-04, tipo fora do enum, agora confere o path `tipo` e não o texto da mensagem) e C2 (CT-03-26, estoque vazio, agora confere `items` vazio e `meta.total` 0). Os 11 testes novos usam um fake em memória de `prisma.item`, com unicidade global de `tombamento` e `numeroSerie` e sem colisão para valores nulos, e cobrem as lacunas L1 a L10 (CT-03-27, 24, 25, 32, 33, 34, 14, 15, 13, 37 e 35). Cada teste novo ou alterado traz o comentário `// LACUNA: CT-03-xx`.
+- Verificação contra a v1 (`git diff --no-index`): 291 linhas adicionadas e 6 removidas. As 6 removidas são o cabeçalho do arquivo, o comentário e a asserção de C1 e o comentário e as duas linhas de C2. Nenhum outro teste da v1 foi alterado.
+- Execução: `npx vitest run --config vitest.tests.config.ts tests/v2`
+- Problemas observados: nenhum erro de import, de tipo ou de setup. Nenhuma falha de asserção. Nenhuma rodada extra foi necessária.
+- Resultado: 117 testes · 117 passando · 0 falhando · 0 não compilam
+- Ajustes manuais: dois textos com palavras coladas, o comentário do CT-03-37 (`consigomesmo` passou a `consigo mesmo`) e o nome do teste do CT-03-35 (`anteriorpermanece` passou a `anterior permanece`). Nenhuma lógica foi alterada.
+
+#### Contagem final
+| Passando | Falhando | Não compilam |
+|---|---|---|
+| 117 | 0 | 0 |
+
+#### Testes comentados por não compilar
+| Teste | Motivo |
+|---|---|
+| nenhum | não se aplica |
+
+#### Investigação das falhas
+| Teste | Erro | Classificação | Evidência | Issue |
+|---|---|---|---|---|
+| nenhuma falha | não se aplica | não se aplica | `npx vitest run --config vitest.tests.config.ts tests/v2`: 117 de 117 passando. O teste que falhava na v1 (oráculo errado sobre a mensagem do Zod) foi corrigido em C1. | não se aplica |
+
+#### Cobertura (execução com `--coverage --coverage.reportsDirectory=../docs/testes/relatorios/v2`)
+Mesmo escopo e mesmas ferramentas da v1 (Vitest 4.1.8, provider v8, 4 arquivos de produção do módulo `itens`).
+
+| Arquivo | Statements | Branches | Funções | Linhas | Linhas com ramo não coberto |
+|---|---|---|---|---|---|
+| `itens.controller.ts` | 100% | 100% | 100% | 100% | — |
+| `itens.service.ts` | 100% | 96,66% (29/30) | 100% | 100% | 14 |
+| `dto/create-item.dto.ts` | 100% | 100% | 100% | 100% | — |
+| `dto/update-item.dto.ts` | 100% | 100% | 100% | 100% | — |
+| **Total** | **100% (60/60)** | **97,36% (37/38)** | **100% (14/14)** | **100% (60/60)** | |
+
+O branch não coberto é o da linha 14 (`@Injectable()`), o mesmo da v1, associado ao decorator e não a uma decisão do código de negócio.
+
+#### Revisão dos testes novos contra o requisito
+- O fake reproduz o que o schema define: `tombamento` e `numeroSerie` únicos globalmente, valores nulos sem colisão, o próprio item ignorado na checagem de unicidade na edição.
+- O 409 de CT-03-13 e o 403 de CT-03-32, 33 e 34 saem do `ItensService` real, que traduz o P2002 do fake e consulta o vínculo de gestor. Nenhum erro é lançado direto pelo teste.
+- A listagem (CT-03-24, 25, 26 e 27) usa o `where`, o `skip` e o `take` que o service envia e confere `items` e `meta.total`.
+- Ressalva 1 (CT-03-35): o teste confere que o `UpdateItemSchema` recusa o tombamento vazio, mas o `service.update` não é chamado. As asserções "update não chamado" e "tombamento anterior permanece" são sempre verdadeiras, e a parte "anterior mantido" não é verificada de forma independente. O caso continua Parcial na matriz.
+- Ressalva 2 (CT-03-32, 33 e 34): o service só consulta o vínculo de gestor e não lê o perfil. O teste de ADMIN sem vínculo percorre o mesmo caminho do requisitante.
+- Ressalva 3: o fake é simulação, e não banco real. Os casos que dependem dele ficam como Sim* na matriz.
 
 ## US04 — Empréstimo e devolução (Theo)
 
@@ -1102,29 +2432,28 @@ INSTRUÇÕES
 |---|---|---|---|---|
 | EmprestimosService.create > deixa o prazo indefinido (null) quando omitido | `expected undefined to be null` (linha 470) | erro do teste (setup do mock) | A asserção da linha 468, que exige `prazoDevolucao: null` na chamada de `tx.emprestimo.create`, passou, então o service grava `null` (`dto.prazoDevolucao ?? null`). A linha 470 lê o retorno de `create`, que é o resultado do `tx.emprestimo.update` mockado repassado por `comFlagTermo`. O mock do update não traz `prazoDevolucao`, daí `undefined`. | não se aplica |
 | EmprestimosService.create > deixa o prazo indefinido (null) quando nulo | igual ao anterior | erro do teste (setup do mock) | Mesma causa e mesma linha. | não se aplica |
-| EmprestimosService.create > responsável com item em atraso > impede novo empréstimo para responsável com item em atraso | a promise resolveu (`AGUARDANDO_TERMO`) em vez de rejeitar | defeito real | `create` não consulta empréstimos ativos vencidos do responsável. `estaAtrasado` só é usado em `findPendentes` e não há menção a atraso ou pendência no fluxo de criação. O CA9 (premissa A5) não está implementado. O campo `justificativaPermanencia` já existe no schema, sem uso. | Issue 1 |
-| EmprestimosService.create > responsável com item em atraso > informa a pendência na mensagem de erro | `Esperava que a promessa fosse rejeitada` | defeito real (mesma causa do anterior) | Como não há bloqueio, nenhum erro é lançado, então não existe mensagem de pendência. | Issue 1 |
+| EmprestimosService.create > responsável com item em atraso > impede novo empréstimo para responsável com item em atraso | a promise resolveu (`AGUARDANDO_TERMO`) em vez de rejeitar | defeito real | `create` não consulta empréstimos ativos vencidos do responsável. `estaAtrasado` só é usado em `findPendentes` e não há menção a atraso ou pendência no fluxo de criação. O CA9 (premissa A5) não está implementado. O campo `justificativaPermanencia` já existe no schema, sem uso. | [S3-20 (#100)](https://github.com/CaioC11/ds-equipe15-controle-estoque/issues/100) |
+| EmprestimosService.create > responsável com item em atraso > informa a pendência na mensagem de erro | `Esperava que a promessa fosse rejeitada` | defeito real (mesma causa do anterior) | Como não há bloqueio, nenhum erro é lançado, então não existe mensagem de pendência. | [S3-20 (#100)](https://github.com/CaioC11/ds-equipe15-controle-estoque/issues/100) |
 
 ## US04 — Suíte v2 (Theo)
 
-> Trecho para colar no `docs/testes/llm-log.md`, depois da seção da v1 da US04. Revise os campos marcados antes do commit.
 
 #### Rodada v2-1
 - Data e hora: 14/11/2026 (escrita da suíte; a execução fica registrada abaixo)
-- Modelo e contexto: Claude Sonnet 5.5, na mesma conversa da v1 da US04, com o zip atualizado do projeto anexado (código com a Issue 1 implementada, `tests/v1-llm/us04-emprestimos.spec.ts` já commitada e a matriz com a coluna "Coberto pela v1?" preenchida).
+- Modelo e contexto: Claude Sonnet 5.5, na mesma conversa da v1 da US04, com o zip atualizado do projeto anexado (código com a [S3-20 (#100)](https://github.com/CaioC11/ds-equipe15-controle-estoque/issues/100) implementada, `tests/v1-llm/us04-emprestimos.spec.ts` já commitada e a matriz com a coluna "Coberto pela v1?" preenchida).
 - Prompt das lacunas: texto da task S3B (suíte v2 em `tests/v2/`, cada mudança ligada a uma lacuna da matriz, meta de 100% dos CAs, partições e limites, e branches acima da v1) mais a ordem de analisar o projeto antes. As lacunas informadas vieram da coluna "Coberto pela v1?":
   - 13 casos `Não`: CT-04-02, 04, 05, 09, 34, 35, 36, 37, 38, 39, 40, 43 e 46.
   - 6 casos `Parcial`: CT-04-01, 10, 21, 28, 42 e 45.
   - 2 testes da v1 que falhavam por oráculo errado (prazo indefinido, CT-04-12) e 4 testes triviais (`toBeDefined`).
   - 3 branches descobertos do `emprestimos.service.ts` (linhas 196, 265 e 273).
-- Resumo da resposta: arquivo `tests/v2/us04-emprestimos.spec.ts` com todos os testes da v1 (mantidos ou corrigidos) e os novos, cada um com o comentário `[v2] Lacuna CT-04-xx`. Novos grupos: perfis de acesso pelo controller com o service real (ADMIN, requisitante e gestor de outro estoque), fluxo completo com estado simulado, `registrarJustificativaPermanencia` e seu schema, bloqueio por atraso com as partições da matriz e os branches de `obterPdf` e `obterPdfAssinado`. `it.todo` para o que depende da Issue 2 (CT-04-05, 09, 10, 38 e 39) e para a PR-04 (CT-04-28).
+- Resumo da resposta: arquivo `tests/v2/us04-emprestimos.spec.ts` com todos os testes da v1 (mantidos ou corrigidos) e os novos, cada um com o comentário `[v2] Lacuna CT-04-xx`. Novos grupos: perfis de acesso pelo controller com o service real (ADMIN, requisitante e gestor de outro estoque), fluxo completo com estado simulado, `registrarJustificativaPermanencia` e seu schema, bloqueio por atraso com as partições da matriz e os branches de `obterPdf` e `obterPdfAssinado`. `it.todo` para o que depende da [S3-21 (#101)](https://github.com/CaioC11/ds-equipe15-controle-estoque/issues/101) (CT-04-05, 09, 10, 38 e 39) e para a PR-04 (CT-04-28).
 - Problemas observados:
-  - A primeira versão do arquivo foi escrita contra o código anterior, em que o bloqueio por atraso não existia, e usava `it.fails` para o CA-09. O zip atualizado mostrou a Issue 1 implementada, então esses testes viraram testes normais e foram acrescentados os da ação `justificativa-permanencia`.
+  - A primeira versão do arquivo foi escrita contra o código anterior, em que o bloqueio por atraso não existia, e usava `it.fails` para o CA-09. O zip atualizado mostrou a [S3-20 (#100)](https://github.com/CaioC11/ds-equipe15-controle-estoque/issues/100) implementada, então esses testes viraram testes normais e foram acrescentados os da ação `justificativa-permanencia`.
   - O simulador de empréstimos existentes teve de respeitar os filtros novos do service (`prazoDevolucao.lt` e `justificativaPermanencia` nula), senão os casos "aceita" falhariam.
   - A LLM não executou a suíte. A execução e a contagem abaixo são do integrante.
-- Revisão contra o requisito (marque ao concluir):
-  - [ ] Cada teste `[v2]` confere o resultado esperado do CT que cita, e não só o que o código faz.
-  - [ ] Os testes que usam o estado simulado (fluxo completo, devolver e emprestar de novo, justificativa e liberação) foram lidos contra a matriz.
+- Revisão contra o requisito (concluída na rodada de correções abaixo):
+  - [x] Cada teste `[v2]` confere o resultado esperado do CT que cita, e não só o que o código faz.
+  - [x] Os testes que usam o estado simulado (fluxo completo, devolver e emprestar de novo, justificativa e liberação) foram lidos contra a matriz.
 
 #### Execução e contagem
 Execução de 14/11/2026, 10:55 (`vitest run tests/v2/us04-emprestimos.spec.ts --config vitest.llm.config.ts`, Vitest v4.1.8, cobertura v8). Primeira rodada da v2, sem ajustes depois da execução.
@@ -1134,7 +2463,7 @@ Execução de 14/11/2026, 10:55 (`vitest run tests/v2/us04-emprestimos.spec.ts -
 | 194 | 0 | 0 | 6 |
 
 #### Investigação das falhas
-Não houve falhas na v2. Os 6 `it.todo` não são falhas: CT-04-05, 09, 10, 38 e 39 dependem da Issue 2, e o CT-04-28 depende de confirmar a premissa PR-04.
+Não houve falhas na v2. Os 6 `it.todo` não são falhas: CT-04-05, 09, 10, 38 e 39 dependem da [S3-21 (#101)](https://github.com/CaioC11/ds-equipe15-controle-estoque/issues/101), e o CT-04-28 depende de confirmar a premissa PR-04.
 
 
 
@@ -1144,10 +2473,24 @@ Não houve falhas na v2. Os 6 `it.todo` não são falhas: CT-04-05, 09, 10, 38 e
 #### Lacunas sinalizadas pela LLM (`it.todo`)
 | Teste | CA | Verificação no código | Issue |
 |---|---|---|---|
-| lista responsáveis cadastrados com nome e Siape/CPF para seleção | CA2 | O controller só expõe criar, listar pendentes, devolução, termo e confirmar entrega. Não há consulta de responsáveis. | Issue 2 |
-| retorna o histórico de empréstimos e devoluções de um responsável | CA10 | Também não há consulta de histórico por responsável. | Issue 2 |
+| lista responsáveis cadastrados com nome e Siape/CPF para seleção | CA2 | O controller só expõe criar, listar pendentes, devolução, termo e confirmar entrega. Não há consulta de responsáveis. | [S3-21 (#101)](https://github.com/CaioC11/ds-equipe15-controle-estoque/issues/101) |
+| retorna o histórico de empréstimos e devoluções de um responsável | CA10 | Também não há consulta de histórico por responsável. | [S3-21 (#101)](https://github.com/CaioC11/ds-equipe15-controle-estoque/issues/101) |
 
 Observação (fora dos CAs): as linhas 196, 265 e 273 do `emprestimos.service.ts` ficaram sem cobertura (caminhos de 404 em `obterPdf` e `obterPdfAssinado`).
+
+
+#### Rodada v2-2 — correções do feedback (14/11/2026)
+
+- Ferramenta: ChatGPT/Codex. Pedido: aplicar o feedback de aprovação — comparar com v1 no código atual, limpar lembretes, usar S3-20 (#100) e S3-21 (#101), completar bloqueio só por CPF, revisar 403 da justificativa e registrar CTs de permissão das consultas como `it.todo`.
+- Revisão realizada: conferidos os testes novos/corrigidos, suas asserções e os fluxos com estado simulado contra a seção 6 da matriz e `docs/permissoes.md`. Os mocks não comprovam integração com banco real; os resultados continuam `Sim*`. CA-02 e CA-10 seguem pendentes da S3-21; CT-04-28 da PR-04.
+- Acrescentado CT-04-33 com responsável só por CPF: confere busca por CPF, vínculo com o responsável em atraso, 409, mensagem de pendência e ausência de criação, movimentação e escrita do PDF.
+- Os testes parametrizados de justificativa já incluíam ADMIN e requisitante; reforçados para conferir ausência de leitura do empréstimo e de gravações de item/movimentação, além do 403 e de `updateMany` não chamado.
+- Acrescentados oito `it.todo` CT-04-47 a 54: gestor e ADMIN autorizados; requisitante e gestor de outro estoque com 403 para lista e histórico. Sem inventar métodos para APIs ausentes.
+- Execução: `npx vitest run tests/v2/us04-emprestimos.spec.ts --config vitest.llm.config.ts --coverage --coverage.reporter=text --coverage.reporter=html --coverage.reporter=json-summary --coverage.reportsDirectory=../docs/testes/relatorios/v2/us04`.
+- Resultado revisado: **209 testes, 195 passando, 0 falhando, 14 todo** (13 S3-21 e 1 PR-04). Vitest 4.1.8, provider v8. HTML e resumo JSON regenerados.
+- Mesmo recorte de 3 arquivos: linhas **201/201 (100%)**, branches **107/109 (98,17%)**, statements **205/207 (99,03%)**, funções **40/42 (95,24%)**.
+- Referência v1 no código atual: `relatorios/v1/us04-codigo-atual/coverage-summary.json`: linhas **182/201 (90,55%)**, branches **94/109 (86,24%)**. Reexecução da suíte v1 confirmou 134 passando, 2 falhando (mock da linha 470) e 2 todo; os números antigos acima documentam a primeira rodada, não a execução revisada.
+
 
 ## US05 — Termo de Responsabilidade (Randell)
 

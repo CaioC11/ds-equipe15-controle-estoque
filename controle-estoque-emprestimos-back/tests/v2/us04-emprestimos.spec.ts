@@ -1,10 +1,10 @@
 // Suíte v2 da US04 (Registro de empréstimo e devolução).
 // Base: suíte v1 (tests/v1-llm/us04-emprestimos.spec.ts), mantida e corrigida, mais os testes das lacunas.
-// Código sob teste: versão com a Issue 1 implementada (bloqueio por atraso e justificativa de permanência).
+// Código sob teste: versão com a S3-20 (#100) implementada (bloqueio por atraso e justificativa de permanência).
 // Convenção dos comentários:
 //   "v1"                     -> teste mantido da v1
 //   "[v2] Lacuna CT-04-xx"   -> teste novo ou corrigido; xx é o caso da matriz-rastreabilidade-us4.md
-// Casos que dependem de funcionalidade ainda ausente ficam como it.todo com o número da issue (Issue 2).
+// Casos que dependem de funcionalidade ainda ausente ficam como it.todo com o número da issue (S3-21 (#101)).
 import { HttpStatus } from '@nestjs/common';
 import { StatusEmprestimo, StatusItem, TipoItem, TipoMovimentacao } from '@prisma/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -522,10 +522,10 @@ describe('EmprestimosService.create', () => {
   });
 
   // [v2] Lacunas CT-04-05 (PRO-04), CT-04-09 e CT-04-10 (PRO-01 sem reenviar dados): o módulo não tem seleção
-  // de responsável por identificador nem consulta de responsáveis. Dependem da Issue 2.
-  it.todo('[v2] CT-04-05: registrar empréstimo com identificador de responsável inexistente é recusado (404) — Issue 2');
-  it.todo('[v2] CT-04-09: lista responsáveis cadastrados com nome e Siape/CPF para seleção — CA-02, Issue 2');
-  it.todo('[v2] CT-04-10: novo empréstimo com responsável selecionado na lista, sem reenviar seus dados — CA-02, Issue 2');
+  // de responsável por identificador nem consulta de responsáveis. Dependem da S3-21 (#101).
+  it.todo('[v2] CT-04-05: registrar empréstimo com identificador de responsável inexistente é recusado (404) — S3-21 (#101)');
+  it.todo('[v2] CT-04-09: lista responsáveis cadastrados com nome e Siape/CPF para seleção — CA-02, S3-21 (#101)');
+  it.todo('[v2] CT-04-10: novo empréstimo com responsável selecionado na lista, sem reenviar seus dados — CA-02, S3-21 (#101)');
 
   it('guarda o prazo de devolução quando informado', async () => {
     // v1 | Técnica: partição (prazo informado) | Requisito: CA3 | CT-04-11
@@ -770,7 +770,7 @@ describe('EmprestimosService.create', () => {
     });
 
     it('[v2] impede novo empréstimo para responsável com item em atraso', async () => {
-      // [v2] Lacuna CT-04-33 (PRS-02, LM-03 lado recusado): na v1 falhava (defeito real); a Issue 1 implementou o bloqueio.
+      // [v2] Lacuna CT-04-33 (PRS-02, LM-03 lado recusado): na v1 falhava (defeito real); a S3-20 (#100) implementou o bloqueio.
       // Técnica: critério de aceitação (regra de bloqueio) | Requisito: CA-09
       simularEmprestimosExistentes(prisma, [atrasado()]);
 
@@ -779,6 +779,28 @@ describe('EmprestimosService.create', () => {
       expect(erro).toBeInstanceOf(ResourceConflictException);
       expect(erro.getStatus()).toBe(HttpStatus.CONFLICT);
       expect(prisma.emprestimo.create).not.toHaveBeenCalled();
+      expect(termoStorage.write).not.toHaveBeenCalled();
+    });
+
+    it('[v2] bloqueia responsável identificado só por CPF, sem Siape — S3-20', async () => {
+      // [v2] Lacuna CT-04-33 (identificação só por CPF) | Requisito: CA-09, S3-20 (#100)
+      const responsavelCpf = { ...RESPONSAVEL, id: 'resp-cpf', siape: null, cpf: '12345678901' };
+      prisma.responsavel.findMany.mockResolvedValue([responsavelCpf]);
+      prisma.responsavel.update.mockResolvedValue(responsavelCpf);
+      simularEmprestimosExistentes(prisma, [atrasado({ responsavelId: responsavelCpf.id })]);
+      const dto = criarDto({ responsavel: { nome: responsavelCpf.nome, cpf: responsavelCpf.cpf, lotacao: 'DCC', cargo: 'Docente' } });
+
+      const erro = await erroDe(service.create(ESTOQUE_ID, dto, USER_ID));
+
+      expect(prisma.responsavel.findMany).toHaveBeenCalledWith({ where: { OR: [{ cpf: responsavelCpf.cpf }] } });
+      expect(prisma.emprestimo.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({ responsavelId: responsavelCpf.id }),
+      }));
+      expect(erro).toBeInstanceOf(ResourceConflictException);
+      expect(erro.getStatus()).toBe(HttpStatus.CONFLICT);
+      expect(erro.message).toMatch(/atras|pend/i);
+      expect(prisma.emprestimo.create).not.toHaveBeenCalled();
+      expect(prisma.movimentacao.create).not.toHaveBeenCalled();
       expect(termoStorage.write).not.toHaveBeenCalled();
     });
 
@@ -1530,6 +1552,9 @@ describe('[v2] Acesso por perfil no registro e na devolução (CA-11)', () => {
     expect(erro).toBeInstanceOf(AccessDeniedException);
     expect(erro.getStatus()).toBe(HttpStatus.FORBIDDEN);
     expect(prisma.emprestimo.updateMany).not.toHaveBeenCalled();
+    expect(prisma.item.update).not.toHaveBeenCalled();
+    expect(prisma.movimentacao.create).not.toHaveBeenCalled();
+    expect(prisma.emprestimo.findFirst).not.toHaveBeenCalled();
   });
 
   it('[v2] o gestor do estoque registra o empréstimo pelo controller', async () => {
@@ -1542,7 +1567,7 @@ describe('[v2] Acesso por perfil no registro e na devolução (CA-11)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// [v2] Justificativa de permanência (Issue 1, matriz seção 8)
+// [v2] Justificativa de permanência (S3-20 (#100), matriz seção 8)
 // ---------------------------------------------------------------------------
 describe('[v2] RegistrarJustificativaPermanenciaSchema', () => {
   const caminhos = (r: any) => r.error.issues.map((i: any) => i.path.join('.'));
@@ -1752,11 +1777,11 @@ describe('[v2] Fluxo completo do empréstimo', () => {
 });
 
 // ---------------------------------------------------------------------------
-// [v2] Histórico do responsável (CA-10): a consulta não existe no módulo (Issue 2)
+// [v2] Histórico do responsável (CA-10): a consulta não existe no módulo (S3-21 (#101))
 // ---------------------------------------------------------------------------
 describe('[v2] Histórico do responsável (CA-10)', () => {
-  it.todo('[v2] CT-04-38: responsável com um empréstimo ativo e um devolvido vê os dois no histórico — Issue 2');
-  it.todo('[v2] CT-04-39: responsável sem nenhum empréstimo recebe histórico vazio, sem erro — Issue 2');
+  it.todo('[v2] CT-04-38: responsável com um empréstimo ativo e um devolvido vê os dois no histórico — S3-21 (#101)');
+  it.todo('[v2] CT-04-39: responsável sem nenhum empréstimo recebe histórico vazio, sem erro — S3-21 (#101)');
 });
 
 // ---------------------------------------------------------------------------
@@ -1868,4 +1893,26 @@ describe('EmprestimosController', () => {
     expect(headers.disposition).toBe('attachment; filename="termo-01-2026-assinado.pdf"');
     expect(svc.obterPdfAssinado).toHaveBeenCalledWith(ESTOQUE_ID, 'emp-1', user);
   });
+});
+// [v2] Lacunas de permissão das consultas ainda ausentes: S3-21 (#101).
+// Requisitos: CA-02, CA-10, RNF01 e docs/permissoes.md (ADMIN consulta;
+// gestor consulta seu estoque; requisitante e gestor de outro estoque recebem 403).
+// Sem inventar métodos de API: converter em testes executáveis quando S3-21 for implementada.
+describe('[v2] Permissões das consultas de responsáveis e histórico — S3-21', () => {
+  // [v2] Lacuna CT-04-47 | Requisito: CA-02, RNF01 | S3-21 (#101)
+  it.todo('[v2] CT-04-47: lista de responsáveis — gestor do estoque consulta com sucesso — S3-21 (#101)');
+  // [v2] Lacuna CT-04-48 | Requisito: CA-02, RNF01 | S3-21 (#101)
+  it.todo('[v2] CT-04-48: lista de responsáveis — ADMIN sem vínculo consulta com sucesso — S3-21 (#101)');
+  // [v2] Lacuna CT-04-49 | Requisito: CA-02, RNF01 | S3-21 (#101)
+  it.todo('[v2] CT-04-49: lista de responsáveis — requisitante recebe 403 sem expor dados — S3-21 (#101)');
+  // [v2] Lacuna CT-04-50 | Requisito: CA-02, RNF01 | S3-21 (#101)
+  it.todo('[v2] CT-04-50: lista de responsáveis — gestor de outro estoque recebe 403 sem expor dados — S3-21 (#101)');
+  // [v2] Lacuna CT-04-51 | Requisito: CA-10, RNF01 | S3-21 (#101)
+  it.todo('[v2] CT-04-51: histórico do responsável — gestor do estoque consulta com sucesso — S3-21 (#101)');
+  // [v2] Lacuna CT-04-52 | Requisito: CA-10, RNF01 | S3-21 (#101)
+  it.todo('[v2] CT-04-52: histórico do responsável — ADMIN sem vínculo consulta com sucesso — S3-21 (#101)');
+  // [v2] Lacuna CT-04-53 | Requisito: CA-10, RNF01 | S3-21 (#101)
+  it.todo('[v2] CT-04-53: histórico do responsável — requisitante recebe 403 sem expor dados — S3-21 (#101)');
+  // [v2] Lacuna CT-04-54 | Requisito: CA-10, RNF01 | S3-21 (#101)
+  it.todo('[v2] CT-04-54: histórico do responsável — gestor de outro estoque recebe 403 sem expor dados — S3-21 (#101)');
 });
