@@ -3,7 +3,6 @@ export enum Links {
   INTRANET_HOME = 'https://intranet.cin.ufpe.br/',
   HOME = '/',
   FORBIDDEN = '/forbidden',
-  TODOS = '/todos',
   TEAM = '/team',
   CATEGORIAS = '/categorias',
   EMPRESTIMOS = '/emprestimos',

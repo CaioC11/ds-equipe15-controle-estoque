@@ -62,7 +62,7 @@ interface EmprestimoModalProps {
 /**
  * Formulário de novo empréstimo: seleciona um cadastro existente ou informa um novo.
  * A seleção envia somente o identificador, preservando o cadastro. Quem renderiza usa `key` para remontar (e resetar)
- * o formulário a cada abertura — mesmo padrão do `TodoModal`.
+ * o formulário a cada abertura — mesmo padrão do `EstoqueModal`.
  */
 export function EmprestimoModal({
   isOpen,

@@ -25,10 +25,10 @@ import { EmptyState } from '../../components/EmptyState';
  * Tela de **gerenciamento de equipe** — restrita ao ADMIN pela rota
  * (`permittedRoles={[Roles.ADMIN]}` em `routes.tsx`). Não há `<Can>` aqui:
  * quem não é ADMIN não chega nesta página, então todos os botões podem
- * aparecer sem checagem adicional. Compare com `pages/todos/index.tsx`, que é
- * aberta a qualquer usuário e usa `<Can>` para gatear ações individuais.
+ * aparecer sem checagem adicional. Nas telas abertas a qualquer usuário (ex.:
+ * `pages/estoques`), as ações individuais são gateadas com `<Can>`.
  *
- * Mesma anatomia de módulo do `todos`: página (só orquestra, em `pages/`) +
+ * Anatomia de módulo: página (só orquestra, em `pages/`) +
  * `useTeam` (cache do servidor, sobre `useAsync`) + `team.service` (HTTP) +
  * `MemberModal` (formulário RHF + zod) — esses últimos em `modules/team/`.
  */

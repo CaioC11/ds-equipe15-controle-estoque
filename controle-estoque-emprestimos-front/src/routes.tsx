@@ -9,7 +9,6 @@ import ForbiddenPageCin from './components/ForbiddenPageCin';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ErrorScreen, httpErrors } from '@cincoders/cinnamon';
 import { ALL_ROLES, Links, Roles } from './utils/enums';
-import TodosPage from './pages/todos';
 import TeamPage from './pages/team';
 import LoginPage from './pages/login';
 import EmprestimosPage from './pages/emprestimos';
@@ -111,12 +110,12 @@ function RouteMap() {
   return (
     <BrowserRouter basename={import.meta.env.BASE_URL}>
       <Routes>
-        {/* Rota raiz /: se autenticado vai para /todos, caso contrário exibe tela de login */}
+        {/* Rota raiz /: se autenticado vai para /estoques, caso contrário exibe tela de login */}
         <Route
           path={Links.HOME}
           element={
             auth.isAuthenticated ? (
-              <Navigate to={Links.TODOS} replace />
+              <Navigate to={Links.ESTOQUES} replace />
             ) : (
               <LoginPage auth={auth} />
             )
@@ -130,7 +129,6 @@ function RouteMap() {
             RouteErrorBoundary isola falhas de renderização por página. */}
         <Route element={<PageCin auth={auth} permittedRoles={ALL_ROLES} />}>
           <Route element={<RouteErrorBoundary />}>
-            <Route path={Links.TODOS} element={<TodosPage />} />
             <Route path={Links.ESTOQUES} element={<EstoquesPage />} />
             <Route path={Links.CATEGORIAS} element={<CategoriasPage />} />
             <Route path={Links.EMPRESTIMOS} element={<EmprestimosPage />} />

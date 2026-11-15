@@ -3,7 +3,7 @@ import { estoqueService } from './estoque.service';
 import type { CreateEstoqueDto, Estoque, UpdateEstoqueDto } from './estoque.types';
 
 /**
- * Estado da listagem de estoques + ações de mutação (mesmo padrão do `useTodos`).
+ * Estado da listagem de estoques + ações de mutação, sobre `useAsync`.
  */
 export function useEstoques() {
   const {

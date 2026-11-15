@@ -27,7 +27,7 @@ const INPUT_CLASS =
 
 /**
  * Formulário de criação/edição de estoque. Quem renderiza usa `key` para
- * remontar o formulário a cada abertura (mesmo padrão do TodoModal).
+ * remontar o formulário a cada abertura (mesmo padrão do MemberModal).
  */
 export function EstoqueModal({ isOpen, onClose, onSubmit, estoqueToEdit }: EstoqueModalProps) {
   const formId = useId();
