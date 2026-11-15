@@ -41,7 +41,10 @@ export interface Movimentacao {
   quantidade: number;
   observacao: string | null;
   usuarioId: string;
-  dataMovimentacao: string;
+   /** Presentes nas duas movimentações geradas por uma transferência entre estoques */
+  transferenciaId?: string | null;
+  estoqueOrigemId?: string | null;
+  estoqueDestinoId?: string | null;
   item: { id: string; nome: string; tipo: 'PATRIMONIAL' | 'CONSUMO' };
 }
 
@@ -56,4 +59,19 @@ export interface ResultadoRegistro {
   movimentacao: Movimentacao;
   saldoAtual: number;
   abaixoDoMinimo: boolean;
+}
+
+export interface TransferirItemDto {
+  itemId: string;
+  estoqueOrigemId: string;
+  estoqueDestinoId: string;
+  /** Obrigatória para item de consumo; ignorada em patrimonial (sempre 1 unidade) */
+  quantidade?: number;
+  observacao?: string;
+}
+
+export interface ResultadoTransferencia {
+  transferenciaId: string;
+  movimentacaoSaida: Omit<Movimentacao, 'item'>;
+  movimentacaoEntrada: Omit<Movimentacao, 'item'>;
 }

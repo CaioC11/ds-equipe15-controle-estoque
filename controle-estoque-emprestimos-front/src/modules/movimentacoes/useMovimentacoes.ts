@@ -4,7 +4,9 @@ import type {
   Movimentacao,
   RegistrarMovimentacaoDto,
   ResultadoRegistro,
+  ResultadoTransferencia,
   SaldoEstoque,
+  TransferirItemDto,
 } from './movimentacao.types';
 
 /**
@@ -36,6 +38,12 @@ export function useMovimentacoes(estoqueId: string | undefined) {
     return resultado;
   };
 
+  const transferir = async (dto: TransferirItemDto): Promise<ResultadoTransferencia> => {
+    const resultado = await movimentacaoService.transferir(dto);
+    reload();
+    return resultado;
+  };
+
   return {
     itensSaldo: saldoAsync.data?.itens ?? [],
     carregandoSaldo: saldoAsync.isLoading,
@@ -45,5 +53,6 @@ export function useMovimentacoes(estoqueId: string | undefined) {
     erroHistorico: historicoAsync.error,
     reload,
     registrar,
+    transferir,
   };
 }

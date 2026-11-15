@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ClipboardList, History, Lock, Plus, RefreshCw } from 'lucide-react';
+import { ArrowRightLeft, ClipboardList, History, Lock, Plus, RefreshCw } from 'lucide-react';
 import {
   ErrorScreen,
   httpErrors,
@@ -19,8 +19,12 @@ import { EmptyState } from '../../components/EmptyState';
 import { HttpError } from '../../modules/emprestimos/emprestimo.service';
 import { useEstoques } from '../../modules/emprestimos/useEmprestimos';
 import { MovimentacaoModal } from '../../modules/movimentacoes/components/MovimentacaoModal';
+import { TransferenciaModal } from '../../modules/movimentacoes/components/TransferenciaModal';
 import { HistoricoRow, SaldoRow } from '../../modules/movimentacoes/components/MovimentacaoRows';
-import type { RegistrarMovimentacaoDto } from '../../modules/movimentacoes/movimentacao.types';
+import type {
+  RegistrarMovimentacaoDto,
+  TransferirItemDto,
+} from '../../modules/movimentacoes/movimentacao.types';
 import { useMovimentacoes } from '../../modules/movimentacoes/useMovimentacoes';
 
 const SUPPORT_EMAIL = 'helpdesk@cin.ufpe.br';
@@ -36,6 +40,8 @@ export default function MovimentacoesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   // Muda a cada abertura, forçando o modal a remontar e resetar o formulário
   const [modalKey, setModalKey] = useState(0);
+  const [isTransferenciaOpen, setIsTransferenciaOpen] = useState(false);
+  const [transferenciaKey, setTransferenciaKey] = useState(0);
 
   const {
     estoques,
@@ -56,6 +62,7 @@ export default function MovimentacoesPage() {
     erroHistorico,
     reload,
     registrar,
+    transferir,
   } = useMovimentacoes(estoqueId);
 
   // O histórico responde 403 a quem não é gestor do estoque nem ADMIN. Esse
@@ -76,6 +83,21 @@ export default function MovimentacoesPage() {
       toast.error(err instanceof Error ? err.message : 'Falha ao registrar movimentação.');
       throw err; // Repassa para o modal não fechar em caso de erro
     }
+  };
+
+    const handleTransferir = async (dto: TransferirItemDto) => {
+    try {
+      await transferir(dto);
+      toast.success('Transferência realizada com sucesso.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Falha ao transferir item.');
+      throw err; // Repassa para o modal não fechar em caso de erro
+    }
+  };
+
+  const handleAbrirTransferencia = () => {
+    setTransferenciaKey((key) => key + 1);
+    setIsTransferenciaOpen(true);
   };
 
   const handleAbrirNovo = () => {
@@ -191,7 +213,15 @@ export default function MovimentacoesPage() {
 
         {/* Só aparece para quem consegue ver o histórico (gestor do estoque ou
             ADMIN). O ADMIN só consulta: se tentar registrar, o backend recusa. */}
-        {podeRegistrar && (
+                {podeRegistrar && (
+          <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={handleAbrirTransferencia}
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-xs transition hover:bg-gray-50 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:outline-none cursor-pointer dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+          >
+            <ArrowRightLeft className="h-4 w-4" />
+            Transferir Item
+          </button>
           <button
             onClick={handleAbrirNovo}
             className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white shadow-xs transition hover:bg-red-700 focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:outline-none cursor-pointer"
@@ -199,6 +229,7 @@ export default function MovimentacoesPage() {
             <Plus className="h-4 w-4" />
             Registrar Movimentação
           </button>
+          </div>
         )}
       </div>
 
@@ -257,8 +288,20 @@ export default function MovimentacoesPage() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSubmit={handleRegistrar}
-        itens={itensSaldo}
+                itens={itensSaldo}
       />
+
+      {estoqueId && (
+        <TransferenciaModal
+          key={transferenciaKey}
+          isOpen={isTransferenciaOpen}
+          onClose={() => setIsTransferenciaOpen(false)}
+          onSubmit={handleTransferir}
+          estoqueOrigemId={estoqueId}
+          itens={itensSaldo}
+          estoques={estoques}
+        />
+      )}
     </div>
   );
 }
