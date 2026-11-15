@@ -52,8 +52,13 @@ describe('TransferenciasService', () => {
 
   /** Origem e destino ativos, usuário gestor dos dois, sem empréstimo em aberto. */
   const cenarioFeliz = () => {
-    mockPrisma.estoque.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) =>
-      where.id === 'est-origem' ? estoqueOrigem : where.id === 'est-destino' ? estoqueDestino : null,
+    mockPrisma.estoque.findUnique.mockImplementation(
+      async ({ where }: { where: { id: string } }) =>
+        where.id === 'est-origem'
+          ? estoqueOrigem
+          : where.id === 'est-destino'
+            ? estoqueDestino
+            : null,
     );
     mockPrisma.estoqueGestor.findUnique.mockResolvedValue({ estoqueId: 'x', usuarioId: 'u1' });
     mockPrisma.emprestimo.findFirst.mockResolvedValue(null);
@@ -185,8 +190,9 @@ describe('TransferenciasService', () => {
 
   it('rejeita estoque de destino desativado', async () => {
     cenarioFeliz();
-    mockPrisma.estoque.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) =>
-      where.id === 'est-origem' ? estoqueOrigem : { ...estoqueDestino, ativo: false },
+    mockPrisma.estoque.findUnique.mockImplementation(
+      async ({ where }: { where: { id: string } }) =>
+        where.id === 'est-origem' ? estoqueOrigem : { ...estoqueDestino, ativo: false },
     );
 
     await expect(service.transferir(dtoConsumo(1), 'u1')).rejects.toThrow(AppException);

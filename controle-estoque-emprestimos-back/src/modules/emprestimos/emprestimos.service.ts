@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { Prisma, StatusEmprestimo, StatusItem, TipoItem, TipoMovimentacao } from '@prisma/client';
 import { AccessRole } from '../../common/auth/access-role.enum';
-import type { CurrentUser } from '../../common/auth/current-user.interface';
 import { assertGestorDoEstoque } from '../../common/auth/assert-gestor-do-estoque';
+import type { CurrentUser } from '../../common/auth/current-user.interface';
 import { AppException } from '../../common/exceptions/app.exception';
 import { ErrorCode } from '../../common/exceptions/error-code.enum';
 import { ResourceConflictException } from '../../common/exceptions/resource-conflict.exception';
@@ -47,7 +47,10 @@ type ResponsavelInput = NonNullable<CreateEmprestimoDto['responsavel']>;
 // PR-04: o dia de vencimento inteiro ainda está no prazo em America/Recife.
 function inicioDoDiaRecife(agora: Date): Date {
   const partes = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Recife', year: 'numeric', month: '2-digit', day: '2-digit',
+    timeZone: 'America/Recife',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
   }).formatToParts(agora);
   const valor = (tipo: string) => Number(partes.find((parte) => parte.type === tipo)?.value);
   return new Date(Date.UTC(valor('year'), valor('month') - 1, valor('day'), 3));
@@ -626,7 +629,10 @@ export class EmprestimosService {
   // Papel de gestor é por estoque (docs/permissoes.md, regra 2)
   private async assertGestorDoEstoque(estoqueId: string, userId?: string) {
     await assertGestorDoEstoque(
-      this.prisma, estoqueId, userId, 'Apenas gestores deste estoque podem registrar ou consultar empréstimos.',
+      this.prisma,
+      estoqueId,
+      userId,
+      'Apenas gestores deste estoque podem registrar ou consultar empréstimos.',
     );
   }
 

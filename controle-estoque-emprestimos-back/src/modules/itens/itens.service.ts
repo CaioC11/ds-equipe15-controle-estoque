@@ -196,7 +196,10 @@ export class ItensService {
   // Papel de gestor é por estoque (docs/permissoes.md, regra 2)
   private async assertGestorDoEstoque(estoqueId: string, userId?: string) {
     await assertGestorDoEstoque(
-      this.prisma, estoqueId, userId, 'Apenas gestores deste estoque podem cadastrar ou editar itens.',
+      this.prisma,
+      estoqueId,
+      userId,
+      'Apenas gestores deste estoque podem cadastrar ou editar itens.',
     );
   }
 
