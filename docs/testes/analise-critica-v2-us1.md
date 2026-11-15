@@ -12,7 +12,7 @@ Suíte: `controle-estoque-emprestimos-back/tests/v2/us01-estoques.spec.ts`. A v2
 | Pendentes `it.todo` | 0 | 2 |
 | Falhando / não compilam | 0 / 0 | 0 / 0 |
 
-Os dois relatórios `coverage-summary.json` foram produzidos separadamente para v1 e v2. O escopo instrumentado inclui também arquivos de outras US, por isso os percentuais não são exclusivos desta story. HTML: `docs/testes/relatorios/v2/us01/index.html`. Aumento de branches: true.
+Os dois relatórios `coverage-summary.json` foram produzidos separadamente para v1 e v2. O escopo instrumentado inclui também arquivos de outras US, por isso os percentuais não são exclusivos desta story. HTML: `docs/testes/relatorios/v2/us01/index.html`.
 
 ## 2. Lacunas abordadas
 
