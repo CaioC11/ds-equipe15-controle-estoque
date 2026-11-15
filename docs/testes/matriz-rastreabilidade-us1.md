@@ -94,43 +94,43 @@ Pontos que o README e a issue da US01 não definem. Se a resposta for diferente,
 
 | Requisito / critério | Variável | Partição ou limite | Caso de teste esperado | Coberto pela v1? | Coberto pela v2? |
 |----------------------|----------|--------------------|------------------------|------------------|------------------|
-| CA-01 (PR-01*) | nome, perfil | PNE-01, PPC-01 | CT-01-01*: usuário autorizado cadastra o estoque "Laboratório X" → estoque criado, ativo e presente na listagem | Parcial — "cria estoque com ativo=true" (spec:54) e "lista estoques ativos com contagem por status" (spec:74), sem verificar o mesmo estoque nas duas operações | (preencher na Etapa 4) |
-| CA-01 | nome | PNE-02 | CT-01-02: cadastro sem nome → recusado, nada criado | Não — nenhum teste com nome ausente | |
-| CA-01 | nome | PNE-03, LM-03 (lado inválido) | CT-01-03: cadastro com nome "" → recusado, nada criado | Sim — "rejeita nome vazio %j" (spec:26) | |
-| CA-01 | nome | PNE-03 | CT-01-04: cadastro com nome "   " (só espaços) → recusado, nada criado | Sim — "rejeita nome vazio %j" (spec:26) | |
-| CA-01 | nome | PNE-01, LM-03 (lado válido) | CT-01-05: cadastro com nome "A" → estoque criado | Não — nenhum teste com nome de 1 caractere | |
-| CA-01 (PR-02*) | nome | PNE-04 | CT-01-06*: cadastro com nome já usado por outro estoque → recusado; apenas 1 estoque com esse nome | Sim* — "recusa nome já cadastrado" (spec:66) | |
-| CA-01 (PR-01*) | perfil | PPC-02 | CT-01-07*: requisitante tenta cadastrar estoque → 403, nada criado | Não — nenhum teste de criação por requisitante | |
-| CA-01, CA-02 | nome | PNE-01 | CT-01-08: cadastro de dois estoques com nomes distintos → ambos criados e independentes | Não — nenhum teste com dois estoques independentes | |
-| CA-03 | perfil, estoque | PPM-01, PES-01 | CT-01-09: gestor do estoque edita o nome e a descrição do próprio estoque → dados atualizados | Parcial — "atualiza estoque existente" (spec:99), sem verificar perfil/permissão nem descrição | |
-| CA-03 | estoque | PES-02 | CT-01-10: editar estoque inexistente → recusado (não encontrado) | Não — nenhum teste de update para estoque ausente | |
-| CA-08 | perfil | PPM-02 | CT-01-11: gestor de outro estoque tenta editar → 403, estoque inalterado | Não — nenhum teste de edição por gestor não autorizado | |
-| CA-08 (PR-04*) | perfil | PPM-03 | CT-01-12*: requisitante tenta editar → 403, estoque inalterado | Não — nenhum teste de edição por requisitante | |
-| CA-04 | tipo, quantidade, item, perfil | PTP-01, PQT-01, PIT-01, PPM-01 | CT-01-13: gestor registra entrada de 10 unidades de um item do estoque → saldo aumenta em 10 e a movimentação é registrada | Parcial — "registra entrada e informa saldo após a operação" (spec:270), mas usa quantidade 1 e não verifica persistência da movimentação | |
-| CA-05 | tipo, quantidade, saída × saldo | PTP-02, PQT-01, PSD-01 | CT-01-14: saída de 3 unidades com saldo 10 → saldo passa a 7 e a movimentação é registrada | Não — nenhum teste de saída válida | |
-| CA-05 (PR-05*) | saída × saldo | PSD-02, LM-02 (lado válido) | CT-01-15*: saída de 10 unidades com saldo 10 → aceita, saldo passa a 0 | Não — nenhum teste de saída igual ao saldo | |
-| CA-05 (PR-05*) | saída × saldo | PSD-03, LM-02 (lado inválido) | CT-01-16*: saída de 11 unidades com saldo 10 → recusada, saldo continua 10, nenhuma movimentação registrada | Sim* — "recusa saída maior que o saldo disponível" (spec:253) | |
-| CA-04, CA-05 | tipo | PTP-03 | CT-01-17: movimentação sem tipo → recusada, nada registrado | Não — nenhum teste sem tipo | |
-| CA-04, CA-05 | tipo | PTP-04 | CT-01-18: movimentação com tipo "AJUSTE" → recusada, nada registrado | Não — nenhum teste com tipo fora do enum | |
-| CA-04, CA-05 | quantidade | PQT-05 | CT-01-19: movimentação sem quantidade → recusada, nada registrado | Não — nenhum teste sem quantidade | |
-| CA-04 (PR-03*) | quantidade | PQT-02, LM-01 (lado inválido) | CT-01-20*: entrada com quantidade 0 → recusada, saldo inalterado | Sim* — "rejeita quantidade inválida %s" (spec:215) | |
-| CA-04 | quantidade | PQT-01, LM-01 (lado válido) | CT-01-21: entrada com quantidade 1 → aceita, saldo aumenta em 1 | Sim* — "registra entrada e informa saldo após a operação" (spec:270) | |
-| CA-04, CA-05 | quantidade | PQT-03 | CT-01-22: movimentação com quantidade -5 → recusada, saldo inalterado | Sim* — "rejeita quantidade inválida %s" (spec:215) | |
-| CA-04 (PR-03*) | quantidade | PQT-04 | CT-01-23*: entrada com quantidade 2.5 → recusada, saldo inalterado | Sim* — "rejeita quantidade inválida %s" (spec:215) | |
-| CA-04, CA-05 | item | PIT-02 | CT-01-24: movimentar item inexistente → recusado (não encontrado), nada registrado | Não — item ausente testado apenas em consulta, não em movimentação | |
-| CA-08 (PR-06*) | item | PIT-03 | CT-01-25*: movimentar, pela rota do estoque A, um item que pertence ao estoque B → recusado, saldo do item inalterado | Não — nenhum teste de item pertencente a outro estoque | |
-| CA-08 | perfil | PPM-02 | CT-01-26: gestor de outro estoque tenta registrar entrada → 403, saldo inalterado | Parcial — "recusa usuário sem vínculo de gestor" (spec:238), sem modelar vínculo com outro estoque | |
-| CA-08 | perfil | PPM-02 | CT-01-27: gestor de outro estoque tenta registrar saída → 403, saldo inalterado | Não — nenhum teste de saída por gestor não autorizado | |
-| CA-08 (PR-04*) | perfil | PPM-03 | CT-01-28*: requisitante tenta movimentar → 403, saldo inalterado | Não — nenhum teste por requisitante | |
-| CA-08 (PR-04*) | perfil | PPM-04 | CT-01-29*: ADMIN sem vínculo com o estoque tenta movimentar → 403, saldo inalterado | Sim* — "recusa registro por ADMIN" (spec:227) | |
-| CA-06 (PR-07*) | consulta de saldo | PCS-01 | CT-01-30*: item com entradas 10 e 5 e saída 4 → saldo 11 na consulta do estoque | Não — não há consulta de saldo por estoque | |
-| CA-02, CA-06 | consulta de saldo | PCS-01 | CT-01-31: movimentar um item do estoque A → saldos do estoque B não mudam | Não — nenhum teste de isolamento de saldo entre estoques | |
-| CA-06 | consulta de saldo | PCS-02, LM-04 | CT-01-32: estoque sem itens → consulta de saldo devolve lista vazia | Não — nenhum teste de consulta de saldo de estoque vazio | |
-| CA-06 | estoque | PES-02 | CT-01-33: consultar saldo de estoque inexistente → recusado (não encontrado) | Não — nenhum teste de consulta de saldo de estoque ausente | |
-| CA-07 | histórico | PHI-01, LM-04 (1 movimentação) | CT-01-34: estoque com exatamente 1 movimentação → histórico com 1 registro, com tipo, quantidade, data e responsável | Não — nenhum teste de histórico | |
-| CA-07 | histórico | PHI-01 | CT-01-35: estoque com 3 movimentações e outro estoque com movimentações → histórico traz exatamente as 3 do estoque consultado | Não — nenhum teste de histórico | |
-| CA-07 | histórico | PHI-02, LM-04 (0 movimentações) | CT-01-36: estoque sem movimentações → histórico vazio | Não — nenhum teste de histórico | |
-| CA-07 | histórico | PSD-03 | CT-01-37: movimentação recusada (ex.: CT-01-16) → não aparece no histórico | Não — nenhum teste de histórico | |
+| CA-01 (PR-01*) | nome, perfil | PNE-01, PPC-01 | CT-01-01*: usuário autorizado cadastra o estoque "Laboratório X" → estoque criado, ativo e presente na listagem | Parcial — "cria estoque com ativo=true" (spec:54) e "lista estoques ativos com contagem por status" (spec:74), sem verificar o mesmo estoque nas duas operações | Sim* — `cria e lista o mesmo estoque ativo` |
+| CA-01 | nome | PNE-02 | CT-01-02: cadastro sem nome → recusado, nada criado | Não — nenhum teste com nome ausente | Sim* — `rejeita cadastro sem nome` valida o campo antes do service |
+| CA-01 | nome | PNE-03, LM-03 (lado inválido) | CT-01-03: cadastro com nome "" → recusado, nada criado | Sim — "rejeita nome vazio %j" (spec:26) | Sim* — `rejeita nome vazio %j` verifica path e mensagem |
+| CA-01 | nome | PNE-03 | CT-01-04: cadastro com nome "   " (só espaços) → recusado, nada criado | Sim — "rejeita nome vazio %j" (spec:26) | Sim* — `rejeita nome vazio %j` verifica path e mensagem |
+| CA-01 | nome | PNE-01, LM-03 (lado válido) | CT-01-05: cadastro com nome "A" → estoque criado | Não — nenhum teste com nome de 1 caractere | Sim* — `aceita estoque com nome de um caractere` |
+| CA-01 (PR-02*) | nome | PNE-04 | CT-01-06*: cadastro com nome já usado por outro estoque → recusado; apenas 1 estoque com esse nome | Sim* — "recusa nome já cadastrado" (spec:66) | Sim* — `recusa nome já cadastrado`; criação não é chamada |
+| CA-01 (PR-01*) | perfil | PPC-02 | CT-01-07*: requisitante tenta cadastrar estoque → 403, nada criado | Não — nenhum teste de criação por requisitante | Sim* — `nega criação ao requisitante com HTTP 403` antes de criar |
+| CA-01, CA-02 | nome | PNE-01 | CT-01-08: cadastro de dois estoques com nomes distintos → ambos criados e independentes | Não — nenhum teste com dois estoques independentes | Sim* — `cria dois estoques distintos sem compartilhar identidade` |
+| CA-03 | perfil, estoque | PPM-01, PES-01 | CT-01-09: gestor do estoque edita o nome e a descrição do próprio estoque → dados atualizados | Parcial — "atualiza estoque existente" (spec:99), sem verificar perfil/permissão nem descrição | Parcial — teste de service confirma nome; `it.fails` de rota esperava 200 e recebeu 403; descrição não é verificada |
+| CA-03 | estoque | PES-02 | CT-01-10: editar estoque inexistente → recusado (não encontrado) | Não — nenhum teste de update para estoque ausente | Sim* — `retorna não encontrado para estoque ausente` (404 e sem update) |
+| CA-08 | perfil | PPM-02 | CT-01-11: gestor de outro estoque tenta editar → 403, estoque inalterado | Não — nenhum teste de edição por gestor não autorizado | Parcial — rota nega USER; vínculo de estoque não é representado na edição |
+| CA-08 (PR-04*) | perfil | PPM-03 | CT-01-12*: requisitante tenta editar → 403, estoque inalterado | Não — nenhum teste de edição por requisitante | Sim* — rota nega USER antes de chamar `update` |
+| CA-04 | tipo, quantidade, item, perfil | PTP-01, PQT-01, PIT-01, PPM-01 | CT-01-13: gestor registra entrada de 10 unidades de um item do estoque → saldo aumenta em 10 e a movimentação é registrada | Parcial — "registra entrada e informa saldo após a operação" (spec:270), mas usa quantidade 1 e não verifica persistência da movimentação | Sim* — entrada de 10 persiste no ledger e atualiza o saldo |
+| CA-05 | tipo, quantidade, saída × saldo | PTP-02, PQT-01, PSD-01 | CT-01-14: saída de 3 unidades com saldo 10 → saldo passa a 7 e a movimentação é registrada | Não — nenhum teste de saída válida | Sim* — saída de 3 registra o movimento e deixa saldo 7 |
+| CA-05 (PR-05*) | saída × saldo | PSD-02, LM-02 (lado válido) | CT-01-15*: saída de 10 unidades com saldo 10 → aceita, saldo passa a 0 | Não — nenhum teste de saída igual ao saldo | Sim* — saída igual ao saldo aceita e retorna saldo zero |
+| CA-05 (PR-05*) | saída × saldo | PSD-03, LM-02 (lado inválido) | CT-01-16*: saída de 11 unidades com saldo 10 → recusada, saldo continua 10, nenhuma movimentação registrada | Sim* — "recusa saída maior que o saldo disponível" (spec:253) | Sim* — saída acima do saldo retorna 400 e não grava |
+| CA-04, CA-05 | tipo | PTP-03 | CT-01-17: movimentação sem tipo → recusada, nada registrado | Não — nenhum teste sem tipo | Sim* — DTO recusa tipo ausente com erro no campo `tipo` |
+| CA-04, CA-05 | tipo | PTP-04 | CT-01-18: movimentação com tipo "AJUSTE" → recusada, nada registrado | Não — nenhum teste com tipo fora do enum | Sim* — DTO recusa `AJUSTE` por enum inválido |
+| CA-04, CA-05 | quantidade | PQT-05 | CT-01-19: movimentação sem quantidade → recusada, nada registrado | Não — nenhum teste sem quantidade | Sim* — DTO recusa quantidade ausente no campo correto |
+| CA-04 (PR-03*) | quantidade | PQT-02, LM-01 (lado inválido) | CT-01-20*: entrada com quantidade 0 → recusada, saldo inalterado | Sim* — "rejeita quantidade inválida %s" (spec:215) | Sim* — 0 é recusado antes de iniciar transação |
+| CA-04 | quantidade | PQT-01, LM-01 (lado válido) | CT-01-21: entrada com quantidade 1 → aceita, saldo aumenta em 1 | Sim* — "registra entrada e informa saldo após a operação" (spec:270) | Sim* — entrada com quantidade 1 atualiza saldo e ledger |
+| CA-04, CA-05 | quantidade | PQT-03 | CT-01-22: movimentação com quantidade -5 → recusada, saldo inalterado | Sim* — "rejeita quantidade inválida %s" (spec:215) | Sim* — quantidade negativa é recusada antes da transação |
+| CA-04 (PR-03*) | quantidade | PQT-04 | CT-01-23*: entrada com quantidade 2.5 → recusada, saldo inalterado | Sim* — "rejeita quantidade inválida %s" (spec:215) | Sim* — quantidade fracionária é recusada antes da transação |
+| CA-04, CA-05 | item | PIT-02 | CT-01-24: movimentar item inexistente → recusado (não encontrado), nada registrado | Não — item ausente testado apenas em consulta, não em movimentação | Sim* — item inexistente retorna 404 e não grava movimento |
+| CA-08 (PR-06*) | item | PIT-03 | CT-01-25*: movimentar, pela rota do estoque A, um item que pertence ao estoque B → recusado, saldo do item inalterado | Não — nenhum teste de item pertencente a outro estoque | Sim* — vínculo é buscado pelo estoque real do item; 403 e ledger intacto |
+| CA-08 | perfil | PPM-02 | CT-01-26: gestor de outro estoque tenta registrar entrada → 403, saldo inalterado | Parcial — "recusa usuário sem vínculo de gestor" (spec:238), sem modelar vínculo com outro estoque | Sim* — entrada sem vínculo real é recusada; não grava |
+| CA-08 | perfil | PPM-02 | CT-01-27: gestor de outro estoque tenta registrar saída → 403, saldo inalterado | Não — nenhum teste de saída por gestor não autorizado | Sim* — saída sem vínculo real é recusada e saldo inicial preservado |
+| CA-08 (PR-04*) | perfil | PPM-03 | CT-01-28*: requisitante tenta movimentar → 403, saldo inalterado | Não — nenhum teste por requisitante | Sim* — requisitante recebe 403 e ledger não muda |
+| CA-08 (PR-04*) | perfil | PPM-04 | CT-01-29*: ADMIN sem vínculo com o estoque tenta movimentar → 403, saldo inalterado | Sim* — "recusa registro por ADMIN" (spec:227) | Sim* — ADMIN recebe 403 e ledger não muda |
+| CA-06 (PR-07*) | consulta de saldo | PCS-01 | CT-01-30*: item com entradas 10 e 5 e saída 4 → saldo 11 na consulta do estoque | Não — não há consulta de saldo por estoque | Sim* — consulta retorna saldo agregado 11 |
+| CA-02, CA-06 | consulta de saldo | PCS-01 | CT-01-31: movimentar um item do estoque A → saldos do estoque B não mudam | Não — nenhum teste de isolamento de saldo entre estoques | Sim* — duas consultas mantêm os saldos dos estoques A e B isolados |
+| CA-06 | consulta de saldo | PCS-02, LM-04 | CT-01-32: estoque sem itens → consulta de saldo devolve lista vazia | Não — nenhum teste de consulta de saldo de estoque vazio | Sim* — estoque existente sem itens retorna lista vazia |
+| CA-06 | estoque | PES-02 | CT-01-33: consultar saldo de estoque inexistente → recusado (não encontrado) | Não — nenhum teste de consulta de saldo de estoque ausente | Sim* — estoque ausente retorna HTTP 404 |
+| CA-07 | histórico | PHI-01, LM-04 (1 movimentação) | CT-01-34: estoque com exatamente 1 movimentação → histórico com 1 registro, com tipo, quantidade, data e responsável | Não — nenhum teste de histórico | Sim* — primeira movimentação aparece com tipo, quantidade, data e responsável |
+| CA-07 | histórico | PHI-01 | CT-01-35: estoque com 3 movimentações e outro estoque com movimentações → histórico traz exatamente as 3 do estoque consultado | Não — nenhum teste de histórico | Sim* — histórico filtra os movimentos pelo estoque solicitado |
+| CA-07 | histórico | PHI-02, LM-04 (0 movimentações) | CT-01-36: estoque sem movimentações → histórico vazio | Não — nenhum teste de histórico | Sim* — estoque sem movimentos retorna lista vazia |
+| CA-07 | histórico | PSD-03 | CT-01-37: movimentação recusada (ex.: CT-01-16) → não aparece no histórico | Não — nenhum teste de histórico | Sim* — saída recusada não altera ledger nem histórico |
 
 ## 7. Totais (contados nesta matriz)
 
