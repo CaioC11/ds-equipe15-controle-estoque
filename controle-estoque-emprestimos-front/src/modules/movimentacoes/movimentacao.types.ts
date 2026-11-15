@@ -36,6 +36,7 @@ export interface SaldoEstoque {
 
 export interface Movimentacao {
   id: string;
+  dataMovimentacao: string;
   itemId: string;
   tipo: TipoMovimentacao;
   quantidade: number;

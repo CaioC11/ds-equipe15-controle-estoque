@@ -7,7 +7,7 @@ Esta matriz foi escrita **antes** de qualquer interação com a LLM com base nos
 ## 1. Escopo
 
 - User story: US03 e S3-19 (#95), itens vinculados a um estoque (categoria, tipo patrimonial ou consumo, tombamento opcional/pendente no cadastro patrimonial e preenchimento posterior, nº de série, nível mínimo).
-- Operações cobertas: cadastrar item, editar item, completar tombamento de item patrimonial pendente (PATCH /estoques/:estoqueId/itens/:id/tombamento), listar itens por estoque (com indicador 	ombamentoPendente e filtro ?pendente=true|false).
+- Operações cobertas: cadastrar item, editar item, completar tombamento de item patrimonial pendente (PATCH /estoques/:estoqueId/itens/:id/tombamento), listar itens por estoque (com indicador `tombamentoPendente` e filtro ?pendente=true|false).
 - Os resultados "recusado" não fixam código HTTP nem texto exato, porque o requisito só define o **403** para quem não é gestor do estoque. As mensagens e os demais códigos serão conferidos contra o que a equipe definir.
 
 ## 2. Critérios de aceitação
@@ -18,7 +18,7 @@ Esta matriz foi escrita **antes** de qualquer interação com a LLM com base nos
 | CA-02 | Item patrimonial pode ser cadastrado sem tombamento (ficando pendente) e ter o tombamento completado posteriormente; tombamento único, duplicado é recusado e tombamento preenchido não pode ser apagado (revisado na S3-19 / #95) |
 | CA-03 | Item de consumo não exige tombamento (nem aceita tombamento) e é controlado por saldo |
 | CA-04 | Nº de série e nível mínimo são opcionais |
-| CA-05 | Listagem de itens por estoque (com indicador 	ombamentoPendente e filtro ?pendente=true|false na S3-19 / #95) |
+| CA-05 | Listagem de itens por estoque (com indicador `tombamentoPendente` e filtro ?pendente=true|false na S3-19 / #95) |
 | CA-06 | Só o gestor daquele estoque cadastra, edita e completa tombamento (403 para os demais) |
 | CA-07 | Item patrimonial tem saldo 1 por registro (da descrição da issue) |
 
@@ -39,7 +39,7 @@ V = válida, I = inválida, * = depende de premissa da seção 5.
 | tombamento (patrimonial) | PTB-03 | vazio ou só espaços (normalizado para pendente no cadastro — S3-19) | V |
 | tombamento (patrimonial) | PTB-04 | já usado por outro item | I |
 | tombamento (consumo) | PTC-01 | ausente | V |
-| completar tombamento (S3-19) | PCT-01 | item patrimonial pendente (	ombamento == null) e código inédito | V |
+| completar tombamento (S3-19) | PCT-01 | item patrimonial pendente (`tombamento == null`) e código inédito | V |
 | completar tombamento (S3-19) | PCT-02 | item patrimonial já tombado | I |
 | completar tombamento (S3-19) | PCT-03 | item de consumo | I |
 | completar tombamento (S3-19) | PCT-04 | tombamento já usado por outro item | I |
@@ -93,14 +93,14 @@ Pontos que a issue #7 não definia originalmente e o status após a S3-19 (#95):
 
 | Requisito / critério | Variável | Partição ou limite | Caso de teste esperado | Coberto pela v1? | Coberto pela v2 / S3-19? |
 |----------------------|----------|--------------------|------------------------|------------------|--------------------------|
-| CA-01 | tipo, tombamento, categoria, estoque, perfil | PT-01, PTB-01, PCA-01, PES-01, PPF-01 | CT-03-01: gestor do estoque cadastra item PATRIMONIAL com categoria existente e tombamento inédito → item criado, vinculado ao estoque e à categoria (	ombamentoPendente=false) | Sim* — service CA1: cria item patrimonial (banco simulado) | Sim* — mantido da v1 |
+| CA-01 | tipo, tombamento, categoria, estoque, perfil | PT-01, PTB-01, PCA-01, PES-01, PPF-01 | CT-03-01: gestor do estoque cadastra item PATRIMONIAL com categoria existente e tombamento inédito → item criado, vinculado ao estoque e à categoria (`tombamentoPendente`=false) | Sim* — service CA1: cria item patrimonial (banco simulado) | Sim* — mantido da v1 |
 | CA-01, CA-03 | tipo, tombamento | PT-02, PTC-01 | CT-03-02: gestor cadastra item CONSUMO sem tombamento → item criado | Sim — schema e service CA4 consumo sem tombamento | Sim — mantido da v1 |
 | CA-01 | tipo | PT-03 | CT-03-03: cadastro sem tipo → recusado, nada criado | Sim — schema: rejeita tipo ausente | Sim — mantido da v1 |
-| CA-01 | tipo | PT-04 | CT-03-04: cadastro com tipo "OUTRO" → recusado, nada criado | Sim — schema: tipo fora do enum (teste falha só na mensagem) e minúsculas | Sim — corrigido (C1): recusa conferida pelo path 	ipo, sem fixar a mensagem |
+| CA-01 | tipo | PT-04 | CT-03-04: cadastro com tipo "OUTRO" → recusado, nada criado | Sim — schema: tipo fora do enum (teste falha só na mensagem) e minúsculas | Sim — corrigido (C1): recusa conferida pelo path `tipo`, sem fixar a mensagem |
 | CA-01 | categoria | PCA-02 | CT-03-05: cadastro sem categoria → recusado | Sim — schema: rejeita categoriaId ausente | Sim — mantido da v1 |
 | CA-01 | categoria | PCA-03 | CT-03-06: cadastro com categoria inexistente → recusado | Sim — service: categoria não existe, nada criado | Sim — mantido da v1 |
 | CA-01 | estoque | PES-02 | CT-03-07: cadastro em estoque inexistente → recusado (não encontrado) | Sim — service: estoque não existe, nada criado | Sim — mantido da v1 |
-| CA-02 (S3-19) | tombamento | PTB-02 | CT-03-08: PATRIMONIAL sem tombamento → aceito e cadastrado como pendente (	ombamento=undefined, 	ombamentoPendente=true) | Sim (regra antiga #7) | Sim* — revisado na S3-19: schema e service criam item pendente |
+| CA-02 (S3-19) | tombamento | PTB-02 | CT-03-08: PATRIMONIAL sem tombamento → aceito e cadastrado como pendente (`tombamento=undefined`, `tombamentoPendente`=true) | Sim (regra antiga #7) | Sim* — revisado na S3-19: schema e service criam item pendente |
 | CA-02 (S3-19) | tombamento | PTB-03 | CT-03-09: PATRIMONIAL com tombamento "" → normalizado para undefined e cadastrado como pendente | Sim (regra antiga #7) | Sim — revisado na S3-19: schema normaliza vazio para undefined |
 | CA-02 (S3-19) | tombamento | PTB-03 | CT-03-10: PATRIMONIAL com tombamento "   " (só espaços) → normalizado para undefined e cadastrado como pendente | Sim (regra antiga #7) | Sim — revisado na S3-19: schema normaliza espaços para undefined |
 | CA-02 | tombamento | PTB-01, LM-02 (lado válido) | CT-03-11: PATRIMONIAL com tombamento "1" → item criado | Sim — schema CA1: tombamento de 1 caractere | Sim — mantido da v1 |
@@ -130,13 +130,13 @@ Pontos que a issue #7 não definia originalmente e o status após a S3-19 (#95):
 | CA-02 | tombamento | LM-02 (lado inválido) | CT-03-35: editar item PATRIMONIAL removendo o tombamento → recusado (400), tombamento anterior mantido | Parcial — schema update rejeita tombamento vazio | Sim* — L10 (schema) + service update bloqueia apagar tombamento já preenchido (S3-19 CA4) |
 | CA-02 | tombamento | PTB-04, LM-03 (lado inválido) | CT-03-36: editar o tombamento de um item para o valor de outro item → recusado | Sim* — service CA3: P2002 de tombamento na edição | Sim* — mantido da v1 |
 | CA-02 | tombamento | LM-03 (lado válido) | CT-03-37: editar um item PATRIMONIAL mantendo o próprio tombamento → aceito (não conta como duplicado) | Não — nenhum teste de manter o próprio tombamento | Sim* — L9: edição mantendo o próprio tombamento, sem conflito; fake em memória |
-| CA-02, CA-06 (S3-19) | completar tombamento | PCT-01, PPF-01 | CT-03-38: gestor do estoque completa tombamento de item patrimonial pendente via PATCH .../itens/:id/tombamento → tombamento salvo e 	ombamentoPendente=false | Não (S3-19) | Sim* — S3-19 CA2 (service e controller) |
+| CA-02, CA-06 (S3-19) | completar tombamento | PCT-01, PPF-01 | CT-03-38: gestor do estoque completa tombamento de item patrimonial pendente via PATCH .../itens/:id/tombamento → tombamento salvo e `tombamentoPendente`=false | Não (S3-19) | Sim* — S3-19 CA2 (service e controller) |
 | CA-06 (S3-19) | completar tombamento | PCT-01, PPF-02, PPF-03 | CT-03-39: usuário sem vínculo de gestor no estoque tenta completar tombamento → 403, item inalterado | Não (S3-19) | Sim* — S3-19 CA2 (service) |
 | CA-02 (S3-19) | completar tombamento | PCT-02 | CT-03-40: tentar completar tombamento de item patrimonial que já possui tombamento → recusado (400) | Não (S3-19) | Sim* — S3-19 CA2 (service) |
 | CA-03 (S3-19) | completar tombamento | PCT-03 | CT-03-41: tentar completar tombamento de item de consumo → recusado (400) | Não (S3-19) | Sim* — S3-19 CA2/CA6 (service) |
 | CA-02 (S3-19) | completar tombamento | PCT-04 | CT-03-42: tentar completar tombamento com código já usado por outro item → recusado com conflito (409) | Não (S3-19) | Sim* — S3-19 CA3 (service) |
 | CA-02 (S3-19) | completar tombamento | LM-02 (lado inválido) | CT-03-43: completar tombamento com valor vazio ou só espaços → recusado (400) | Não (S3-19) | Sim — CompletarTombamentoSchema |
-| CA-05 (S3-19) | listagem | PLI-03 | CT-03-44: listagem com ?pendente=true e ?pendente=false filtra itens pendentes e preenche 	ombamentoPendente | Não (S3-19) | Sim* — S3-19 CA5 (service) |
+| CA-05 (S3-19) | listagem | PLI-03 | CT-03-44: listagem com ?pendente=true e ?pendente=false filtra itens pendentes e preenche `tombamentoPendente` | Não (S3-19) | Sim* — S3-19 CA5 (service) |
 
 Legenda da coluna v1: **Sim** = teste com entrada na partição e asserção sobre o resultado esperado; **Sim\*** = idem, mas só com o banco simulado (mock); **Parcial** = há teste, mas a asserção é trivial ou não distingue o caso; **Não** = nenhum teste. Na coluna da v2 / S3-19, **Sim\*** também cobre os casos verificados com o fake em memória de prisma.item e mocks do PrismaService.
 
@@ -157,7 +157,7 @@ A S3-19 (#95) permitiu cadastrar item patrimonial sem tombamento (ficando penden
 
 | Caso | Antes (#7) | Após a S3-19 (#95) |
 |------|------------|--------------------|
-| CT-03-08 | PATRIMONIAL sem tombamento é recusado | Aceito, fica pendente (	ombamentoPendente=true) |
+| CT-03-08 | PATRIMONIAL sem tombamento é recusado | Aceito, fica pendente (`tombamentoPendente`=true) |
 | CT-03-09 | PATRIMONIAL com tombamento "" é recusado | Aceito, normalizado para undefined (pendente) |
 | CT-03-10 | PATRIMONIAL com tombamento só de espaços é recusado | Aceito, normalizado para undefined (pendente) |
 | CT-03-35 | Editar removendo o tombamento é recusado, anterior mantido | Continua recusado (400 no schema e no service; tombamento preenchido não pode ser apagado) |
