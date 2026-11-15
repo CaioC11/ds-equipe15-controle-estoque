@@ -28,7 +28,7 @@ O documento da Sprint 3 pede pelo menos três itens para a nota máxima. Os IDs 
 
 ## Resultado conjunto e limites
 
-A suíte v2 do backend passou antes e depois das refatorações, sem falhas inesperadas. A suíte geral do frontend terminou com **87 pass e 3 falhas** em `Can.test.tsx` e `cinnamon-v2.test.tsx`, também observadas na revisão anterior. Essas áreas não foram alteradas aqui; apenas os 13 testes direcionados dos serviços HTTP passaram. Não houve teste integrado com banco e autenticação real. A tabela `divida-tecnica.md` marca DT-09/10/11 como `Refatorado` e mantém os demais itens abertos.
+A suíte v2 do backend passou antes e depois das refatorações, sem falhas inesperadas. A suíte geral do frontend terminou com **87 pass e 3 falhas** em `Can.test.tsx` e `cinnamon-v2.test.tsx`, reproduzidas no ZIP original `ds-equipe15-controle-estoque-main.zip` recebido antes destas refatorações, com as mesmas dependências: 3 falhas e 8 aprovações nesses dois arquivos. Essa comparação não substitui executar a `main` atual. Essas áreas não foram alteradas aqui; apenas os 13 testes direcionados dos serviços HTTP passaram. Não houve teste integrado com banco e autenticação real. A tabela `divida-tecnica.md` marca DT-09/10/11 como `Refatorado` e mantém os demais itens abertos.
 
 ## Comparação das formas de identificação
 

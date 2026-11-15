@@ -16,8 +16,14 @@ describe('DT-10 — contrato HTTP da movimentação', () => {
   });
   it('preserva status e mensagem de erro da API', async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ message: 'Sem acesso' }), { status: 403 }));
-    await expect(service.listarHistorico('e')).rejects.toMatchObject({ name: 'HttpError', status: 403, message: 'Sem acesso' });
-    expect(HttpError).toBeDefined();
+    let erro: unknown;
+    try {
+      await service.listarHistorico('e');
+    } catch (e) {
+      erro = e;
+    }
+    expect(erro).toBeInstanceOf(HttpError);
+    expect(erro).toMatchObject({ status: 403, message: 'Sem acesso' });
   });
 
   it('envia POST para /movimentacoes/transferencias e desembrulha data', async () => {
