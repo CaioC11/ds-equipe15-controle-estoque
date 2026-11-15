@@ -52,4 +52,7 @@ Sprint 3, Parte 1. Issue S3B-10 (#69). A v2 foi gerada pela mesma LLM da v1 (Cla
 
 ## 5. Impacto da S3-19 (#95)
 
-A S3-19 permite cadastrar item patrimonial sem tombamento (pendente) e completar o tombamento depois. Os testes de CT-03-08, 09, 10 e 35 (e os de schema equivalentes) valem para o requisito vigente (#7) e serão revisados quando a S3-19 for implementada. A matriz (seção 8) registra essa revisão prevista.
+A S3-19 (#95) já foi implementada: o cadastro de patrimonial sem tombamento agora é aceito como pendente, e o tombamento pode ser completado depois. A seção 8 da matriz registra a revisão dos CT-03-08/09/10/35. **Os indicadores das seções 1–4 são históricos, medidos antes da S3-19, e não descrevem uma execução das suítes no código atual.** Mantemos a v1 original sem edição, conforme o protocolo da sprint. Ao executá-la agora, os CT-03-08/09/10 falham por esperarem a regra anterior; isso não demonstra regressão da implementação. Uma nova tabela comparável exigirá rodar v1 e v2 sobre a mesma revisão e restringir a cobertura aos mesmos quatro arquivos.
+## Complementação posterior — saldo inicial e fluxo de consumo
+
+A decisão do requisito foi confirmada nesta revisão: patrimonial começa com saldo 1 sem `ENTRADA` manual. `MovimentacoesService.calcularSaldoItem` usa 1 como base do patrimonial e 0 do consumo, somando as movimentações existentes. `tests/v2/us03-saldo-fluxo.spec.ts` acrescenta CT-03-16/17 com cadastro, entrada para consumo e consulta sobre um fake compartilhado (2 aprovados). As células são `Sim*`: não houve execução com Postgres, pois não há Docker/psql neste ambiente. Os números de cobertura anteriores à S3-19 continuam históricos e não são reaproveitados como medição desta mudança.

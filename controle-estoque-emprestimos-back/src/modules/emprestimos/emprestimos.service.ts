@@ -44,6 +44,15 @@ function comFlagTermo<
 
 type ResponsavelInput = NonNullable<CreateEmprestimoDto['responsavel']>;
 
+// PR-04: o dia de vencimento inteiro ainda está no prazo em America/Recife.
+function inicioDoDiaRecife(agora: Date): Date {
+  const partes = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Recife', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(agora);
+  const valor = (tipo: string) => Number(partes.find((parte) => parte.type === tipo)?.value);
+  return new Date(Date.UTC(valor('year'), valor('month') - 1, valor('day'), 3));
+}
+
 // Atraso é derivado, não é status (premissa A5): empréstimo ATIVO com prazo vencido
 export function estaAtrasado(
   emprestimo: { status: StatusEmprestimo; prazoDevolucao: Date | null },
@@ -52,7 +61,7 @@ export function estaAtrasado(
   return (
     emprestimo.status === StatusEmprestimo.ATIVO &&
     emprestimo.prazoDevolucao !== null &&
-    emprestimo.prazoDevolucao < agora
+    emprestimo.prazoDevolucao < inicioDoDiaRecife(agora)
   );
 }
 
@@ -61,7 +70,7 @@ export function estaAtrasado(
 function filtroAtrasoSemJustificativa(agora: Date): Prisma.EmprestimoWhereInput {
   return {
     status: StatusEmprestimo.ATIVO,
-    prazoDevolucao: { lt: agora },
+    prazoDevolucao: { lt: inicioDoDiaRecife(agora) },
     justificativaPermanencia: null,
   };
 }

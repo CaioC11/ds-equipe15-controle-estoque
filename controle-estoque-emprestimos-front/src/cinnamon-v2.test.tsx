@@ -10,7 +10,7 @@ vi.mock('react-oidc-context', () => ({ useAuth: vi.fn() }));
 describe('@cincoders/cinnamon v2 integration', () => {
   it('ErrorScreen renders the 501 message and illustration', () => {
     render(<ErrorScreen errorType={httpErrors.COMINGSOON_501} />);
-    expect(screen.getByText(/em construcao/i)).toBeInTheDocument();
+    expect(screen.getByText(/em construção/i)).toBeInTheDocument();
     expect(
       screen.getByRole('img', { name: /erro 501/i }),
     ).toBeInTheDocument();
@@ -18,7 +18,7 @@ describe('@cincoders/cinnamon v2 integration', () => {
 
   it('ErrorScreen renders the 503 (inactive) message', () => {
     render(<ErrorScreen errorType={httpErrors.INACTIVE_503} />);
-    expect(screen.getByText(/temporariamente inacessivel/i)).toBeInTheDocument();
+    expect(screen.getByText(/temporariamente indisponível/i)).toBeInTheDocument();
   });
 
   it('ForbiddenPage renders the 403 screen with the logged-in user', () => {

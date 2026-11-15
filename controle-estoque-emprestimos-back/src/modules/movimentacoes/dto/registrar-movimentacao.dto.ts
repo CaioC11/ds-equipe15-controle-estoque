@@ -1,19 +1,12 @@
 import { TipoMovimentacao } from '@prisma/client';
-import { IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
+import { createZodDto } from 'nestjs-zod';
+import { z } from 'zod';
 
-export class RegistrarMovimentacaoDto {
-  @IsString()
-  @IsNotEmpty()
-  itemId: string;
+export const RegistrarMovimentacaoSchema = z.object({
+  itemId: z.string().trim().min(1),
+  tipo: z.nativeEnum(TipoMovimentacao),
+  quantidade: z.number().int().positive(),
+  observacao: z.string().optional(),
+});
 
-  @IsEnum(TipoMovimentacao)
-  tipo: TipoMovimentacao;
-
-  @IsInt()
-  @Min(1)
-  quantidade: number;
-
-  @IsOptional()
-  @IsString()
-  observacao?: string;
-}
+export class RegistrarMovimentacaoDto extends createZodDto(RegistrarMovimentacaoSchema) {}

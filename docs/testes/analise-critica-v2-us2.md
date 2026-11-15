@@ -33,3 +33,7 @@ npx vitest run tests/v2/us02-acesso.spec.ts --config vitest.llm.config.ts --cove
 ```
 
 Para comparar, trocar `tests/v2/` por `tests/v1-llm/` e a saída por `../docs/testes/relatorios/v1-codigo-atual/us02`. A execução conjunta `npx vitest run tests/v2 --config vitest.llm.config.ts` passou com 481 aprovados, 6 falhas esperadas (`it.fails`) e 6 pendentes em seis arquivos.
+
+## Complementação posterior — edição por gestor
+
+`tests/v2/us01-us02-edicao-vinculo.spec.ts` exercita vínculo e 403 sem escrita para gestor de outro estoque, requisitante e ADMIN sem vínculo, além de verificar a metadata da rota. CT07/10/12 permanecem parciais até validação HTTP integrada. A seção 1 conserva sua medição histórica; os `it.todo` da spec gerada não foram editados.

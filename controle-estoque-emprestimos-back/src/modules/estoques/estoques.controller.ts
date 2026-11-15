@@ -2,6 +2,8 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@n
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { AccessRole, Roles } from '../../common/auth/decorators/roles.decorator';
 import { AuthGuard } from '../../common/auth/guards/auth.guard';
+import type { CurrentUser } from '../../common/auth/current-user.interface';
+import { GetCurrentUser } from '../../common/auth/decorators/current-user.decorator';
 import { RolesGuard } from '../../common/auth/guards/roles.guard';
 import { AutorizarGestorDto } from './dto/autorizar-gestor.dto';
 import { CreateEstoqueDto } from './dto/create-estoque.dto';
@@ -32,9 +34,9 @@ export class EstoquesController {
   }
 
   @Patch(':id')
-  @Roles(AccessRole.ADMIN)
-  update(@Param('id') id: string, @Body() updateEstoqueDto: UpdateEstoqueDto) {
-    return this.estoquesService.update(id, updateEstoqueDto);
+  @Roles(AccessRole.ADMIN, AccessRole.USER)
+  update(@Param('id') id: string, @Body() updateEstoqueDto: UpdateEstoqueDto, @GetCurrentUser() user?: CurrentUser) {
+    return this.estoquesService.update(id, updateEstoqueDto, user?.userId ?? '');
   }
 
   @Delete(':id')

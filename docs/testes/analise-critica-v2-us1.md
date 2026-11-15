@@ -33,3 +33,11 @@ npx vitest run tests/v2/us01-estoques.spec.ts --config vitest.llm.config.ts --co
 ```
 
 Para comparar, trocar `tests/v2/` por `tests/v1-llm/` e a saída por `../docs/testes/relatorios/v1-codigo-atual/us01`. A execução conjunta `npx vitest run tests/v2 --config vitest.llm.config.ts` passou com 481 aprovados, 6 falhas esperadas (`it.fails`) e 6 pendentes em seis arquivos.
+
+## Complementação posterior — edição por gestor
+
+A rota de edição agora admite `USER` e `ADMIN`, mas o serviço exige vínculo de gestor no estoque antes de gravar. `tests/v2/us01-us02-edicao-vinculo.spec.ts` acrescenta seis execuções para vínculo, negação com 403 sem escrita, metadata da rota e usuário ausente. As células CT-01-09/11/12 ficam parciais até teste HTTP integrado e verificação de descrição. Esta complementação é posterior à medição v1/v2 da seção 1; não altera seus percentuais históricos. Os `it.todo` da spec gerada permanecem intactos.
+
+## Complementação posterior — validação das movimentações
+
+O DTO de movimentação passou a usar `createZodDto`, compatível com o `ZodValidationPipe` global. `tests/v2/us01-movimentacao-validacao.spec.ts` executa o pipe: tipo ausente/inválido e quantidades zero/negativa/fracionária são rejeitados; inteiro positivo é aceito (6 testes). CT-01-17/18/19 permanecem parciais até teste HTTP que também comprove ausência de escrita. Os percentuais acima são históricos.

@@ -40,5 +40,4 @@ describe('US02 v2 — permissões por perfil e estoque', () => {
     if (vinculado) { expect(await action).toMatchObject({ saldoAtual: 1 }); expect(tx.movimentacao.create).toHaveBeenCalledOnce(); }
     else { await expect(action).rejects.toBeInstanceOf(ForbiddenException); expect(tx.movimentacao.create).not.toHaveBeenCalled(); }
   });
-  it.todo('CT07/10/12: edição de estoque por gestor vinculado; rota atual exige ADMIN indiscriminadamente');
 });

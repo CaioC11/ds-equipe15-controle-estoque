@@ -1,5 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { StatusItem } from '@prisma/client';
+import { assertGestorDoEstoque } from '../../common/auth/assert-gestor-do-estoque';
 import { ResourceConflictException } from '../../common/exceptions/resource-conflict.exception';
 import { ResourceNotFoundException } from '../../common/exceptions/resource-not-found.exception';
 import { PrismaService } from '../../database/prisma.service';
@@ -63,7 +64,10 @@ export class EstoquesService {
     return this.formatEstoqueComSaldo(estoque);
   }
 
-  async update(id: string, updateEstoqueDto: UpdateEstoqueDto) {
+  async update(id: string, updateEstoqueDto: UpdateEstoqueDto, userId?: string) {
+    if (userId !== undefined) {
+      await assertGestorDoEstoque(this.prisma, id, userId, 'Apenas o gestor deste estoque pode editar seus dados.');
+    }
     await this.findOne(id);
 
     if (updateEstoqueDto.nome) {

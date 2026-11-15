@@ -11,7 +11,7 @@ import { TransferenciasService } from './transferencias.service';
 @Controller('movimentacoes')
 @UseGuards(AuthGuard)
 export class MovimentacoesController {
-  constructor(
+    constructor(
     private readonly movimentacoesService: MovimentacoesService,
     private readonly transferenciasService: TransferenciasService,
   ) {}
@@ -33,20 +33,30 @@ export class MovimentacoesController {
     );
   }
 
-  // Transferência entre estoques: exige ser gestor da origem e do destino (403 para os demais)
+    // Transferência entre estoques: exige ser gestor da origem e do destino (403 para os demais)
   @Post('transferencias')
   async transferir(@Body() dto: TransferirItemDto, @GetCurrentUser() user: CurrentUser) {
     return this.transferenciasService.transferir(dto, this.getUserId(user));
   }
 
   @Get('saldo/item/:itemId')
-  async consultarSaldoItem(@Param('itemId') itemId: string) {
-    return this.movimentacoesService.consultarSaldoItem(itemId);
+  async consultarSaldoItem(@Param('itemId') itemId: string, @GetCurrentUser() user: CurrentUser) {
+    return this.movimentacoesService.consultarSaldoItemAutorizado(itemId, this.getUserId(user), this.checkIsAdmin(user));
   }
 
   @Get('saldo/estoque/:estoqueId')
-  async consultarSaldoEstoque(@Param('estoqueId') estoqueId: string) {
-    return this.movimentacoesService.consultarSaldoEstoque(estoqueId);
+  async consultarSaldoEstoque(@Param('estoqueId') estoqueId: string, @GetCurrentUser() user: CurrentUser) {
+    return this.movimentacoesService.consultarSaldoEstoqueAutorizado(estoqueId, this.getUserId(user), this.checkIsAdmin(user));
+  }
+
+  @Get('alertas/estoque/:estoqueId')
+  consultarAlertasEstoque(@Param('estoqueId') estoqueId: string, @GetCurrentUser() user: CurrentUser) {
+    return this.movimentacoesService.consultarAlertasEstoque(estoqueId, this.getUserId(user), this.checkIsAdmin(user));
+  }
+
+  @Get('alertas')
+  consultarMeusAlertas(@GetCurrentUser() user: CurrentUser) {
+    return this.movimentacoesService.consultarMeusAlertas(this.getUserId(user), this.checkIsAdmin(user));
   }
 
   @Get('historico/estoque/:estoqueId')

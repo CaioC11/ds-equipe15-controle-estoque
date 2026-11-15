@@ -107,3 +107,7 @@ A meta "branches acima da v1" foi atingida no total e nos dois arquivos que tinh
 - **Partições PPF-03 e PPF-04:** o código não distingue "gestor de outro estoque" de "requisitante": ambos caem em `assertGestorDoEstoque` e na ausência de vínculo. Os dois testes são equivalentes no código, e a cobertura das duas partições tem a mesma base.
 - **Erro de tipo TS2339** na linha 742 da spec da v2 (`headers.disposition?.startsWith`, tipo `string | string[]`). Sem efeito na execução, porque o Vitest não checa tipos; não foi corrigido porque a spec gerada não é editada à mão.
 - **Oráculos (4ª pergunta da Etapa 4):** foi respondida para a v1 em `analise-critica-v1-us5.md` (S3B-09). A seção 3(d) desta análise a retoma para a v2.
+
+## 5. Complementação da interface após a medição histórica
+
+Os CT-05-16, 24, 25 e 27 receberam quatro testes em `controle-estoque-emprestimos-front/src/pages/emprestimos/TermoPage.v2.test.tsx` (4/4 passando). São testes da tela com o serviço simulado: verificam iframe e link de download, botão desabilitado sem anexo, botão habilitado com anexo confirmado e sequência de upload inválido/válido. A matriz marca CT-05-16 como parcial quanto à autorização de perfil e os outros três como cobertos na tela simulada. Esta complementação **não altera** os números históricos da cobertura do backend em `b9b67c5` nem prova persistência integrada; uma nova medição consolidada deve informar separadamente a suíte de interface.

@@ -24,8 +24,8 @@ function setRoles(roles: string[] | null) {
 describe('<Can>', () => {
   beforeEach(() => mockUseAuth.mockReset());
 
-  it('renderiza os filhos quando o usuário tem a role (editor + escrita)', () => {
-    setRoles(['sys_controle-estoque-emprestimos-editor']);
+  it('renderiza os filhos quando o usuário tem a role de ADMIN para escrita', () => {
+    setRoles(['sys_controle-estoque-emprestimos-admin']);
     render(
       <Can roles={WRITE_ROLES}>
         <button>Novo</button>
@@ -44,8 +44,8 @@ describe('<Can>', () => {
     expect(screen.queryByText('Novo')).toBeNull();
   });
 
-  it('esconde delete para editor mas mostra para admin', () => {
-    setRoles(['sys_controle-estoque-emprestimos-editor']);
+  it('esconde delete para usuário comum mas mostra para admin', () => {
+    setRoles(['sys_controle-estoque-emprestimos-users']);
     const { rerender } = render(
       <Can roles={[Roles.ADMIN]}>
         <button>Excluir</button>

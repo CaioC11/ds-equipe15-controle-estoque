@@ -69,6 +69,4 @@ describe('US01 v2 — fronteiras e independência de estoque', () => {
     expect(result).toEqual(registros);
     expect(prisma.movimentacao.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { item: { estoqueId: 'e' } }, orderBy: { dataMovimentacao: 'desc' } }));
   });
-  it.todo('CT-01-07/09/11/12: autorização de edição por gestor; controller atual só permite ADMIN');
-  it.todo('CT-01-17/18/19: validar tipo e quantidade antes de chamar o serviço pela rota HTTP');
 });
