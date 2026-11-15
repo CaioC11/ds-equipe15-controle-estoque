@@ -30,6 +30,9 @@ export interface Responsavel {
   cpf: string | null;
   lotacao: string;
   cargo: string;
+  email?: string | null;
+  curso?: string | null;
+  telefone?: string | null;
 }
 
 export interface Emprestimo {
@@ -57,6 +60,9 @@ export interface ResponsavelInput {
   cpf?: string;
   lotacao: string;
   cargo: string;
+  email?: string;
+  curso?: string;
+  telefone?: string;
 }
 
 export interface CreateEmprestimoDto {

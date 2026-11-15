@@ -100,6 +100,8 @@ model Responsavel {
   lotacao     String
   cargo       String
   email       String?
+  curso       String?
+  telefone    String?
   emprestimos Emprestimo[]
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt

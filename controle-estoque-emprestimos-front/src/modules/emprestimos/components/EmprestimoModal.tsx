@@ -19,6 +19,9 @@ const emprestimoFormSchema = z
     cpf: z.string().trim(),
     lotacao: z.string().trim(),
     cargo: z.string().trim(),
+    email: z.string().trim(),
+    curso: z.string().trim(),
+    telefone: z.string().trim(),
     prazoDevolucao: z
       .string()
       .refine(
@@ -39,6 +42,9 @@ const emprestimoFormSchema = z
       ctx.addIssue({ code: 'custom', path: ['siape'], message: 'Informe o Siape ou o CPF.' });
     if (data.cpf && data.cpf.replace(/\D/g, '').length !== 11) {
       ctx.addIssue({ code: 'custom', path: ['cpf'], message: 'CPF deve ter 11 dígitos.' });
+    }
+    if (data.email && !/^\S+@\S+\.\S+$/.test(data.email)) {
+      ctx.addIssue({ code: 'custom', path: ['email'], message: 'E-mail inválido.' });
     }
   });
 
@@ -80,6 +86,9 @@ export function EmprestimoModal({
       cpf: '',
       lotacao: '',
       cargo: '',
+      email: '',
+      curso: '',
+      telefone: '',
       prazoDevolucao: '',
     },
   });
@@ -98,6 +107,9 @@ export function EmprestimoModal({
               cpf: values.cpf ? values.cpf.replace(/\D/g, '') : undefined,
               lotacao: values.lotacao,
               cargo: values.cargo,
+              email: values.email || undefined,
+              curso: values.curso || undefined,
+              telefone: values.telefone || undefined,
             },
           }),
       prazoDevolucao: values.prazoDevolucao ? fimDoDiaISO(values.prazoDevolucao) : undefined,
@@ -166,6 +178,9 @@ export function EmprestimoModal({
               { name: 'cpf', label: 'CPF (se não houver Siape)', placeholder: '' },
               { name: 'lotacao', label: 'Lotação *', placeholder: 'Ex: CIn' },
               { name: 'cargo', label: 'Cargo *', placeholder: 'Ex: Professor' },
+              { name: 'email', label: 'Email', placeholder: 'Ex: maria@cin.ufpe.br' },
+              { name: 'curso', label: 'Curso (se aluno)', placeholder: 'Ex: Sistemas de Informação' },
+              { name: 'telefone', label: 'Telefone', placeholder: 'Ex: (81) 99999-9999' },
             ] as const
           ).map((campo) => (
             <div key={campo.name} className={campo.name === 'nome' ? 'sm:col-span-2' : undefined}>
