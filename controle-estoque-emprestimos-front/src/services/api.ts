@@ -154,3 +154,35 @@ export const getApiErrorMessage = async (
 
   return fallback;
 };
+
+/** Envelope aplicado a toda resposta pelo TransformInterceptor do backend. */
+interface ApiEnvelope<T> {
+  statusCode: number;
+  timestamp: string;
+  path: string;
+  data: T;
+}
+
+/** Erro HTTP com o status, para a tela distinguir "sem permissão" de falha de servidor. */
+export class HttpError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'HttpError';
+    this.status = status;
+  }
+}
+
+export async function request<T>(path: string, fallback: string, init?: RequestInit): Promise<T> {
+  const response = await fetchApi(`${API_URL}${path}`, init);
+
+  if (!response.ok) {
+    const message = await getApiErrorMessage(response, fallback);
+    throw new HttpError(message, response.status);
+  }
+
+  const envelope = (await response.json()) as ApiEnvelope<T>;
+  return envelope.data;
+}
+
