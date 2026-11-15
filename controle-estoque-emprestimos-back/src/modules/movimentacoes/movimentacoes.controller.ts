@@ -11,7 +11,7 @@ import { TransferenciasService } from './transferencias.service';
 @Controller('movimentacoes')
 @UseGuards(AuthGuard)
 export class MovimentacoesController {
-    constructor(
+  constructor(
     private readonly movimentacoesService: MovimentacoesService,
     private readonly transferenciasService: TransferenciasService,
   ) {}
@@ -33,13 +33,16 @@ export class MovimentacoesController {
     );
   }
 
-    // Transferência entre estoques: exige ser gestor da origem e do destino (403 para os demais)
+  // Transferência entre estoques: exige ser gestor da origem e do destino (403 para os demais)
   @Post('transferencias')
   async transferir(@Body() dto: TransferirItemDto, @GetCurrentUser() user: CurrentUser) {
     return this.transferenciasService.transferir(dto, this.getUserId(user));
   }
 
   @Get('saldo/item/:itemId')
+  async consultarSaldoItem(@Param('itemId') itemId: string) {
+    return this.movimentacoesService.consultarSaldoItem(itemId);
+  }
 
   @Get('saldo/estoque/:estoqueId')
   async consultarSaldoEstoque(@Param('estoqueId') estoqueId: string) {
