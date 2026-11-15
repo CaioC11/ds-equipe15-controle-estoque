@@ -1,6 +1,6 @@
+import { randomUUID } from 'node:crypto';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { Prisma, StatusEmprestimo, StatusItem, TipoItem, TipoMovimentacao } from '@prisma/client';
-import { randomUUID } from 'node:crypto';
 import { assertGestorDoEstoque } from '../../common/auth/assert-gestor-do-estoque';
 import { AppException } from '../../common/exceptions/app.exception';
 import { ErrorCode } from '../../common/exceptions/error-code.enum';

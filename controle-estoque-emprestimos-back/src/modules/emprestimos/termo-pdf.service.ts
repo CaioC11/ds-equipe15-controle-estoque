@@ -130,7 +130,7 @@ export class TermoPdfService {
     });
     y -= 32;
 
-        const r = data.responsavel;
+    const r = data.responsavel;
     drawField('Nome', r.nome);
     if (r.siape) drawField('Siape', r.siape);
     if (r.cpf) drawField('CPF', r.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4'));

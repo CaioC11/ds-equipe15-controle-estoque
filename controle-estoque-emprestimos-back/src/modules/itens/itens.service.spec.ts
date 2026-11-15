@@ -304,9 +304,9 @@ describe('ItensService', () => {
         tombamento: '123456',
       });
 
-      await expect(
-        service.update('est-1', 'item-1', { tombamento: '' }, 'user-1'),
-      ).rejects.toThrow('Tombamento já preenchido não pode ser apagado');
+      await expect(service.update('est-1', 'item-1', { tombamento: '' }, 'user-1')).rejects.toThrow(
+        'Tombamento já preenchido não pode ser apagado',
+      );
       await expect(
         service.update('est-1', 'item-1', { tombamento: null as never }, 'user-1'),
       ).rejects.toBeInstanceOf(AppException);

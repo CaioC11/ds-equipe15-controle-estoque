@@ -66,7 +66,12 @@ export class EstoquesService {
 
   async update(id: string, updateEstoqueDto: UpdateEstoqueDto, userId?: string) {
     if (userId !== undefined) {
-      await assertGestorDoEstoque(this.prisma, id, userId, 'Apenas o gestor deste estoque pode editar seus dados.');
+      await assertGestorDoEstoque(
+        this.prisma,
+        id,
+        userId,
+        'Apenas o gestor deste estoque pode editar seus dados.',
+      );
     }
     await this.findOne(id);
 

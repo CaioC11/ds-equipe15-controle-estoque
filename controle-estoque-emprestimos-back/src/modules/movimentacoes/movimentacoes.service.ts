@@ -128,20 +128,35 @@ export class MovimentacoesService {
   }
 
   async consultarSaldoEstoqueAutorizado(estoqueId: string, usuarioId: string, isAdmin: boolean) {
-    await this.garantirAcessoLeitura(estoqueId, usuarioId, isAdmin, 'Acesso negado ao saldo deste estoque');
+    await this.garantirAcessoLeitura(
+      estoqueId,
+      usuarioId,
+      isAdmin,
+      'Acesso negado ao saldo deste estoque',
+    );
     return this.consultarSaldoEstoque(estoqueId);
   }
 
   async consultarSaldoItemAutorizado(itemId: string, usuarioId: string, isAdmin: boolean) {
     const item = await this.prisma.item.findUnique({ where: { id: itemId } });
     if (!item) throw new NotFoundException('Item não encontrado');
-    await this.garantirAcessoLeitura(item.estoqueId, usuarioId, isAdmin, 'Acesso negado ao saldo deste item');
+    await this.garantirAcessoLeitura(
+      item.estoqueId,
+      usuarioId,
+      isAdmin,
+      'Acesso negado ao saldo deste item',
+    );
     return this.consultarSaldoItem(itemId);
   }
 
   /** Alertas visíveis apenas ao gestor vinculado ou ADMIN. */
   async consultarAlertasEstoque(estoqueId: string, usuarioId: string, isAdmin: boolean) {
-    await this.garantirAcessoLeitura(estoqueId, usuarioId, isAdmin, 'Acesso negado aos alertas deste estoque');
+    await this.garantirAcessoLeitura(
+      estoqueId,
+      usuarioId,
+      isAdmin,
+      'Acesso negado aos alertas deste estoque',
+    );
     const saldos = await this.consultarSaldoEstoque(estoqueId);
     return { estoqueId, itens: saldos.itens.filter((item) => item.abaixoDoMinimo) };
   }
@@ -149,10 +164,19 @@ export class MovimentacoesService {
   async consultarMeusAlertas(usuarioId: string, isAdmin: boolean) {
     const estoques = isAdmin
       ? await this.prisma.estoque.findMany({ where: { ativo: true }, select: { id: true } })
-      : await this.prisma.estoqueGestor.findMany({ where: { usuarioId }, select: { estoqueId: true } });
-    return Promise.all(estoques.map((estoque) =>
-      this.consultarAlertasEstoque('estoqueId' in estoque ? estoque.estoqueId : estoque.id, usuarioId, isAdmin),
-    ));
+      : await this.prisma.estoqueGestor.findMany({
+          where: { usuarioId },
+          select: { estoqueId: true },
+        });
+    return Promise.all(
+      estoques.map((estoque) =>
+        this.consultarAlertasEstoque(
+          'estoqueId' in estoque ? estoque.estoqueId : estoque.id,
+          usuarioId,
+          isAdmin,
+        ),
+      ),
+    );
   }
 
   async consultarHistoricoEstoque(estoqueId: string, usuarioId: string, isAdmin: boolean) {
