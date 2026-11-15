@@ -4,12 +4,17 @@ import type { CurrentUser } from '../../common/auth/current-user.interface';
 import { GetCurrentUser } from '../../common/auth/decorators/current-user.decorator';
 import { AuthGuard } from '../../common/auth/guards/auth.guard';
 import { RegistrarMovimentacaoDto } from './dto/registrar-movimentacao.dto';
+import { TransferirItemDto } from './dto/transferir-item.dto';
 import { MovimentacoesService } from './movimentacoes.service';
+import { TransferenciasService } from './transferencias.service';
 
 @Controller('movimentacoes')
 @UseGuards(AuthGuard)
 export class MovimentacoesController {
-  constructor(private readonly movimentacoesService: MovimentacoesService) {}
+    constructor(
+    private readonly movimentacoesService: MovimentacoesService,
+    private readonly transferenciasService: TransferenciasService,
+  ) {}
 
   private getUserId(user: CurrentUser): string {
     return user.userId ?? '';
@@ -28,10 +33,13 @@ export class MovimentacoesController {
     );
   }
 
-  @Get('saldo/item/:itemId')
-  async consultarSaldoItem(@Param('itemId') itemId: string) {
-    return this.movimentacoesService.consultarSaldoItem(itemId);
+    // Transferência entre estoques: exige ser gestor da origem e do destino (403 para os demais)
+  @Post('transferencias')
+  async transferir(@Body() dto: TransferirItemDto, @GetCurrentUser() user: CurrentUser) {
+    return this.transferenciasService.transferir(dto, this.getUserId(user));
   }
+
+  @Get('saldo/item/:itemId')
 
   @Get('saldo/estoque/:estoqueId')
   async consultarSaldoEstoque(@Param('estoqueId') estoqueId: string) {

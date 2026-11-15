@@ -155,5 +155,12 @@ model Movimentacao {
   quantidade       Int              @default(1)
   usuarioId        String
   dataMovimentacao DateTime         @default(now())
-  observacao       String?
+    observacao       String?
+
+  // Transferência entre estoques: saída e entrada compartilham o mesmo transferenciaId
+  transferenciaId  String?
+  estoqueOrigemId  String?
+  estoqueDestinoId String?
+
+  @@index([transferenciaId])
 }
