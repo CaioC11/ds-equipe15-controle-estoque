@@ -9,8 +9,12 @@ describe('TermoPdfService', () => {
       responsavel: {
         nome: 'Pessoa de Teste',
         siape: '0000000',
+        cpf: null,
         lotacao: 'Centro de Informática',
         cargo: 'Servidor',
+        email: null,
+        curso: null,
+        telefone: null,
       },
       unidade: 'Estoque de teste',
       dataAbertura: new Date('2026-02-27T12:00:00.000Z'),

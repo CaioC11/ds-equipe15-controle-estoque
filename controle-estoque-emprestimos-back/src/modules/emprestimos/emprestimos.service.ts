@@ -159,8 +159,12 @@ export class EmprestimosService {
           responsavel: {
             nome: responsavel.nome,
             siape: responsavel.siape,
+            cpf: responsavel.cpf,
             lotacao: responsavel.lotacao,
             cargo: responsavel.cargo,
+            email: responsavel.email,
+            curso: responsavel.curso,
+            telefone: responsavel.telefone,
           },
           unidade: estoque.nome,
           dataAbertura: emprestimo.dataRetirada,
@@ -566,6 +570,8 @@ export class EmprestimosService {
       lotacao: dados.lotacao,
       cargo: dados.cargo,
       email: dados.email,
+      curso: dados.curso,
+      telefone: dados.telefone,
     };
 
     // Já cadastrado: atualiza com o que o gestor digitou agora (o termo usa os dados mais recentes)

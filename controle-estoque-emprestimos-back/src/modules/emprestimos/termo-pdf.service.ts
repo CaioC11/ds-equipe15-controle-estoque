@@ -6,8 +6,12 @@ export interface TermoPdfData {
   responsavel: {
     nome: string;
     siape: string | null;
+    cpf: string | null;
     lotacao: string;
     cargo: string;
+    email: string | null;
+    curso: string | null;
+    telefone: string | null;
   };
   unidade: string;
   dataAbertura: Date;
@@ -126,10 +130,15 @@ export class TermoPdfService {
     });
     y -= 32;
 
-    drawField('Nome', data.responsavel.nome);
-    drawField('Siape', data.responsavel.siape ?? 'Não informado');
-    drawField('Lotação', data.responsavel.lotacao);
-    drawField('Cargo', data.responsavel.cargo);
+        const r = data.responsavel;
+    drawField('Nome', r.nome);
+    if (r.siape) drawField('Siape', r.siape);
+    if (r.cpf) drawField('CPF', r.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4'));
+    drawField('Lotação', r.lotacao);
+    drawField('Cargo', r.cargo);
+    if (r.curso) drawField('Curso', r.curso);
+    if (r.telefone) drawField('Telefone', r.telefone);
+    if (r.email) drawField('Email', r.email);
     drawField('Unidade de Acautelamento', data.unidade);
     drawField('Data de Abertura', date(data.dataAbertura));
     drawField('Data Prevista para Fechamento', formatarData(data.dataFechamento));

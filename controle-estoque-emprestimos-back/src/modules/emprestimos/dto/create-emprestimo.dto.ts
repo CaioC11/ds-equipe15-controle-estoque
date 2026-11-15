@@ -19,6 +19,8 @@ export const ResponsavelInputSchema = z
     lotacao: texto('Lotação do responsável é obrigatória'),
     cargo: texto('Cargo do responsável é obrigatório'),
     email: z.string().trim().email('E-mail inválido').optional(),
+    curso: z.string().trim().min(1, 'Curso inválido').optional(),
+    telefone: z.string().trim().min(1, 'Telefone inválido').optional(),
   })
   .refine((dados) => Boolean(dados.siape || dados.cpf), {
     path: ['siape'],
