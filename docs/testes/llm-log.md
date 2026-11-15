@@ -1,24 +1,1044 @@
-# Log de uso da LLM (v1)
+# Log de uso da LLM (v1 e v2)
 
 O modelo do prompt está em `prompt-modelo.md`. Este arquivo registra o que foi feito com ele.
 
-## Decisão (igual para todos)
+## Decisão da geração v1
 - LLM: Claude (Anthropic), pelo app claude.ai
-- Modelo e versão:Claude Sonnet 5.5
+- Modelo e versão: Claude Sonnet 5.5
 - Configuração: esforço médio (ou "padrão, sem opção de ajuste"), busca na web desligada, conversa nova sem anexos
-- Data da decisão:13/11/2026
+- Data da decisão: 13/11/2026
 - Matriz de rastreabilidade: não mostrada à LLM; commitada antes da geração.
 
-## Regras
+## Regras da geração v1
 - Até 3 rodadas por story, só para compilar ou rodar. Pedido de "mais testes" fica para a v2.
 - Sem edição manual dos testes; os que não compilam são comentados com registro aqui.
 
 ---
 
-## US01 — Estoques e movimentação/saldo (Mateus)
-(preencher conforme o modelo da seção abaixo)
+## Contexto da complementação v2 (15/11/2026)
 
-## US02 — Controle de acesso por grupo (Artur)
+Esta seção registra a intervenção posterior à geração v1. As suítes originais de `tests/v1-llm/` permanecem intactas. O pedido literal do usuário foi **“corriga e faça tudo que é necessario”**, após a transcrição dos critérios das tarefas v1, análise crítica e v2 e o pedido de revisar a parte de Mateus e Artur. Não houve um prompt independente com a redação integral de cada caso enviado a um serviço externo: o assistente consultou as matrizes e o código nesta conversa e gerou os novos testes. As listas de CT abaixo registram esse contexto, sem apresentá-las como uma citação literal de prompt. Uma rodada de geração e uma correção de execução foram feitas.
+
+## Verificação conjunta e correção adicional
+
+`npx vitest run tests/v2 --config vitest.llm.config.ts`: seis arquivos, 481 aprovados, 6 falhas esperadas (`it.fails`), 6 `todo`, nenhuma falha inesperada. A execução inicial conjunta encontrou em `tests/v2/us04-emprestimos.spec.ts` o oráculo `result.meta.total`; o retorno real é `result.total`, e essa asserção foi corrigida antes da verificação final. Os indicadores v1 no código atual foram medidos com o mesmo `vitest.llm.config.ts`, V8 e escopo, nas saídas `relatorios/v1-codigo-atual/us01`, `us02` e `us06`. Não há confirmação humana registrada para esta complementação.
+
+---
+
+## US01 — Gestão Multiestoque (Costa2208 / Mateus)
+
+- Ferramenta: Codex.
+- Commit-base: `5259ba6` (`origin/main`).
+- Story lida: `README.md`, L73.
+- Arquivo gerado: `controle-estoque-emprestimos-back/tests/v1-llm/us01-estoques.spec.ts`.
+- Critérios: o README não contém CAs separados; o prompt registra CA1 como paráfrase direta do único enunciado, sem consultar matriz.
+
+#### Prompt completo
+<details><summary>Prompt-modelo preenchido enviado na Rodada 1</summary>
+Você vai gerar testes automatizados com Vitest (TypeScript, NestJS 11, Prisma 5).
+
+USER STORY
+US01 (Gestão Multiestoque): Como gestor de estoque, quero cadastrar e gerenciar meu próprio estoque para controlar os itens sob minha responsabilidade. (Prioridade: Alta)
+
+CRITÉRIOS DE ACEITAÇÃO
+O README fornece apenas a frase da story, sem critérios separados. Não acrescente requisitos além dela. CA1 (reformulação direta da story): Dado um gestor de estoque, quando cadastra e gerencia seu próprio estoque, então controla os itens sob sua responsabilidade.
+
+CÓDIGO DO MÓDULO
+
+### src/modules/estoques/estoques.controller.ts
+``typescript
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiBody, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { AccessRole, Roles } from '../../common/auth/decorators/roles.decorator';
+import { AuthGuard } from '../../common/auth/guards/auth.guard';
+import { RolesGuard } from '../../common/auth/guards/roles.guard';
+import { AutorizarGestorDto } from './dto/autorizar-gestor.dto';
+import { CreateEstoqueDto } from './dto/create-estoque.dto';
+import { UpdateEstoqueDto } from './dto/update-estoque.dto';
+import { EstoquesService } from './estoques.service';
+
+@Controller('estoques')
+@ApiTags('Estoques')
+@ApiBearerAuth()
+@UseGuards(AuthGuard, RolesGuard)
+export class EstoquesController {
+  constructor(private readonly estoquesService: EstoquesService) {}
+
+  @Post()
+  @Roles(AccessRole.ADMIN)
+  create(@Body() createEstoqueDto: CreateEstoqueDto) {
+    return this.estoquesService.create(createEstoqueDto);
+  }
+
+  @Get()
+  findAll() {
+    return this.estoquesService.findAll();
+  }
+
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.estoquesService.findOne(id);
+  }
+
+  @Patch(':id')
+  @Roles(AccessRole.ADMIN)
+  update(@Param('id') id: string, @Body() updateEstoqueDto: UpdateEstoqueDto) {
+    return this.estoquesService.update(id, updateEstoqueDto);
+  }
+
+  @Delete(':id')
+  @Roles(AccessRole.ADMIN)
+  remove(@Param('id') id: string) {
+    return this.estoquesService.remove(id);
+  }
+
+  @Get(':id/gestores')
+  @Roles(AccessRole.ADMIN)
+  @ApiOperation({ summary: 'Lista os gestores autorizados para um estoque (ADMIN)' })
+  @ApiParam({ name: 'id', description: 'ID do estoque' })
+  listGestores(@Param('id') id: string) {
+    return this.estoquesService.listGestores(id);
+  }
+
+  @Post(':id/gestores')
+  @Roles(AccessRole.ADMIN)
+  @ApiOperation({ summary: 'Autoriza um usuário como gestor de um estoque (ADMIN)' })
+  @ApiParam({ name: 'id', description: 'ID do estoque' })
+  @ApiBody({
+    type: AutorizarGestorDto,
+    examples: { exemplo: { value: { usuarioId: 'sub-do-usuario-no-keycloak' } } },
+  })
+  addGestor(@Param('id') id: string, @Body() dto: AutorizarGestorDto) {
+    return this.estoquesService.addGestor(id, dto.usuarioId);
+  }
+
+  @Delete(':id/gestores/:usuarioId')
+  @Roles(AccessRole.ADMIN)
+  @ApiOperation({ summary: 'Remove a autorização de gestor de um usuário (ADMIN)' })
+  @ApiParam({ name: 'id', description: 'ID do estoque' })
+  @ApiParam({ name: 'usuarioId', description: 'Claim sub do usuário no Keycloak' })
+  removeGestor(@Param('id') id: string, @Param('usuarioId') usuarioId: string) {
+    return this.estoquesService.removeGestor(id, usuarioId);
+  }
+}
+
+``
+
+### src/modules/estoques/estoques.service.ts
+``typescript
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ResourceConflictException } from '../../common/exceptions/resource-conflict.exception';
+import { ResourceNotFoundException } from '../../common/exceptions/resource-not-found.exception';
+import { PrismaService } from '../../database/prisma.service';
+import { CreateEstoqueDto } from './dto/create-estoque.dto';
+import { UpdateEstoqueDto } from './dto/update-estoque.dto';
+
+@Injectable()
+export class EstoquesService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async create(createEstoqueDto: CreateEstoqueDto) {
+    const existing = await this.prisma.estoque.findFirst({
+      where: {
+        nome: {
+          equals: createEstoqueDto.nome,
+          mode: 'insensitive',
+        },
+      },
+    });
+
+    if (existing) {
+      throw new ConflictException('Já existe um estoque com este nome');
+    }
+
+    return this.prisma.estoque.create({
+      data: {
+        ...createEstoqueDto,
+        ativo: true,
+      },
+    });
+  }
+
+  async findAll(verInativos?: boolean) {
+    const where = verInativos ? {} : { ativo: true };
+
+    const estoques = await this.prisma.estoque.findMany({
+      where,
+      include: {
+        itens: true,
+        gestores: true,
+      },
+      orderBy: { nome: 'asc' },
+    });
+
+    return estoques.map((estoque) => this.formatEstoqueComSaldo(estoque));
+  }
+
+  async findOne(id: string) {
+    const estoque = await this.prisma.estoque.findUnique({
+      where: { id },
+      include: {
+        itens: true,
+        gestores: true,
+      },
+    });
+
+    if (!estoque) {
+      throw new NotFoundException('Estoque não encontrado');
+    }
+
+    return this.formatEstoqueComSaldo(estoque);
+  }
+
+  async update(id: string, updateEstoqueDto: UpdateEstoqueDto) {
+    await this.findOne(id);
+
+    if (updateEstoqueDto.nome) {
+      const existing = await this.prisma.estoque.findFirst({
+        where: {
+          nome: {
+            equals: updateEstoqueDto.nome,
+            mode: 'insensitive',
+          },
+          NOT: { id },
+        },
+      });
+
+      if (existing) {
+        throw new ConflictException('Já existe um estoque com este nome');
+      }
+    }
+
+    return this.prisma.estoque.update({
+      where: { id },
+      data: updateEstoqueDto,
+    });
+  }
+
+  async remove(id: string) {
+    await this.findOne(id);
+
+    return this.prisma.estoque.update({
+      where: { id },
+      data: { ativo: false },
+    });
+  }
+
+  async listGestores(estoqueId: string) {
+    await this.assertEstoqueExiste(estoqueId);
+    return this.prisma.estoqueGestor.findMany({
+      where: { estoqueId },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async addGestor(estoqueId: string, usuarioId: string) {
+    await this.assertEstoqueExiste(estoqueId);
+    const existente = await this.prisma.estoqueGestor.findUnique({
+      where: { estoqueId_usuarioId: { estoqueId, usuarioId } },
+    });
+    if (existente) {
+      throw new ResourceConflictException('Este usuário já é gestor deste estoque.');
+    }
+
+    return this.prisma.estoqueGestor.create({
+      data: { estoqueId, usuarioId },
+    });
+  }
+
+  async removeGestor(estoqueId: string, usuarioId: string) {
+    await this.assertEstoqueExiste(estoqueId);
+    const vinculo = await this.prisma.estoqueGestor.findUnique({
+      where: { estoqueId_usuarioId: { estoqueId, usuarioId } },
+    });
+    if (!vinculo) {
+      throw new ResourceNotFoundException('Vínculo de gestor', usuarioId);
+    }
+
+    return this.prisma.estoqueGestor.delete({
+      where: { estoqueId_usuarioId: { estoqueId, usuarioId } },
+    });
+  }
+
+  private async assertEstoqueExiste(estoqueId: string) {
+    const estoque = await this.prisma.estoque.findUnique({ where: { id: estoqueId } });
+    if (!estoque) {
+      throw new ResourceNotFoundException('Estoque', estoqueId);
+    }
+  }
+
+  private formatEstoqueComSaldo(estoque: any) {
+    const totalItens = estoque.itens?.length || 0;
+    const itensDisponiveis =
+      estoque.itens?.filter((item: any) => item.status === 'DISPONIVEL').length || 0;
+    const itensEmprestados =
+      estoque.itens?.filter((item: any) => item.status === 'EMPRESTADO').length || 0;
+
+    return {
+      ...estoque,
+      saldo: {
+        totalItens,
+        disponiveis: itensDisponiveis,
+        emprestados: itensEmprestados,
+      },
+    };
+  }
+}
+
+``
+
+### src/modules/estoques/dto/create-estoque.dto.ts
+``typescript
+import { createZodDto } from 'nestjs-zod';
+import { z } from 'zod';
+
+export const CreateEstoqueSchema = z.object({
+  nome: z.string({ required_error: 'Nome é obrigatório' }).trim().min(1, 'Nome é obrigatório'),
+  descricao: z.string().optional(),
+  localizacao: z.string().optional(),
+});
+
+export class CreateEstoqueDto extends createZodDto(CreateEstoqueSchema) {}
+
+``
+
+### src/modules/estoques/dto/update-estoque.dto.ts
+``typescript
+import { createZodDto } from 'nestjs-zod';
+import { CreateEstoqueSchema } from './create-estoque.dto';
+
+export const UpdateEstoqueSchema = CreateEstoqueSchema.partial();
+
+export class UpdateEstoqueDto extends createZodDto(UpdateEstoqueSchema) {}
+
+``
+
+### src/modules/movimentacoes/movimentacoes.controller.ts
+``typescript
+import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { AccessRole } from '../../common/auth/access-role.enum';
+import type { CurrentUser } from '../../common/auth/current-user.interface';
+import { GetCurrentUser } from '../../common/auth/decorators/current-user.decorator';
+import { AuthGuard } from '../../common/auth/guards/auth.guard';
+import { RegistrarMovimentacaoDto } from './dto/registrar-movimentacao.dto';
+import { MovimentacoesService } from './movimentacoes.service';
+
+@Controller('movimentacoes')
+@UseGuards(AuthGuard)
+export class MovimentacoesController {
+  constructor(private readonly movimentacoesService: MovimentacoesService) {}
+
+  private getUserId(user: CurrentUser): string {
+    return user.userId ?? '';
+  }
+
+  private checkIsAdmin(user: CurrentUser): boolean {
+    return user.role === AccessRole.ADMIN;
+  }
+
+  @Post()
+  async registrar(@Body() dto: RegistrarMovimentacaoDto, @GetCurrentUser() user: CurrentUser) {
+    return this.movimentacoesService.registrarMovimentacao(
+      dto,
+      this.getUserId(user),
+      this.checkIsAdmin(user),
+    );
+  }
+
+  @Get('saldo/item/:itemId')
+  async consultarSaldoItem(@Param('itemId') itemId: string) {
+    return this.movimentacoesService.consultarSaldoItem(itemId);
+  }
+
+  @Get('saldo/estoque/:estoqueId')
+  async consultarSaldoEstoque(@Param('estoqueId') estoqueId: string) {
+    return this.movimentacoesService.consultarSaldoEstoque(estoqueId);
+  }
+
+  @Get('historico/estoque/:estoqueId')
+  async consultarHistoricoEstoque(
+    @Param('estoqueId') estoqueId: string,
+    @GetCurrentUser() user: CurrentUser,
+  ) {
+    return this.movimentacoesService.consultarHistoricoEstoque(
+      estoqueId,
+      this.getUserId(user),
+      this.checkIsAdmin(user),
+    );
+  }
+}
+
+``
+
+### src/modules/movimentacoes/movimentacoes.service.ts
+``typescript
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma, TipoMovimentacao } from '@prisma/client';
+import { PrismaService } from '../../database/prisma.service';
+import { RegistrarMovimentacaoDto } from './dto/registrar-movimentacao.dto';
+
+type Db = Prisma.TransactionClient;
+
+const TIPOS_QUE_SOMAM: TipoMovimentacao[] = [TipoMovimentacao.ENTRADA, TipoMovimentacao.DEVOLUCAO];
+
+const TIPOS_QUE_SUBTRAEM: TipoMovimentacao[] = [
+  TipoMovimentacao.SAIDA,
+  TipoMovimentacao.TRANSFERENCIA,
+  TipoMovimentacao.MANUTENCAO,
+];
+
+const MAX_TENTATIVAS = 3;
+
+@Injectable()
+export class MovimentacoesService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async eGestorDoEstoque(
+    estoqueId: string,
+    usuarioId: string,
+    db: Db = this.prisma,
+  ): Promise<boolean> {
+    const gestor = await db.estoqueGestor.findUnique({
+      where: { estoqueId_usuarioId: { estoqueId, usuarioId } },
+    });
+    return !!gestor;
+  }
+
+  /** Soma no banco (groupBy) em vez de carregar todas as movimentações em memória. */
+  async calcularSaldoItem(itemId: string, db: Db = this.prisma): Promise<number> {
+    const grupos = await db.movimentacao.groupBy({
+      by: ['tipo'],
+      where: { itemId },
+      _sum: { quantidade: true },
+    });
+
+    return grupos.reduce(
+      (saldo, g) => saldo + this.aplicarSinal(g.tipo, g._sum.quantidade ?? 0),
+      0,
+    );
+  }
+
+  async registrarMovimentacao(dto: RegistrarMovimentacaoDto, usuarioId: string, isAdmin: boolean) {
+    if (isAdmin) {
+      throw new ForbiddenException('ADMIN tem permissão apenas de consulta');
+    }
+
+    if (!Number.isInteger(dto.quantidade) || dto.quantidade <= 0) {
+      throw new BadRequestException('A quantidade deve ser um inteiro maior que zero');
+    }
+
+    for (let tentativa = 1; ; tentativa++) {
+      try {
+        return await this.prisma.$transaction(
+          (tx) => this.registrarNaTransacao(tx, dto, usuarioId),
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        );
+      } catch (erro) {
+        if (!this.eConflitoDeSerializacao(erro)) throw erro;
+        if (tentativa >= MAX_TENTATIVAS) {
+          throw new ConflictException(
+            'Não foi possível registrar a movimentação por conflito de concorrência. Tente novamente.',
+          );
+        }
+      }
+    }
+  }
+
+  async consultarSaldoItem(itemId: string) {
+    const item = await this.prisma.item.findUnique({ where: { id: itemId } });
+
+    if (!item) {
+      throw new NotFoundException('Item não encontrado');
+    }
+
+    const saldo = await this.calcularSaldoItem(itemId);
+
+    return {
+      itemId: item.id,
+      nomeItem: item.nome,
+      estoqueId: item.estoqueId,
+      saldo,
+      nivelMinimo: item.nivelMinimo,
+      abaixoDoMinimo: this.abaixoDoMinimo(saldo, item.nivelMinimo),
+    };
+  }
+
+  async consultarSaldoEstoque(estoqueId: string) {
+    const estoque = await this.prisma.estoque.findUnique({
+      where: { id: estoqueId },
+    });
+
+    if (!estoque) {
+      throw new NotFoundException('Estoque não encontrado');
+    }
+
+    const itens = await this.prisma.item.findMany({
+      where: { estoqueId },
+    });
+
+    const saldos = await Promise.all(
+      itens.map(async (item) => {
+        const saldo = await this.calcularSaldoItem(item.id);
+        return {
+          itemId: item.id,
+          nomeItem: item.nome,
+          saldo,
+          nivelMinimo: item.nivelMinimo,
+          abaixoDoMinimo: this.abaixoDoMinimo(saldo, item.nivelMinimo),
+        };
+      }),
+    );
+
+    return {
+      estoqueId,
+      itens: saldos,
+    };
+  }
+
+  async consultarHistoricoEstoque(estoqueId: string, usuarioId: string, isAdmin: boolean) {
+    await this.garantirAcessoLeitura(
+      estoqueId,
+      usuarioId,
+      isAdmin,
+      'Acesso negado ao histórico deste estoque',
+    );
+
+    return this.prisma.movimentacao.findMany({
+      where: {
+        item: { estoqueId },
+      },
+      include: {
+        item: {
+          select: {
+            id: true,
+            nome: true,
+            tipo: true,
+          },
+        },
+      },
+      orderBy: {
+        dataMovimentacao: 'desc',
+      },
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Internos
+  // ---------------------------------------------------------------------------
+
+  private async registrarNaTransacao(tx: Db, dto: RegistrarMovimentacaoDto, usuarioId: string) {
+    const item = await tx.item.findUnique({ where: { id: dto.itemId } });
+
+    if (!item) {
+      throw new NotFoundException('Item não encontrado');
+    }
+
+    const eGestor = await this.eGestorDoEstoque(item.estoqueId, usuarioId, tx);
+    if (!eGestor) {
+      throw new ForbiddenException('Apenas o gestor deste estoque pode registrar movimentações');
+    }
+
+    const saldoAtual = await this.calcularSaldoItem(dto.itemId, tx);
+
+    if (TIPOS_QUE_SUBTRAEM.includes(dto.tipo) && dto.quantidade > saldoAtual) {
+      throw new BadRequestException('Saldo insuficiente para realizar a movimentação');
+    }
+
+    const movimentacao = await tx.movimentacao.create({
+      data: {
+        itemId: dto.itemId,
+        tipo: dto.tipo,
+        quantidade: dto.quantidade,
+        observacao: dto.observacao,
+        usuarioId,
+      },
+    });
+
+    const novoSaldo = saldoAtual + this.aplicarSinal(dto.tipo, dto.quantidade);
+
+    return {
+      movimentacao,
+      saldoAtual: novoSaldo,
+      abaixoDoMinimo: this.abaixoDoMinimo(novoSaldo, item.nivelMinimo),
+    };
+  }
+
+  private async garantirAcessoLeitura(
+    estoqueId: string,
+    usuarioId: string,
+    isAdmin: boolean,
+    mensagem: string,
+  ): Promise<void> {
+    if (isAdmin) return;
+    const eGestor = await this.eGestorDoEstoque(estoqueId, usuarioId);
+    if (!eGestor) {
+      throw new ForbiddenException(mensagem);
+    }
+  }
+
+  private aplicarSinal(tipo: TipoMovimentacao, quantidade: number): number {
+    if (TIPOS_QUE_SOMAM.includes(tipo)) return quantidade;
+    if (TIPOS_QUE_SUBTRAEM.includes(tipo)) return -quantidade;
+    return 0;
+  }
+
+  private abaixoDoMinimo(saldo: number, nivelMinimo: number | null | undefined): boolean {
+    return nivelMinimo !== null && nivelMinimo !== undefined && saldo <= nivelMinimo;
+  }
+
+  private eConflitoDeSerializacao(erro: unknown): boolean {
+    return (erro as { code?: string } | null)?.code === 'P2034';
+  }
+}
+
+``
+
+### src/modules/movimentacoes/dto/registrar-movimentacao.dto.ts
+``typescript
+import { TipoMovimentacao } from '@prisma/client';
+import { IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
+
+export class RegistrarMovimentacaoDto {
+  @IsString()
+  @IsNotEmpty()
+  itemId: string;
+
+  @IsEnum(TipoMovimentacao)
+  tipo: TipoMovimentacao;
+
+  @IsInt()
+  @Min(1)
+  quantidade: number;
+
+  @IsOptional()
+  @IsString()
+  observacao?: string;
+}
+
+``
+INSTRUÇÕES
+1. Aplique partições de equivalência (válidas e inválidas) em cada variável de entrada.
+2. Aplique análise de valores-limite dos dois lados de cada fronteira.
+3. Garanta que cada critério de aceitação tenha ao menos um teste.
+4. Em cada teste, adicione um comentário com a técnica usada (partição / valor-limite / critério) e o requisito coberto (ex.: CA1).
+5. Use apenas os arquivos e caminhos fornecidos. O arquivo de saída é tests/v1-llm/us01-estoques.spec.ts e os imports apontam para ../../src/...
+6. Responda com um único bloco de código.
+</details>
+
+#### Rodada 1
+- Data e hora: 14/11/2026 às 22:32.
+- Prompt completo: acima; não houve nova geração.
+- Resumo da resposta: um arquivo com 24 testes para schemas de estoque, `EstoquesService`, `MovimentacoesService` e delegação do `MovimentacoesController`; todos os testes trazem comentário de técnica e CA1.
+- Problemas observados: a primeira execução parou antes de iniciar Vitest com `spawn EPERM` ao resolver caminhos dentro do sandbox. O mesmo arquivo e comando foram repetidos com a permissão de execução do processo filho, sem alterar o teste, e rodaram normalmente. Nenhuma rodada de geração adicional foi necessária.
+- Comandos: `npx vitest run tests/v1-llm/us01-estoques.spec.ts --config vitest.llm.config.ts`; repetição de relatório com `--coverage`, reporters default/json e coverage text/html/json-summary.
+- Saídas completas: `%TEMP%\s3b08-us01-round1-vitest.txt` e `%TEMP%\s3b08-us01-report-vitest.txt`.
+- Resultado do Vitest: 24 testes · 24 passando · 0 falhando · 0 não compilam.
+
+#### Contagem final
+| Passando | Falhando | Não compilam |
+|---|---|---|
+| 24 | 0 | 0 |
+
+#### Testes comentados por não compilar
+| Teste | Motivo |
+|---|---|
+| nenhum | não se aplica |
+
+#### Investigação das falhas
+| Teste | Erro | Classificação | Evidência | Issue |
+|---|---|---|---|---|
+| nenhuma falha de teste | não se aplica | não se aplica | A execução isolada passou; o erro `spawn EPERM` ocorreu antes de Vitest iniciar e foi resolvido repetindo o comando com permissão para iniciar o processo filho. | não se aplica |
+
+#### Relatórios
+- `docs/testes/relatorios/resultados-v1-us01.json` (Vitest JSON reporter).
+- `docs/testes/relatorios/v1/us01/` (coverage V8: HTML e JSON summary).
+- Cobertura agregada da execução: 62,01% statements; 62,68% branches; 55,55% functions; 60,33% lines.
+
+- **Revisão humana:** não registrada neste log.
+---
+
+## US01 — v2 (estoques e movimentações)
+
+- **Entrada e lacunas consultadas:** matriz `matriz-rastreabilidade-us1.md`, suíte v1 `us01-estoques.spec.ts`, `EstoquesService`, `MovimentacoesService`; nome ausente/vazio/mínimo, estoques distintos, update ausente, entradas e saídas com saldo 10, estoque vazio/ausente e histórico (CT-01-02/03/04/05/08/10/13/14/15/16/32/33/34/35/36).
+- **Resposta gerada:** `tests/v2/us01-estoques.spec.ts` importa a v1 e acrescenta cenários unitários de schema, serviços e valores de fronteira.
+- **Revisão do requisito:** a autorização de edição por gestor (CT-01-07/09/11/12) não existe na rota atual; validação de tipo/quantidade por HTTP (CT-01-17/18/19) ainda não foi comprovada. Dois `it.todo`; isolamento/histórico em mock estão marcados como parciais na matriz.
+- **Execução:** 36 aprovados, 0 falhando, 0 não compilam, 2 `todo`. Linhas 88/551 (15,97%); branches 46/289 (15,91%). Análise individual: `analise-critica-v2-us1.md`; HTML: `relatorios/v2/us01/index.html`.
+
+---
+
+## US02 — Controle de acesso (Costa2208)
+<details>
+<summary>Prompt completo da rodada 1</summary>
+
+``text
+Você vai gerar testes automatizados com Vitest (TypeScript, NestJS 11, Prisma 5).
+
+USER STORY
+US02 (Controle de Acesso): Como gestor de estoque, quero definir quais grupos têm acesso ao meu estoque para evitar movimentações não autorizadas. (Prioridade: Alta)
+
+CRITÉRIOS DE ACEITAÇÃO
+O README fornece apenas a frase da story, sem critérios separados. Não acrescente requisitos além dela. CA1 (reformulação direta da story): Dado um gestor de estoque, quando define quais grupos têm acesso ao próprio estoque, então movimentações de usuários não autorizados são bloqueadas.
+
+CÓDIGO DO MÓDULO
+
+### src/common/auth/guards/auth.guard.ts
+``typescript
+import {
+  type CanActivate,
+  type ExecutionContext,
+  Inject,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import type { Request } from 'express';
+import { IS_PUBLIC_KEY } from '@/common/decorators/public.decorator';
+import type { CurrentUser } from '../current-user.interface';
+import { IDENTITY_SOURCE, type IdentitySource } from '../identity/identity-source.interface';
+
+declare global {
+  namespace Express {
+    interface Request {
+      user?: CurrentUser;
+    }
+  }
+}
+
+@Injectable()
+export class AuthGuard implements CanActivate {
+  constructor(
+    private reflector: Reflector,
+    @Inject(IDENTITY_SOURCE) private identitySource: IdentitySource,
+  ) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+
+    if (isPublic) {
+      return true;
+    }
+
+    const request = context.switchToHttp().getRequest<Request>();
+    const user = await this.identitySource.extract(request);
+
+    if (!user) {
+      throw new UnauthorizedException('Identidade não fornecida ou inválida.');
+    }
+
+    request.user = user;
+    return true;
+  }
+}
+
+``
+
+### src/common/auth/guards/roles.guard.ts
+``typescript
+import { type CanActivate, type ExecutionContext, Injectable } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import type { Request } from 'express';
+import { AccessDeniedException } from '@/common/exceptions/access-denied.exception';
+import type { AccessRole } from '../access-role.enum';
+import { ROLES_KEY } from '../decorators/roles.decorator';
+
+@Injectable()
+export class RolesGuard implements CanActivate {
+  constructor(private reflector: Reflector) {}
+
+  canActivate(context: ExecutionContext): boolean {
+    const requiredRoles = this.reflector.getAllAndOverride<AccessRole[]>(ROLES_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+
+    if (!requiredRoles || requiredRoles.length === 0) {
+      return true;
+    }
+
+    const request = context.switchToHttp().getRequest<Request>();
+    const user = request.user;
+
+    if (!user || !requiredRoles.includes(user.role)) {
+      throw new AccessDeniedException('Você não tem permissão para acessar este recurso.');
+    }
+
+    return true;
+  }
+}
+
+``
+
+### src/common/auth/decorators/roles.decorator.ts
+``typescript
+import { SetMetadata } from '@nestjs/common';
+import type { AccessRole } from '../access-role.enum';
+
+export const ROLES_KEY = 'roles';
+export const Roles = (...roles: AccessRole[]) => SetMetadata(ROLES_KEY, roles);
+export { AccessRole } from '../access-role.enum';
+
+``
+
+### src/common/auth/access-role.enum.ts
+``typescript
+export enum AccessRole {
+  ADMIN = 'ADMIN',
+  USER = 'USER',
+}
+
+``
+
+### src/modules/itens/itens.service.ts (trecho de autorização por gestor)
+``typescript
+  async create(estoqueId: string, dto: CreateItemDto, userId?: string) {
+    const estoque = await this.findEstoqueOrFail(estoqueId);
+    await this.assertGestorDoEstoque(estoqueId, userId);
+    if (!estoque.ativo) {
+      throw new AppException(
+        ErrorCode.VALIDATION_FAILED,
+        'Estoque desativado não aceita novos itens',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    await this.assertCategoriaExiste(dto.categoriaId);
+
+    try {
+      const item = await this.prisma.item.create({
+        data: {
+          tipo: dto.tipo,
+          nome: dto.nome,
+          descricao: dto.descricao,
+          tombamento: dto.tombamento,
+          numeroSerie: dto.numeroSerie,
+          nivelMinimo: dto.nivelMinimo,
+          categoriaId: dto.categoriaId,
+          estoqueId,
+        },
+        include: { categoria: true },
+      });
+      return this.comTombamentoPendente(item);
+    } catch (error) {
+      this.traduzirErroDeUnicidade(error);
+    }
+  }
+``
+
+### src/modules/itens/itens.service.ts (trecho de autorização por gestor)
+``typescript
+  // Papel de gestor é por estoque (docs/permissoes.md, regra 2)
+  private async assertGestorDoEstoque(estoqueId: string, userId?: string) {
+    const vinculo = userId
+      ? await this.prisma.estoqueGestor.findUnique({
+          where: { estoqueId_usuarioId: { estoqueId, usuarioId: userId } },
+        })
+      : null;
+
+    if (!vinculo) {
+      throw new AccessDeniedException(
+        'Apenas gestores deste estoque podem cadastrar ou editar itens.',
+      );
+    }
+  }
+``
+
+### src/modules/emprestimos/emprestimos.service.ts (trecho de autorização por gestor)
+``typescript
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly termoPdf: TermoPdfService,
+    private readonly termoStorage: TermoStorageService,
+  ) {}
+
+  async create(estoqueId: string, dto: CreateEmprestimoDto, userId?: string) {
+    const estoque = await this.findEstoqueOrFail(estoqueId);
+    await this.assertGestorDoEstoque(estoqueId, userId);
+
+    const item = await this.prisma.item.findFirst({ where: { id: dto.itemId, estoqueId } });
+``
+
+### src/modules/emprestimos/emprestimos.service.ts (trecho de autorização por gestor)
+``typescript
+  // Pendentes = aguardando termo + ativos, com "atrasado" calculado na hora
+  async findPendentes(estoqueId: string, query: PaginationQueryDto, user?: CurrentUser) {
+    await this.findEstoqueOrFail(estoqueId);
+    if (user?.role !== AccessRole.ADMIN) {
+      await this.assertGestorDoEstoque(estoqueId, user?.userId);
+    }
+
+    const where = { status: { in: STATUS_PENDENTES }, item: { estoqueId } };
+``
+
+### src/modules/emprestimos/emprestimos.service.ts (trecho de autorização por gestor)
+``typescript
+  // Papel de gestor é por estoque (docs/permissoes.md, regra 2)
+  private async assertGestorDoEstoque(estoqueId: string, userId?: string) {
+    const vinculo = userId
+      ? await this.prisma.estoqueGestor.findUnique({
+          where: { estoqueId_usuarioId: { estoqueId, usuarioId: userId } },
+        })
+      : null;
+
+    if (!vinculo) {
+      throw new AccessDeniedException(
+        'Apenas gestores deste estoque podem registrar ou consultar empréstimos.',
+      );
+    }
+  }
+``
+
+### src/modules/movimentacoes/movimentacoes.service.ts (trecho de autorização por gestor)
+``typescript
+  async eGestorDoEstoque(
+    estoqueId: string,
+    usuarioId: string,
+    db: Db = this.prisma,
+  ): Promise<boolean> {
+    const gestor = await db.estoqueGestor.findUnique({
+      where: { estoqueId_usuarioId: { estoqueId, usuarioId } },
+    });
+    return !!gestor;
+  }
+``
+
+### src/modules/movimentacoes/movimentacoes.service.ts (trecho de autorização por gestor)
+``typescript
+  async consultarHistoricoEstoque(estoqueId: string, usuarioId: string, isAdmin: boolean) {
+    await this.garantirAcessoLeitura(
+      estoqueId,
+      usuarioId,
+      isAdmin,
+      'Acesso negado ao histórico deste estoque',
+    );
+
+    return this.prisma.movimentacao.findMany({
+      where: {
+        item: { estoqueId },
+      },
+      include: {
+        item: {
+          select: {
+            id: true,
+            nome: true,
+            tipo: true,
+          },
+        },
+``
+
+### src/modules/movimentacoes/movimentacoes.service.ts (trecho de autorização por gestor)
+``typescript
+  private async registrarNaTransacao(tx: Db, dto: RegistrarMovimentacaoDto, usuarioId: string) {
+    const item = await tx.item.findUnique({ where: { id: dto.itemId } });
+
+    if (!item) {
+      throw new NotFoundException('Item não encontrado');
+    }
+
+    const eGestor = await this.eGestorDoEstoque(item.estoqueId, usuarioId, tx);
+    if (!eGestor) {
+      throw new ForbiddenException('Apenas o gestor deste estoque pode registrar movimentações');
+    }
+
+    const saldoAtual = await this.calcularSaldoItem(dto.itemId, tx);
+
+    if (TIPOS_QUE_SUBTRAEM.includes(dto.tipo) && dto.quantidade > saldoAtual) {
+      throw new BadRequestException('Saldo insuficiente para realizar a movimentação');
+    }
+
+    const movimentacao = await tx.movimentacao.create({
+      data: {
+        itemId: dto.itemId,
+        tipo: dto.tipo,
+        quantidade: dto.quantidade,
+        observacao: dto.observacao,
+        usuarioId,
+      },
+    });
+
+    const novoSaldo = saldoAtual + this.aplicarSinal(dto.tipo, dto.quantidade);
+
+    return {
+      movimentacao,
+      saldoAtual: novoSaldo,
+      abaixoDoMinimo: this.abaixoDoMinimo(novoSaldo, item.nivelMinimo),
+    };
+  }
+``
+
+### src/modules/movimentacoes/movimentacoes.service.ts (trecho de autorização por gestor)
+``typescript
+  private async garantirAcessoLeitura(
+    estoqueId: string,
+    usuarioId: string,
+    isAdmin: boolean,
+    mensagem: string,
+  ): Promise<void> {
+    if (isAdmin) return;
+    const eGestor = await this.eGestorDoEstoque(estoqueId, usuarioId);
+    if (!eGestor) {
+      throw new ForbiddenException(mensagem);
+    }
+  }
+``
+INSTRUÇÕES
+1. Aplique partições de equivalência (válidas e inválidas) em cada variável de entrada.
+2. Aplique análise de valores-limite dos dois lados de cada fronteira.
+3. Garanta que cada critério de aceitação tenha ao menos um teste.
+4. Em cada teste, adicione um comentário com a técnica usada (partição / valor-limite / critério) e o requisito coberto (ex.: CA1).
+5. Use apenas os arquivos e caminhos fornecidos. O arquivo de saída é tests/v1-llm/us02-acesso.spec.ts e os imports apontam para ../../src/...
+6. Responda com um único bloco de código.
+``
+</details>
+
+#### Rodada 1
+- Data e hora: 14/11/2026 às 22:38.
+- Prompt completo: acima; não houve nova geração.
+- Resumo da resposta: suíte de 13 testes para AuthGuard, RolesGuard e restrições por gestor em itens, empréstimos e movimentações, cada teste comentado com técnica e CA1.
+- Problemas observados: execução inicial do Vitest e execução inicial de cobertura pararam antes de iniciar com spawn EPERM no sandbox. Os mesmos comandos foram repetidos com autorização fora do sandbox; os testes passaram e os relatórios foram gerados. Não foi necessária nova rodada de geração.
+- Comandos: execução isolada da US02 e repetição com cobertura V8, reporters text/html/json-summary e JSON.
+px vitest run tests/v1-llm/us02-acesso.spec.ts --config vitest.llm.config.ts; repetição isolada com --coverage, includes de auth/itens/emprestimos/movimentacoes, reporters text/html/json-summary e JSON.
+- Resultado do Vitest: 13 testes · 13 passando · 0 falhando · 0 não compilam.
+
+#### Contagem final
+| Passando | Falhando | Não compilam |
+|---|---|---|
+| 13 | 0 | 0 |
+
+#### Testes comentados por não compilar
+| Teste | Motivo |
+|---|---|
+| nenhum | não se aplica |
+
+#### Investigação das falhas
+| Teste | Erro | Classificação | Evidência | Issue |
+|---|---|---|---|---|
+| nenhuma falha de teste | não se aplica | não se aplica | A execução isolada passou; spawn EPERM era falha de inicialização do ambiente, não do teste. | não se aplica |
+
+#### Relatórios
+- docs/testes/relatorios/resultados-v1-us02.json (Vitest JSON reporter).
+- docs/testes/relatorios/v1/us02/ (coverage V8: HTML e JSON summary).
+- Cobertura agregada: 15,96% statements; 9,30% branches; 15,12% functions; 16,12% lines.
+
+- **Revisão humana:** não registrada neste log.
+---
+
+## US02 — v2 (acesso por grupo)
+
+- **Entrada e lacunas consultadas:** matriz `matriz-rastreabilidade-us2.md`, suíte v1 `us02-acesso.spec.ts`, `RolesGuard`, `EstoquesController`, `MovimentacoesService`; permissões ADMIN/USER sobre criação e gestores, movimentação vedada a ADMIN e vínculo de gestor (CT01/03/04/05/06/08/09/11/13).
+- **Resposta gerada:** `tests/v2/us02-acesso.spec.ts` importa a v1 e acrescenta testes do guard, status 403 e movimentação no serviço.
+- **Problema da primeira execução e correção:** quatro casos esperavam `ForbiddenException`, mas o guard lança `AccessDeniedException` com `status: 403`. O oráculo foi alterado para conferir o status 403; não houve mudança no produto ou na v1.
+- **Revisão do requisito:** o guard isolado não prova requisição HTTP ou criação real, portanto CT01/04/05/06/11 são parciais. A rota de edição exige ADMIN, não gestor vinculado; CT07/10/12 ficaram pendentes, com um `it.todo`.
+- **Execução final:** 15 aprovados, 0 falhando, 0 não compilam, 1 `todo`. Linhas 117/551 (21,23%); branches 45/289 (15,57%). Análise: `analise-critica-v2-us2.md`; HTML: `relatorios/v2/us02/index.html`.
+
+---
 
 ## US03 — Itens com tombamento (Caio)
 
@@ -1655,6 +2675,8 @@ O branch não coberto é o da linha 14 (`@Injectable()`), o mesmo da v1, associa
 - Ressalva 2 (CT-03-32, 33 e 34): o service só consulta o vínculo de gestor e não lê o perfil. O teste de ADMIN sem vínculo percorre o mesmo caminho do requisitante.
 - Ressalva 3: o fake é simulação, e não banco real. Os casos que dependem dele ficam como Sim* na matriz.
 
+---
+
 ## US04 — Empréstimo e devolução (Theo)
 
 #### Rodada 1
@@ -2491,6 +3513,36 @@ Observação (fora dos CAs): as linhas 196, 265 e 273 do `emprestimos.service.ts
 - Mesmo recorte de 3 arquivos: linhas **201/201 (100%)**, branches **107/109 (98,17%)**, statements **205/207 (99,03%)**, funções **40/42 (95,24%)**.
 - Referência v1 no código atual: `relatorios/v1/us04-codigo-atual/coverage-summary.json`: linhas **182/201 (90,55%)**, branches **94/109 (86,24%)**. Reexecução da suíte v1 confirmou 134 passando, 2 falhando (mock da linha 470) e 2 todo; os números antigos acima documentam a primeira rodada, não a execução revisada.
 
+## US04 — Implementação da S3-21 (#101), 14/11/2026
+
+### Pedido e escopo
+
+Pedido do integrante: implementar a task que lista responsáveis com nome e Siape/CPF para seleção; aceitar um cadastro existente sem redigitar; mostrar histórico de empréstimos e devoluções; restringir consultas a ADMIN ou gestor do estoque; atualizar matriz e substituir os todo de CA-02 e CA-10 na v2 por testes executáveis. A autorização para implementar foi dada explicitamente nesta rodada.
+
+### Implementação e revisão
+
+- Backend: GET `estoques/:estoqueId/emprestimos/responsaveis` e GET `estoques/:estoqueId/emprestimos/responsaveis/:responsavelId/historico`, paginados. Cadastro global, histórico restrito ao estoque da rota e ao responsável; autorização antes da leitura.
+- POST do empréstimo aceita exatamente uma das alternativas: `responsavel` (cadastro no ato, compatível com o fluxo anterior) ou `responsavelId` (seleção, sem atualizar ou duplicar cadastro). Identificador inexistente retorna 404 e o bloqueio da S3-20 permanece ativo.
+- Frontend: seleção nome + Siape/CPF, alternativa de cadastro novo e painel de histórico incluindo devoluções; percorre todas as páginas e trata vazio/erro/carregamento/troca de estoque.
+- [x] CT-04-05, 09, 10, 38, 39 e 47 a 54 revisados contra CA-02/CA-10, matriz e `docs/permissoes.md`, sem oráculos baseados apenas no retorno do mock.
+- [x] Testes verificam ausência de duplicação/alteração, isolamento de dados e 403 antes das consultas. O fluxo de seleção também verifica que o atraso continua impedindo novo empréstimo.
+- [x] V1 histórica preservada; CA-02 e CA-10 não são mais pendências da v2. PR-04 permanece pendente e não foi decidida nesta task.
+
+### Execução
+
+Comando backend v2: `npx vitest run tests/v2/us04-emprestimos.spec.ts --config vitest.llm.config.ts --coverage --coverage.reporter=html --coverage.reporter=json-summary --coverage.reportsDirectory=../docs/testes/relatorios/v2/us04`.
+
+- V2: **217 testes, 216 passando, 0 falhando, 1 todo** (CT-04-28 / PR-04).
+- V1 sobre o mesmo código: **134 passando, 2 falhando (mock da linha 470), 2 todo**, preservados; relatório regenerado em `relatorios/v1/us04-codigo-atual/`.
+- Mesmo recorte de 3 arquivos: v2 **220/220 linhas (100%)**, **118/119 branches (99,16%)**, **225/227 statements (99,12%)**, **46/48 funções (95,83%)**. V1: **184/220 linhas (83,64%)**, **97/119 branches (81,51%)**.
+- Regressão backend (`npm test`): **151 passando**. Builds backend e frontend: concluídos.
+- Frontend: **27 testes específicos passando** (página, serviço e hook de responsáveis), com API simulada. A regressão geral identifica três falhas preexistentes em `cinnamon-v2.test.tsx` (dois textos esperados) e `components/auth/Can.test.tsx` (papel esperado). As mesmas três falhas foram reproduzidas nos arquivos originais do ZIP, com as mesmas dependências; não são regressões da S3-21.
+
+### Limites
+
+Sem alteração de schema ou migração. Os testes usam Prisma/API simulados: não substituem uma validação ponta a ponta com PostgreSQL e login real. O histórico é por estoque autorizado; ADMIN pode consultar cada estoque, sem ampliar implicitamente o escopo da rota.
+
+---
 
 ## US05 — Termo de Responsabilidade (Randell)
 
@@ -5236,1056 +6288,9 @@ Revisão feita por Randell em 14/10, lendo cada teste de `tests/v2/us05-termo.sp
 
 Conclusões: (a) nenhum teste valida um defeito como comportamento correto; (b) os 6 `it.fails` registram divergências entre o requisito e o código (ACH-15 e ACH-09); (c) os pontos em que o oráculo não vem do requisito (400 e 409 em G-04, 5 bytes em G-07, fuso em G-06, arquivo ausente em G-05) ficam como decisão da equipe; (d) testes alterados ou removidos após a revisão: nenhum, porque a v2 gerada não pode ser editada à mão.
 
-Testes alterados ou removidos após a revisão: [nenhum / quais].
-## US06 — Alerta de estoque baixo (Mateus)
-
 ---
 
-### Modelo de seção (copiar para cada story)
-
-#### Rodada N
-- Data e hora: ______
-- Prompt completo: (colar o prompt já preenchido, com a story, os CAs e o código)
-- Resumo da resposta: ______
-- Problemas observados: ______
-- Resultado: __ passando · __ falhando · __ não compilam
-
-#### Contagem final
-| Passando | Falhando | Não compilam |
-|---|---|---|
-
-#### Testes comentados por não compilar
-| Teste | Motivo |
-|---|---|
-
-#### Investigação das falhas
-| Teste | Erro | Classificação (oráculo errado, API inventada, setup, defeito real) | Evidência | Issue (se defeito real) |
-|---|---|---|---|---|
-
-## US04 — Implementação da S3-21 (#101), 14/11/2026
-
-### Pedido e escopo
-
-Pedido do integrante: implementar a task que lista responsáveis com nome e Siape/CPF para seleção; aceitar um cadastro existente sem redigitar; mostrar histórico de empréstimos e devoluções; restringir consultas a ADMIN ou gestor do estoque; atualizar matriz e substituir os todo de CA-02 e CA-10 na v2 por testes executáveis. A autorização para implementar foi dada explicitamente nesta rodada.
-
-### Implementação e revisão
-
-- Backend: GET `estoques/:estoqueId/emprestimos/responsaveis` e GET `estoques/:estoqueId/emprestimos/responsaveis/:responsavelId/historico`, paginados. Cadastro global, histórico restrito ao estoque da rota e ao responsável; autorização antes da leitura.
-- POST do empréstimo aceita exatamente uma das alternativas: `responsavel` (cadastro no ato, compatível com o fluxo anterior) ou `responsavelId` (seleção, sem atualizar ou duplicar cadastro). Identificador inexistente retorna 404 e o bloqueio da S3-20 permanece ativo.
-- Frontend: seleção nome + Siape/CPF, alternativa de cadastro novo e painel de histórico incluindo devoluções; percorre todas as páginas e trata vazio/erro/carregamento/troca de estoque.
-- [x] CT-04-05, 09, 10, 38, 39 e 47 a 54 revisados contra CA-02/CA-10, matriz e `docs/permissoes.md`, sem oráculos baseados apenas no retorno do mock.
-- [x] Testes verificam ausência de duplicação/alteração, isolamento de dados e 403 antes das consultas. O fluxo de seleção também verifica que o atraso continua impedindo novo empréstimo.
-- [x] V1 histórica preservada; CA-02 e CA-10 não são mais pendências da v2. PR-04 permanece pendente e não foi decidida nesta task.
-
-### Execução
-
-Comando backend v2: `npx vitest run tests/v2/us04-emprestimos.spec.ts --config vitest.llm.config.ts --coverage --coverage.reporter=html --coverage.reporter=json-summary --coverage.reportsDirectory=../docs/testes/relatorios/v2/us04`.
-
-- V2: **217 testes, 216 passando, 0 falhando, 1 todo** (CT-04-28 / PR-04).
-- V1 sobre o mesmo código: **134 passando, 2 falhando (mock da linha 470), 2 todo**, preservados; relatório regenerado em `relatorios/v1/us04-codigo-atual/`.
-- Mesmo recorte de 3 arquivos: v2 **220/220 linhas (100%)**, **118/119 branches (99,16%)**, **225/227 statements (99,12%)**, **46/48 funções (95,83%)**. V1: **184/220 linhas (83,64%)**, **97/119 branches (81,51%)**.
-- Regressão backend (`npm test`): **151 passando**. Builds backend e frontend: concluídos.
-- Frontend: **27 testes específicos passando** (página, serviço e hook de responsáveis), com API simulada. A regressão geral identifica três falhas preexistentes em `cinnamon-v2.test.tsx` (dois textos esperados) e `components/auth/Can.test.tsx` (papel esperado). As mesmas três falhas foram reproduzidas nos arquivos originais do ZIP, com as mesmas dependências; não são regressões da S3-21.
-
-### Limites
-
-Sem alteração de schema ou migração. Os testes usam Prisma/API simulados: não substituem uma validação ponta a ponta com PostgreSQL e login real. O histórico é por estoque autorizado; ADMIN pode consultar cada estoque, sem ampliar implicitamente o escopo da rota.
-
-## US01 — Gestão Multiestoque (Costa2208 / Mateus)
-
-- Ferramenta: Codex.
-- Commit-base: `5259ba6` (`origin/main`).
-- Story lida: `README.md`, L73.
-- Arquivo gerado: `controle-estoque-emprestimos-back/tests/v1-llm/us01-estoques.spec.ts`.
-- Critérios: o README não contém CAs separados; o prompt registra CA1 como paráfrase direta do único enunciado, sem consultar matriz.
-
-#### Prompt completo
-<details><summary>Prompt-modelo preenchido enviado na Rodada 1</summary>
-Você vai gerar testes automatizados com Vitest (TypeScript, NestJS 11, Prisma 5).
-
-USER STORY
-US01 (Gestão Multiestoque): Como gestor de estoque, quero cadastrar e gerenciar meu próprio estoque para controlar os itens sob minha responsabilidade. (Prioridade: Alta)
-
-CRITÉRIOS DE ACEITAÇÃO
-O README fornece apenas a frase da story, sem critérios separados. Não acrescente requisitos além dela. CA1 (reformulação direta da story): Dado um gestor de estoque, quando cadastra e gerencia seu próprio estoque, então controla os itens sob sua responsabilidade.
-
-CÓDIGO DO MÓDULO
-
-### src/modules/estoques/estoques.controller.ts
-``typescript
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiBody, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
-import { AccessRole, Roles } from '../../common/auth/decorators/roles.decorator';
-import { AuthGuard } from '../../common/auth/guards/auth.guard';
-import { RolesGuard } from '../../common/auth/guards/roles.guard';
-import { AutorizarGestorDto } from './dto/autorizar-gestor.dto';
-import { CreateEstoqueDto } from './dto/create-estoque.dto';
-import { UpdateEstoqueDto } from './dto/update-estoque.dto';
-import { EstoquesService } from './estoques.service';
-
-@Controller('estoques')
-@ApiTags('Estoques')
-@ApiBearerAuth()
-@UseGuards(AuthGuard, RolesGuard)
-export class EstoquesController {
-  constructor(private readonly estoquesService: EstoquesService) {}
-
-  @Post()
-  @Roles(AccessRole.ADMIN)
-  create(@Body() createEstoqueDto: CreateEstoqueDto) {
-    return this.estoquesService.create(createEstoqueDto);
-  }
-
-  @Get()
-  findAll() {
-    return this.estoquesService.findAll();
-  }
-
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.estoquesService.findOne(id);
-  }
-
-  @Patch(':id')
-  @Roles(AccessRole.ADMIN)
-  update(@Param('id') id: string, @Body() updateEstoqueDto: UpdateEstoqueDto) {
-    return this.estoquesService.update(id, updateEstoqueDto);
-  }
-
-  @Delete(':id')
-  @Roles(AccessRole.ADMIN)
-  remove(@Param('id') id: string) {
-    return this.estoquesService.remove(id);
-  }
-
-  @Get(':id/gestores')
-  @Roles(AccessRole.ADMIN)
-  @ApiOperation({ summary: 'Lista os gestores autorizados para um estoque (ADMIN)' })
-  @ApiParam({ name: 'id', description: 'ID do estoque' })
-  listGestores(@Param('id') id: string) {
-    return this.estoquesService.listGestores(id);
-  }
-
-  @Post(':id/gestores')
-  @Roles(AccessRole.ADMIN)
-  @ApiOperation({ summary: 'Autoriza um usuário como gestor de um estoque (ADMIN)' })
-  @ApiParam({ name: 'id', description: 'ID do estoque' })
-  @ApiBody({
-    type: AutorizarGestorDto,
-    examples: { exemplo: { value: { usuarioId: 'sub-do-usuario-no-keycloak' } } },
-  })
-  addGestor(@Param('id') id: string, @Body() dto: AutorizarGestorDto) {
-    return this.estoquesService.addGestor(id, dto.usuarioId);
-  }
-
-  @Delete(':id/gestores/:usuarioId')
-  @Roles(AccessRole.ADMIN)
-  @ApiOperation({ summary: 'Remove a autorização de gestor de um usuário (ADMIN)' })
-  @ApiParam({ name: 'id', description: 'ID do estoque' })
-  @ApiParam({ name: 'usuarioId', description: 'Claim sub do usuário no Keycloak' })
-  removeGestor(@Param('id') id: string, @Param('usuarioId') usuarioId: string) {
-    return this.estoquesService.removeGestor(id, usuarioId);
-  }
-}
-
-``
-
-### src/modules/estoques/estoques.service.ts
-``typescript
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { ResourceConflictException } from '../../common/exceptions/resource-conflict.exception';
-import { ResourceNotFoundException } from '../../common/exceptions/resource-not-found.exception';
-import { PrismaService } from '../../database/prisma.service';
-import { CreateEstoqueDto } from './dto/create-estoque.dto';
-import { UpdateEstoqueDto } from './dto/update-estoque.dto';
-
-@Injectable()
-export class EstoquesService {
-  constructor(private readonly prisma: PrismaService) {}
-
-  async create(createEstoqueDto: CreateEstoqueDto) {
-    const existing = await this.prisma.estoque.findFirst({
-      where: {
-        nome: {
-          equals: createEstoqueDto.nome,
-          mode: 'insensitive',
-        },
-      },
-    });
-
-    if (existing) {
-      throw new ConflictException('Já existe um estoque com este nome');
-    }
-
-    return this.prisma.estoque.create({
-      data: {
-        ...createEstoqueDto,
-        ativo: true,
-      },
-    });
-  }
-
-  async findAll(verInativos?: boolean) {
-    const where = verInativos ? {} : { ativo: true };
-
-    const estoques = await this.prisma.estoque.findMany({
-      where,
-      include: {
-        itens: true,
-        gestores: true,
-      },
-      orderBy: { nome: 'asc' },
-    });
-
-    return estoques.map((estoque) => this.formatEstoqueComSaldo(estoque));
-  }
-
-  async findOne(id: string) {
-    const estoque = await this.prisma.estoque.findUnique({
-      where: { id },
-      include: {
-        itens: true,
-        gestores: true,
-      },
-    });
-
-    if (!estoque) {
-      throw new NotFoundException('Estoque não encontrado');
-    }
-
-    return this.formatEstoqueComSaldo(estoque);
-  }
-
-  async update(id: string, updateEstoqueDto: UpdateEstoqueDto) {
-    await this.findOne(id);
-
-    if (updateEstoqueDto.nome) {
-      const existing = await this.prisma.estoque.findFirst({
-        where: {
-          nome: {
-            equals: updateEstoqueDto.nome,
-            mode: 'insensitive',
-          },
-          NOT: { id },
-        },
-      });
-
-      if (existing) {
-        throw new ConflictException('Já existe um estoque com este nome');
-      }
-    }
-
-    return this.prisma.estoque.update({
-      where: { id },
-      data: updateEstoqueDto,
-    });
-  }
-
-  async remove(id: string) {
-    await this.findOne(id);
-
-    return this.prisma.estoque.update({
-      where: { id },
-      data: { ativo: false },
-    });
-  }
-
-  async listGestores(estoqueId: string) {
-    await this.assertEstoqueExiste(estoqueId);
-    return this.prisma.estoqueGestor.findMany({
-      where: { estoqueId },
-      orderBy: { createdAt: 'asc' },
-    });
-  }
-
-  async addGestor(estoqueId: string, usuarioId: string) {
-    await this.assertEstoqueExiste(estoqueId);
-    const existente = await this.prisma.estoqueGestor.findUnique({
-      where: { estoqueId_usuarioId: { estoqueId, usuarioId } },
-    });
-    if (existente) {
-      throw new ResourceConflictException('Este usuário já é gestor deste estoque.');
-    }
-
-    return this.prisma.estoqueGestor.create({
-      data: { estoqueId, usuarioId },
-    });
-  }
-
-  async removeGestor(estoqueId: string, usuarioId: string) {
-    await this.assertEstoqueExiste(estoqueId);
-    const vinculo = await this.prisma.estoqueGestor.findUnique({
-      where: { estoqueId_usuarioId: { estoqueId, usuarioId } },
-    });
-    if (!vinculo) {
-      throw new ResourceNotFoundException('Vínculo de gestor', usuarioId);
-    }
-
-    return this.prisma.estoqueGestor.delete({
-      where: { estoqueId_usuarioId: { estoqueId, usuarioId } },
-    });
-  }
-
-  private async assertEstoqueExiste(estoqueId: string) {
-    const estoque = await this.prisma.estoque.findUnique({ where: { id: estoqueId } });
-    if (!estoque) {
-      throw new ResourceNotFoundException('Estoque', estoqueId);
-    }
-  }
-
-  private formatEstoqueComSaldo(estoque: any) {
-    const totalItens = estoque.itens?.length || 0;
-    const itensDisponiveis =
-      estoque.itens?.filter((item: any) => item.status === 'DISPONIVEL').length || 0;
-    const itensEmprestados =
-      estoque.itens?.filter((item: any) => item.status === 'EMPRESTADO').length || 0;
-
-    return {
-      ...estoque,
-      saldo: {
-        totalItens,
-        disponiveis: itensDisponiveis,
-        emprestados: itensEmprestados,
-      },
-    };
-  }
-}
-
-``
-
-### src/modules/estoques/dto/create-estoque.dto.ts
-``typescript
-import { createZodDto } from 'nestjs-zod';
-import { z } from 'zod';
-
-export const CreateEstoqueSchema = z.object({
-  nome: z.string({ required_error: 'Nome é obrigatório' }).trim().min(1, 'Nome é obrigatório'),
-  descricao: z.string().optional(),
-  localizacao: z.string().optional(),
-});
-
-export class CreateEstoqueDto extends createZodDto(CreateEstoqueSchema) {}
-
-``
-
-### src/modules/estoques/dto/update-estoque.dto.ts
-``typescript
-import { createZodDto } from 'nestjs-zod';
-import { CreateEstoqueSchema } from './create-estoque.dto';
-
-export const UpdateEstoqueSchema = CreateEstoqueSchema.partial();
-
-export class UpdateEstoqueDto extends createZodDto(UpdateEstoqueSchema) {}
-
-``
-
-### src/modules/movimentacoes/movimentacoes.controller.ts
-``typescript
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
-import { AccessRole } from '../../common/auth/access-role.enum';
-import type { CurrentUser } from '../../common/auth/current-user.interface';
-import { GetCurrentUser } from '../../common/auth/decorators/current-user.decorator';
-import { AuthGuard } from '../../common/auth/guards/auth.guard';
-import { RegistrarMovimentacaoDto } from './dto/registrar-movimentacao.dto';
-import { MovimentacoesService } from './movimentacoes.service';
-
-@Controller('movimentacoes')
-@UseGuards(AuthGuard)
-export class MovimentacoesController {
-  constructor(private readonly movimentacoesService: MovimentacoesService) {}
-
-  private getUserId(user: CurrentUser): string {
-    return user.userId ?? '';
-  }
-
-  private checkIsAdmin(user: CurrentUser): boolean {
-    return user.role === AccessRole.ADMIN;
-  }
-
-  @Post()
-  async registrar(@Body() dto: RegistrarMovimentacaoDto, @GetCurrentUser() user: CurrentUser) {
-    return this.movimentacoesService.registrarMovimentacao(
-      dto,
-      this.getUserId(user),
-      this.checkIsAdmin(user),
-    );
-  }
-
-  @Get('saldo/item/:itemId')
-  async consultarSaldoItem(@Param('itemId') itemId: string) {
-    return this.movimentacoesService.consultarSaldoItem(itemId);
-  }
-
-  @Get('saldo/estoque/:estoqueId')
-  async consultarSaldoEstoque(@Param('estoqueId') estoqueId: string) {
-    return this.movimentacoesService.consultarSaldoEstoque(estoqueId);
-  }
-
-  @Get('historico/estoque/:estoqueId')
-  async consultarHistoricoEstoque(
-    @Param('estoqueId') estoqueId: string,
-    @GetCurrentUser() user: CurrentUser,
-  ) {
-    return this.movimentacoesService.consultarHistoricoEstoque(
-      estoqueId,
-      this.getUserId(user),
-      this.checkIsAdmin(user),
-    );
-  }
-}
-
-``
-
-### src/modules/movimentacoes/movimentacoes.service.ts
-``typescript
-import {
-  BadRequestException,
-  ConflictException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
-import { Prisma, TipoMovimentacao } from '@prisma/client';
-import { PrismaService } from '../../database/prisma.service';
-import { RegistrarMovimentacaoDto } from './dto/registrar-movimentacao.dto';
-
-type Db = Prisma.TransactionClient;
-
-const TIPOS_QUE_SOMAM: TipoMovimentacao[] = [TipoMovimentacao.ENTRADA, TipoMovimentacao.DEVOLUCAO];
-
-const TIPOS_QUE_SUBTRAEM: TipoMovimentacao[] = [
-  TipoMovimentacao.SAIDA,
-  TipoMovimentacao.TRANSFERENCIA,
-  TipoMovimentacao.MANUTENCAO,
-];
-
-const MAX_TENTATIVAS = 3;
-
-@Injectable()
-export class MovimentacoesService {
-  constructor(private readonly prisma: PrismaService) {}
-
-  async eGestorDoEstoque(
-    estoqueId: string,
-    usuarioId: string,
-    db: Db = this.prisma,
-  ): Promise<boolean> {
-    const gestor = await db.estoqueGestor.findUnique({
-      where: { estoqueId_usuarioId: { estoqueId, usuarioId } },
-    });
-    return !!gestor;
-  }
-
-  /** Soma no banco (groupBy) em vez de carregar todas as movimentações em memória. */
-  async calcularSaldoItem(itemId: string, db: Db = this.prisma): Promise<number> {
-    const grupos = await db.movimentacao.groupBy({
-      by: ['tipo'],
-      where: { itemId },
-      _sum: { quantidade: true },
-    });
-
-    return grupos.reduce(
-      (saldo, g) => saldo + this.aplicarSinal(g.tipo, g._sum.quantidade ?? 0),
-      0,
-    );
-  }
-
-  async registrarMovimentacao(dto: RegistrarMovimentacaoDto, usuarioId: string, isAdmin: boolean) {
-    if (isAdmin) {
-      throw new ForbiddenException('ADMIN tem permissão apenas de consulta');
-    }
-
-    if (!Number.isInteger(dto.quantidade) || dto.quantidade <= 0) {
-      throw new BadRequestException('A quantidade deve ser um inteiro maior que zero');
-    }
-
-    for (let tentativa = 1; ; tentativa++) {
-      try {
-        return await this.prisma.$transaction(
-          (tx) => this.registrarNaTransacao(tx, dto, usuarioId),
-          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
-        );
-      } catch (erro) {
-        if (!this.eConflitoDeSerializacao(erro)) throw erro;
-        if (tentativa >= MAX_TENTATIVAS) {
-          throw new ConflictException(
-            'Não foi possível registrar a movimentação por conflito de concorrência. Tente novamente.',
-          );
-        }
-      }
-    }
-  }
-
-  async consultarSaldoItem(itemId: string) {
-    const item = await this.prisma.item.findUnique({ where: { id: itemId } });
-
-    if (!item) {
-      throw new NotFoundException('Item não encontrado');
-    }
-
-    const saldo = await this.calcularSaldoItem(itemId);
-
-    return {
-      itemId: item.id,
-      nomeItem: item.nome,
-      estoqueId: item.estoqueId,
-      saldo,
-      nivelMinimo: item.nivelMinimo,
-      abaixoDoMinimo: this.abaixoDoMinimo(saldo, item.nivelMinimo),
-    };
-  }
-
-  async consultarSaldoEstoque(estoqueId: string) {
-    const estoque = await this.prisma.estoque.findUnique({
-      where: { id: estoqueId },
-    });
-
-    if (!estoque) {
-      throw new NotFoundException('Estoque não encontrado');
-    }
-
-    const itens = await this.prisma.item.findMany({
-      where: { estoqueId },
-    });
-
-    const saldos = await Promise.all(
-      itens.map(async (item) => {
-        const saldo = await this.calcularSaldoItem(item.id);
-        return {
-          itemId: item.id,
-          nomeItem: item.nome,
-          saldo,
-          nivelMinimo: item.nivelMinimo,
-          abaixoDoMinimo: this.abaixoDoMinimo(saldo, item.nivelMinimo),
-        };
-      }),
-    );
-
-    return {
-      estoqueId,
-      itens: saldos,
-    };
-  }
-
-  async consultarHistoricoEstoque(estoqueId: string, usuarioId: string, isAdmin: boolean) {
-    await this.garantirAcessoLeitura(
-      estoqueId,
-      usuarioId,
-      isAdmin,
-      'Acesso negado ao histórico deste estoque',
-    );
-
-    return this.prisma.movimentacao.findMany({
-      where: {
-        item: { estoqueId },
-      },
-      include: {
-        item: {
-          select: {
-            id: true,
-            nome: true,
-            tipo: true,
-          },
-        },
-      },
-      orderBy: {
-        dataMovimentacao: 'desc',
-      },
-    });
-  }
-
-  // ---------------------------------------------------------------------------
-  // Internos
-  // ---------------------------------------------------------------------------
-
-  private async registrarNaTransacao(tx: Db, dto: RegistrarMovimentacaoDto, usuarioId: string) {
-    const item = await tx.item.findUnique({ where: { id: dto.itemId } });
-
-    if (!item) {
-      throw new NotFoundException('Item não encontrado');
-    }
-
-    const eGestor = await this.eGestorDoEstoque(item.estoqueId, usuarioId, tx);
-    if (!eGestor) {
-      throw new ForbiddenException('Apenas o gestor deste estoque pode registrar movimentações');
-    }
-
-    const saldoAtual = await this.calcularSaldoItem(dto.itemId, tx);
-
-    if (TIPOS_QUE_SUBTRAEM.includes(dto.tipo) && dto.quantidade > saldoAtual) {
-      throw new BadRequestException('Saldo insuficiente para realizar a movimentação');
-    }
-
-    const movimentacao = await tx.movimentacao.create({
-      data: {
-        itemId: dto.itemId,
-        tipo: dto.tipo,
-        quantidade: dto.quantidade,
-        observacao: dto.observacao,
-        usuarioId,
-      },
-    });
-
-    const novoSaldo = saldoAtual + this.aplicarSinal(dto.tipo, dto.quantidade);
-
-    return {
-      movimentacao,
-      saldoAtual: novoSaldo,
-      abaixoDoMinimo: this.abaixoDoMinimo(novoSaldo, item.nivelMinimo),
-    };
-  }
-
-  private async garantirAcessoLeitura(
-    estoqueId: string,
-    usuarioId: string,
-    isAdmin: boolean,
-    mensagem: string,
-  ): Promise<void> {
-    if (isAdmin) return;
-    const eGestor = await this.eGestorDoEstoque(estoqueId, usuarioId);
-    if (!eGestor) {
-      throw new ForbiddenException(mensagem);
-    }
-  }
-
-  private aplicarSinal(tipo: TipoMovimentacao, quantidade: number): number {
-    if (TIPOS_QUE_SOMAM.includes(tipo)) return quantidade;
-    if (TIPOS_QUE_SUBTRAEM.includes(tipo)) return -quantidade;
-    return 0;
-  }
-
-  private abaixoDoMinimo(saldo: number, nivelMinimo: number | null | undefined): boolean {
-    return nivelMinimo !== null && nivelMinimo !== undefined && saldo <= nivelMinimo;
-  }
-
-  private eConflitoDeSerializacao(erro: unknown): boolean {
-    return (erro as { code?: string } | null)?.code === 'P2034';
-  }
-}
-
-``
-
-### src/modules/movimentacoes/dto/registrar-movimentacao.dto.ts
-``typescript
-import { TipoMovimentacao } from '@prisma/client';
-import { IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
-
-export class RegistrarMovimentacaoDto {
-  @IsString()
-  @IsNotEmpty()
-  itemId: string;
-
-  @IsEnum(TipoMovimentacao)
-  tipo: TipoMovimentacao;
-
-  @IsInt()
-  @Min(1)
-  quantidade: number;
-
-  @IsOptional()
-  @IsString()
-  observacao?: string;
-}
-
-``
-INSTRUÇÕES
-1. Aplique partições de equivalência (válidas e inválidas) em cada variável de entrada.
-2. Aplique análise de valores-limite dos dois lados de cada fronteira.
-3. Garanta que cada critério de aceitação tenha ao menos um teste.
-4. Em cada teste, adicione um comentário com a técnica usada (partição / valor-limite / critério) e o requisito coberto (ex.: CA1).
-5. Use apenas os arquivos e caminhos fornecidos. O arquivo de saída é tests/v1-llm/us01-estoques.spec.ts e os imports apontam para ../../src/...
-6. Responda com um único bloco de código.
-</details>
-
-#### Rodada 1
-- Data e hora: 14/11/2026 às 22:32.
-- Prompt completo: acima; não houve nova geração.
-- Resumo da resposta: um arquivo com 24 testes para schemas de estoque, `EstoquesService`, `MovimentacoesService` e delegação do `MovimentacoesController`; todos os testes trazem comentário de técnica e CA1.
-- Problemas observados: a primeira execução parou antes de iniciar Vitest com `spawn EPERM` ao resolver caminhos dentro do sandbox. O mesmo arquivo e comando foram repetidos com a permissão de execução do processo filho, sem alterar o teste, e rodaram normalmente. Nenhuma rodada de geração adicional foi necessária.
-- Comandos: `npx vitest run tests/v1-llm/us01-estoques.spec.ts --config vitest.llm.config.ts`; repetição de relatório com `--coverage`, reporters default/json e coverage text/html/json-summary.
-- Saídas completas: `%TEMP%\s3b08-us01-round1-vitest.txt` e `%TEMP%\s3b08-us01-report-vitest.txt`.
-- Resultado do Vitest: 24 testes · 24 passando · 0 falhando · 0 não compilam.
-
-#### Contagem final
-| Passando | Falhando | Não compilam |
-|---|---|---|
-| 24 | 0 | 0 |
-
-#### Testes comentados por não compilar
-| Teste | Motivo |
-|---|---|
-| nenhum | não se aplica |
-
-#### Investigação das falhas
-| Teste | Erro | Classificação | Evidência | Issue |
-|---|---|---|---|---|
-| nenhuma falha de teste | não se aplica | não se aplica | A execução isolada passou; o erro `spawn EPERM` ocorreu antes de Vitest iniciar e foi resolvido repetindo o comando com permissão para iniciar o processo filho. | não se aplica |
-
-#### Relatórios
-- `docs/testes/relatorios/resultados-v1-us01.json` (Vitest JSON reporter).
-- `docs/testes/relatorios/v1/us01/` (coverage V8: HTML e JSON summary).
-- Cobertura agregada da execução: 62,01% statements; 62,68% branches; 55,55% functions; 60,33% lines.
-
-- **Confirmado por:** ______ em __/__
----
-### US02 — Controle de acesso (Costa2208)
-<details>
-<summary>Prompt completo da rodada 1</summary>
-
-``text
-Você vai gerar testes automatizados com Vitest (TypeScript, NestJS 11, Prisma 5).
-
-USER STORY
-US02 (Controle de Acesso): Como gestor de estoque, quero definir quais grupos têm acesso ao meu estoque para evitar movimentações não autorizadas. (Prioridade: Alta)
-
-CRITÉRIOS DE ACEITAÇÃO
-O README fornece apenas a frase da story, sem critérios separados. Não acrescente requisitos além dela. CA1 (reformulação direta da story): Dado um gestor de estoque, quando define quais grupos têm acesso ao próprio estoque, então movimentações de usuários não autorizados são bloqueadas.
-
-CÓDIGO DO MÓDULO
-
-### src/common/auth/guards/auth.guard.ts
-``typescript
-import {
-  type CanActivate,
-  type ExecutionContext,
-  Inject,
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
-import type { Request } from 'express';
-import { IS_PUBLIC_KEY } from '@/common/decorators/public.decorator';
-import type { CurrentUser } from '../current-user.interface';
-import { IDENTITY_SOURCE, type IdentitySource } from '../identity/identity-source.interface';
-
-declare global {
-  namespace Express {
-    interface Request {
-      user?: CurrentUser;
-    }
-  }
-}
-
-@Injectable()
-export class AuthGuard implements CanActivate {
-  constructor(
-    private reflector: Reflector,
-    @Inject(IDENTITY_SOURCE) private identitySource: IdentitySource,
-  ) {}
-
-  async canActivate(context: ExecutionContext): Promise<boolean> {
-    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
-
-    if (isPublic) {
-      return true;
-    }
-
-    const request = context.switchToHttp().getRequest<Request>();
-    const user = await this.identitySource.extract(request);
-
-    if (!user) {
-      throw new UnauthorizedException('Identidade não fornecida ou inválida.');
-    }
-
-    request.user = user;
-    return true;
-  }
-}
-
-``
-
-### src/common/auth/guards/roles.guard.ts
-``typescript
-import { type CanActivate, type ExecutionContext, Injectable } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
-import type { Request } from 'express';
-import { AccessDeniedException } from '@/common/exceptions/access-denied.exception';
-import type { AccessRole } from '../access-role.enum';
-import { ROLES_KEY } from '../decorators/roles.decorator';
-
-@Injectable()
-export class RolesGuard implements CanActivate {
-  constructor(private reflector: Reflector) {}
-
-  canActivate(context: ExecutionContext): boolean {
-    const requiredRoles = this.reflector.getAllAndOverride<AccessRole[]>(ROLES_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
-
-    if (!requiredRoles || requiredRoles.length === 0) {
-      return true;
-    }
-
-    const request = context.switchToHttp().getRequest<Request>();
-    const user = request.user;
-
-    if (!user || !requiredRoles.includes(user.role)) {
-      throw new AccessDeniedException('Você não tem permissão para acessar este recurso.');
-    }
-
-    return true;
-  }
-}
-
-``
-
-### src/common/auth/decorators/roles.decorator.ts
-``typescript
-import { SetMetadata } from '@nestjs/common';
-import type { AccessRole } from '../access-role.enum';
-
-export const ROLES_KEY = 'roles';
-export const Roles = (...roles: AccessRole[]) => SetMetadata(ROLES_KEY, roles);
-export { AccessRole } from '../access-role.enum';
-
-``
-
-### src/common/auth/access-role.enum.ts
-``typescript
-export enum AccessRole {
-  ADMIN = 'ADMIN',
-  USER = 'USER',
-}
-
-``
-
-### src/modules/itens/itens.service.ts (trecho de autorização por gestor)
-``typescript
-  async create(estoqueId: string, dto: CreateItemDto, userId?: string) {
-    const estoque = await this.findEstoqueOrFail(estoqueId);
-    await this.assertGestorDoEstoque(estoqueId, userId);
-    if (!estoque.ativo) {
-      throw new AppException(
-        ErrorCode.VALIDATION_FAILED,
-        'Estoque desativado não aceita novos itens',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-    await this.assertCategoriaExiste(dto.categoriaId);
-
-    try {
-      const item = await this.prisma.item.create({
-        data: {
-          tipo: dto.tipo,
-          nome: dto.nome,
-          descricao: dto.descricao,
-          tombamento: dto.tombamento,
-          numeroSerie: dto.numeroSerie,
-          nivelMinimo: dto.nivelMinimo,
-          categoriaId: dto.categoriaId,
-          estoqueId,
-        },
-        include: { categoria: true },
-      });
-      return this.comTombamentoPendente(item);
-    } catch (error) {
-      this.traduzirErroDeUnicidade(error);
-    }
-  }
-``
-
-### src/modules/itens/itens.service.ts (trecho de autorização por gestor)
-``typescript
-  // Papel de gestor é por estoque (docs/permissoes.md, regra 2)
-  private async assertGestorDoEstoque(estoqueId: string, userId?: string) {
-    const vinculo = userId
-      ? await this.prisma.estoqueGestor.findUnique({
-          where: { estoqueId_usuarioId: { estoqueId, usuarioId: userId } },
-        })
-      : null;
-
-    if (!vinculo) {
-      throw new AccessDeniedException(
-        'Apenas gestores deste estoque podem cadastrar ou editar itens.',
-      );
-    }
-  }
-``
-
-### src/modules/emprestimos/emprestimos.service.ts (trecho de autorização por gestor)
-``typescript
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly termoPdf: TermoPdfService,
-    private readonly termoStorage: TermoStorageService,
-  ) {}
-
-  async create(estoqueId: string, dto: CreateEmprestimoDto, userId?: string) {
-    const estoque = await this.findEstoqueOrFail(estoqueId);
-    await this.assertGestorDoEstoque(estoqueId, userId);
-
-    const item = await this.prisma.item.findFirst({ where: { id: dto.itemId, estoqueId } });
-``
-
-### src/modules/emprestimos/emprestimos.service.ts (trecho de autorização por gestor)
-``typescript
-  // Pendentes = aguardando termo + ativos, com "atrasado" calculado na hora
-  async findPendentes(estoqueId: string, query: PaginationQueryDto, user?: CurrentUser) {
-    await this.findEstoqueOrFail(estoqueId);
-    if (user?.role !== AccessRole.ADMIN) {
-      await this.assertGestorDoEstoque(estoqueId, user?.userId);
-    }
-
-    const where = { status: { in: STATUS_PENDENTES }, item: { estoqueId } };
-``
-
-### src/modules/emprestimos/emprestimos.service.ts (trecho de autorização por gestor)
-``typescript
-  // Papel de gestor é por estoque (docs/permissoes.md, regra 2)
-  private async assertGestorDoEstoque(estoqueId: string, userId?: string) {
-    const vinculo = userId
-      ? await this.prisma.estoqueGestor.findUnique({
-          where: { estoqueId_usuarioId: { estoqueId, usuarioId: userId } },
-        })
-      : null;
-
-    if (!vinculo) {
-      throw new AccessDeniedException(
-        'Apenas gestores deste estoque podem registrar ou consultar empréstimos.',
-      );
-    }
-  }
-``
-
-### src/modules/movimentacoes/movimentacoes.service.ts (trecho de autorização por gestor)
-``typescript
-  async eGestorDoEstoque(
-    estoqueId: string,
-    usuarioId: string,
-    db: Db = this.prisma,
-  ): Promise<boolean> {
-    const gestor = await db.estoqueGestor.findUnique({
-      where: { estoqueId_usuarioId: { estoqueId, usuarioId } },
-    });
-    return !!gestor;
-  }
-``
-
-### src/modules/movimentacoes/movimentacoes.service.ts (trecho de autorização por gestor)
-``typescript
-  async consultarHistoricoEstoque(estoqueId: string, usuarioId: string, isAdmin: boolean) {
-    await this.garantirAcessoLeitura(
-      estoqueId,
-      usuarioId,
-      isAdmin,
-      'Acesso negado ao histórico deste estoque',
-    );
-
-    return this.prisma.movimentacao.findMany({
-      where: {
-        item: { estoqueId },
-      },
-      include: {
-        item: {
-          select: {
-            id: true,
-            nome: true,
-            tipo: true,
-          },
-        },
-``
-
-### src/modules/movimentacoes/movimentacoes.service.ts (trecho de autorização por gestor)
-``typescript
-  private async registrarNaTransacao(tx: Db, dto: RegistrarMovimentacaoDto, usuarioId: string) {
-    const item = await tx.item.findUnique({ where: { id: dto.itemId } });
-
-    if (!item) {
-      throw new NotFoundException('Item não encontrado');
-    }
-
-    const eGestor = await this.eGestorDoEstoque(item.estoqueId, usuarioId, tx);
-    if (!eGestor) {
-      throw new ForbiddenException('Apenas o gestor deste estoque pode registrar movimentações');
-    }
-
-    const saldoAtual = await this.calcularSaldoItem(dto.itemId, tx);
-
-    if (TIPOS_QUE_SUBTRAEM.includes(dto.tipo) && dto.quantidade > saldoAtual) {
-      throw new BadRequestException('Saldo insuficiente para realizar a movimentação');
-    }
-
-    const movimentacao = await tx.movimentacao.create({
-      data: {
-        itemId: dto.itemId,
-        tipo: dto.tipo,
-        quantidade: dto.quantidade,
-        observacao: dto.observacao,
-        usuarioId,
-      },
-    });
-
-    const novoSaldo = saldoAtual + this.aplicarSinal(dto.tipo, dto.quantidade);
-
-    return {
-      movimentacao,
-      saldoAtual: novoSaldo,
-      abaixoDoMinimo: this.abaixoDoMinimo(novoSaldo, item.nivelMinimo),
-    };
-  }
-``
-
-### src/modules/movimentacoes/movimentacoes.service.ts (trecho de autorização por gestor)
-``typescript
-  private async garantirAcessoLeitura(
-    estoqueId: string,
-    usuarioId: string,
-    isAdmin: boolean,
-    mensagem: string,
-  ): Promise<void> {
-    if (isAdmin) return;
-    const eGestor = await this.eGestorDoEstoque(estoqueId, usuarioId);
-    if (!eGestor) {
-      throw new ForbiddenException(mensagem);
-    }
-  }
-``
-INSTRUÇÕES
-1. Aplique partições de equivalência (válidas e inválidas) em cada variável de entrada.
-2. Aplique análise de valores-limite dos dois lados de cada fronteira.
-3. Garanta que cada critério de aceitação tenha ao menos um teste.
-4. Em cada teste, adicione um comentário com a técnica usada (partição / valor-limite / critério) e o requisito coberto (ex.: CA1).
-5. Use apenas os arquivos e caminhos fornecidos. O arquivo de saída é tests/v1-llm/us02-acesso.spec.ts e os imports apontam para ../../src/...
-6. Responda com um único bloco de código.
-``
-</details>
-
-#### Rodada 1
-- Data e hora: 14/11/2026 às 22:38.
-- Prompt completo: acima; não houve nova geração.
-- Resumo da resposta: suíte de 13 testes para AuthGuard, RolesGuard e restrições por gestor em itens, empréstimos e movimentações, cada teste comentado com técnica e CA1.
-- Problemas observados: execução inicial do Vitest e execução inicial de cobertura pararam antes de iniciar com spawn EPERM no sandbox. Os mesmos comandos foram repetidos com autorização fora do sandbox; os testes passaram e os relatórios foram gerados. Não foi necessária nova rodada de geração.
-- Comandos: execução isolada da US02 e repetição com cobertura V8, reporters text/html/json-summary e JSON.
-px vitest run tests/v1-llm/us02-acesso.spec.ts --config vitest.llm.config.ts; repetição isolada com --coverage, includes de auth/itens/emprestimos/movimentacoes, reporters text/html/json-summary e JSON.
-- Resultado do Vitest: 13 testes · 13 passando · 0 falhando · 0 não compilam.
-
-#### Contagem final
-| Passando | Falhando | Não compilam |
-|---|---|---|
-| 13 | 0 | 0 |
-
-#### Testes comentados por não compilar
-| Teste | Motivo |
-|---|---|
-| nenhum | não se aplica |
-
-#### Investigação das falhas
-| Teste | Erro | Classificação | Evidência | Issue |
-|---|---|---|---|---|
-| nenhuma falha de teste | não se aplica | não se aplica | A execução isolada passou; spawn EPERM era falha de inicialização do ambiente, não do teste. | não se aplica |
-
-#### Relatórios
-- docs/testes/relatorios/resultados-v1-us02.json (Vitest JSON reporter).
-- docs/testes/relatorios/v1/us02/ (coverage V8: HTML e JSON summary).
-- Cobertura agregada: 15,96% statements; 9,30% branches; 15,12% functions; 16,12% lines.
-
-- **Confirmado por:** ______ em __/__
----
-### US06 — Alerta de Reposição (ars10cin)
+## US06 — Alerta de Reposição (ars10cin)
 - Execução: executado por Costa2208 (Mateus) a pedido de ars10cin (Artur).
 - Ferramenta: Codex.
 - Commit-base: `5259ba6` (`git rev-parse --short origin/main`).
@@ -6417,5 +6422,12 @@ INSTRUÇÕES
 - `docs/testes/relatorios/v1/us06/` (coverage V8: HTML e JSON summary).
 - Cobertura agregada: 15,43% statements; 11,34% branches; 18,18% functions; 15,38% lines.
 
-- **Confirmado por:** ______ em __/__
+- **Revisão humana:** não registrada neste log.
 ---
+
+## US06 — v2 (alerta de reposição)
+
+- **Entrada e lacunas consultadas:** matriz `matriz-rastreabilidade-us6.md`, suíte v1 `us06-alerta.spec.ts`, `MovimentacoesService`; saldo zero, mínimo zero/nulo, passagem pelo limite após movimento, conteúdo e quantidade de alertas, perfis (CT-06-04/05/06/07/08/09/10/14/15/16/17/18/20/21/22).
+- **Resposta gerada:** `tests/v2/us06-alerta.spec.ts` importa a v1 e acrescenta limites, transições após entrada/saída e classificação de cinco itens.
+- **Revisão do requisito:** a consulta de estoque devolve todos os itens com flag, não uma lista filtrada; CT-06-15/16/17 são parciais. Consultas não recebem identidade nem verificam vínculo; CT-06-18/20/21/22 seguem pendentes. Premissa sobre patrimonial (CT-06-13) também permanece `it.todo`.
+- **Execução:** 17 aprovados, 0 falhando, 0 não compilam, 2 `todo`. Linhas 42/551 (7,62%); branches 23/289 (7,95%). Análise: `analise-critica-v2-us6.md`; HTML: `relatorios/v2/us06/index.html`.
