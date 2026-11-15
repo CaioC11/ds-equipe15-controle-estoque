@@ -51,3 +51,7 @@ Os **14 FP** têm justificativa detalhada na seção 4 do registro original. A d
 | FP-13/14 | Replay do StrictMode não provou corrida; erros em `docs-site` são de configuração de escopo, fora do critério de achado de código. |
 
 **Outros ACH não convertidos nesta lista de oito:** ACH-07/08 têm campo “Confirmado por” em branco no registro original; ACH-10/11/12/13 permanecem achados registrados e podem ser priorizados em outra rodada. Isso não os classifica como falsos positivos. O identificador ACH-14 não consta da sequência original. Não reutilizar IDs DT nem renumerá-los após a refatoração: registrar `DT-xx` no PR e mudar apenas o status da linha correspondente.
+
+## Complemento para refatorações da S3B-12 (15/11/2026)
+
+Antes da alteração de código, a leitura dos dois `assertGestorDoEstoque` confirmou ACH-07 (agora DT-09); a comparação dos dois `request<T>` confirmou ACH-08 (DT-10). DT-11 é um recorte específico, ainda não resolvido, das strings de status registradas em ACH-09; DT-07 permanece com os demais problemas de tipagem e fuso. Os IDs DT-09/10/11 foram acrescentados antes dos commits de refatoração. A confirmação desta rodada é uma conferência de código e testes, sem atribuí-la retroativamente a integrantes da equipe.
