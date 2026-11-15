@@ -1,25 +1,35 @@
-# Refatorações da Sprint 3 — DT-09, DT-10 e DT-11
+# Relatório de refatoração — DT-09, DT-10 e DT-11
 
-## Contexto e resultados
+O documento da Sprint 3 pede pelo menos três itens para a nota máxima. Os IDs foram registrados antes das mudanças e cada refatoração recebeu um commit separado. **Use os títulos dos commits como referência:** hashes locais como `0c33176`, `21a3e60` e `3e7d8ae` podem mudar após `git am` ou a correção de autoria no PR.
 
-O documento da Parte 2 atribui nota máxima ao Passo 3 com **pelo menos três itens refatorados**. A task individual descreve uma refatoração; esta entrega contém três, cada uma em commit local separado. O ZIP de origem não continha `.git`, então os hashes abaixo são de uma sequência local reproduzível. Os patches em `docs/qualidade/patches/` podem ser aplicados ao checkout real com `git am` na ordem numérica. Eles não foram publicados no remoto.
+## DT-09 — Extract Function
 
-Antes de qualquer alteração, `npx vitest run tests/v2 --config vitest.llm.config.ts --silent` no backend: **6 arquivos; 481 passando, 6 falhas esperadas (`it.fails`), 6 pendentes (`it.todo`)**. Não havia falha inesperada. Os IDs DT-09 a DT-11 foram registrados na tabela antes das mudanças. As oito DTs originais permanecem com seu status anterior; DT-11 é apenas o recorte de literais de status do ACH-09, sem declarar resolvido o fuso de DT-07.
+- **Commit:** `DT-09: Extract Function da verificacao de gestor por estoque`.
+- **Antes:** `ItensService` e `EmprestimosService` repetiam a consulta `estoqueGestor.findUnique({ where: { estoqueId_usuarioId: { estoqueId, usuarioId: userId } } })`, seguida de `if (!vinculo) throw new AccessDeniedException(mensagem)`.
+- **Depois:** `assertGestorDoEstoque(prisma, estoqueId, userId, mensagem)` em `back/src/common/auth/` concentra a consulta e a negação; os dois services mantêm as respectivas mensagens públicas.
+- **Melhoria:** reduz o *Duplicated Code* do par do ACH-07 (DT-09) e o risco de alterar apenas uma das duas regras de vínculo. As demais cópias citadas em ACH-07 não foram eliminadas.
+- **Antes → depois:** backend v2 **481 pass, 6 `it.fails`, 6 `todo` → 481 pass, 6 `it.fails`, 6 `todo`**. Sem falha inesperada.
 
-| ID e commit local | Refatoração de catálogo | Antes → depois | Testes após o passo |
-|---|---|---|---|
-| DT-09 · `0c33176` | **Extract Function** | `ItensService` e `EmprestimosService` repetiam a consulta `estoqueGestor.findUnique` e a negação. `assertGestorDoEstoque` em `src/common/auth/` centraliza a consulta e recebe a mensagem original de cada módulo. | Backend v2: 481 pass, 6 `it.fails`, 6 `todo`. |
-| DT-10 · `21a3e60` | **Move Function** | Duas funções `request<T>` idênticas abriam o envelope HTTP e criavam `HttpError`. A função e o erro foram movidos para `front/src/services/api.ts`; o export antigo de `HttpError` permanece para compatibilidade. | Testes direcionados: 13 pass; `tsc -b` do frontend passou. Teste de caracterização foi registrado antes da refatoração (`9de31a9`). |
-| DT-11 · `3e7d8ae` | **Replace Magic Literal** | A contagem por status comparava `'DISPONIVEL'` e `'EMPRESTADO'`. Agora usa `StatusItem.DISPONIVEL` e `StatusItem.EMPRESTADO`. A resposta pública é a mesma. | Backend v2: 481 pass, 6 `it.fails`, 6 `todo`; `npm run build` passou. |
+## DT-10 — Move Function
 
-Depois dos três passos, a suíte v2 completa do backend voltou a **481 pass, 6 `it.fails`, 6 `todo`**. Os 13 testes dos serviços HTTP do frontend passaram. A execução geral do frontend resultou em 87 pass e 3 falhas nos testes de `Can` e `cinnamon-v2`, já descritas na análise anterior; estes arquivos e a lógica testada não foram alterados aqui. Isso limita a afirmação à suíte v2 backend e aos testes direcionados front.
+- **Commit:** `DT-10: Move Function request para cliente HTTP compartilhado`. O teste de caracterização entrou antes, em `test: caracteriza contrato HTTP antes de DT-10`.
+- **Antes:** empréstimos e movimentações tinham cópias de `request<T>` que chamavam `fetchApi`, abriam `envelope.data` e criavam `HttpError` para respostas sem sucesso.
+- **Depois:** `request<T>` e `HttpError` ficam em `front/src/services/api.ts`. Os dois módulos importam a mesma função; o export antigo de `HttpError` continua disponível para os consumidores.
+- **Melhoria:** remove o *Duplicated Code* desse par do ACH-08 (DT-10) e concentra a manutenção do contrato HTTP. Outras classes de erro citadas em ACH-08 permanecem fora deste recorte.
+- **Antes → depois:** 11 testes existentes de empréstimo e 2 novos de caracterização de movimentações, **13 pass → 13 pass**. `tsc -b` do frontend passou após a mudança. O backend não foi alterado neste passo; sua v2 foi verificada após os três passos.
 
-## Revisão do comportamento e limites
+## DT-11 — Replace Magic Literal
 
-A verificação de vínculo preserva a consulta, a ordem da checagem e as mensagens de 403; o teste v2 de US03/US04 continuou verde. O cliente HTTP mantém URL, envelope, fallback, erro e status; o teste novo caracteriza ambos os caminhos de sucesso e erro. O enum tem os mesmos valores usados nos literais. As três mudanças não alteram o contrato externo.
+- **Commit:** `DT-11: Replace Magic Literal por StatusItem`.
+- **Antes:** `formatEstoqueComSaldo` comparava `item.status === 'DISPONIVEL'` e `item.status === 'EMPRESTADO'`.
+- **Depois:** as comparações usam `StatusItem.DISPONIVEL` e `StatusItem.EMPRESTADO` do Prisma; o objeto de resposta conserva os mesmos campos e valores.
+- **Melhoria:** elimina as *magic strings* desse trecho e permite ao compilador detectar mudanças no enum. É um recorte do ACH-09; a DT-07 continua aberta para tipagem e fuso.
+- **Antes → depois:** backend v2 **481 pass, 6 `it.fails`, 6 `todo` → 481 pass, 6 `it.fails`, 6 `todo`**. `npm run build` passou.
 
-O registro original ACH-07 ainda aponta outras cópias da autorização fora do par extraído; DT-09 delimita somente a duplicação entre itens e empréstimos. ACH-08 cita outros clientes HTTP; DT-10 delimita as duas funções `request` idênticas. DT-07 permanece aberta para tipagem e fuso; DT-11 trata apenas os literais de status. Os itens não resolvidos não foram marcados como `Refatorado`.
+## Resultado conjunto e limites
 
-## Comparação dos métodos de análise
+A suíte v2 do backend passou antes e depois das refatorações, sem falhas inesperadas. A suíte geral do frontend terminou com **87 pass e 3 falhas** em `Can.test.tsx` e `cinnamon-v2.test.tsx`, também observadas na revisão anterior. Essas áreas não foram alteradas aqui; apenas os 13 testes direcionados dos serviços HTTP passaram. Não houve teste integrado com banco e autenticação real. A tabela `divida-tecnica.md` marca DT-09/10/11 como `Refatorado` e mantém os demais itens abertos.
 
-A leitura manual revelou o contexto das mensagens de erro e do contrato público; a busca textual localizou os trechos duplicados e os literais; a LLM ajudou a organizar candidatos, mas cada DT selecionada foi novamente conferida no código e exercitada por testes. O detector de duplicação original encontrou o par de autorização e o par de funções HTTP; a simples semelhança de imports foi descartada como FP-07. As medições de antes/depois dão evidência de preservação do comportamento coberto, sem substituir teste integrado com banco e autenticação real.
+## Comparação das formas de identificação
+
+A **leitura manual** encontrou que as duas mensagens de 403 eram diferentes e precisavam continuar diferentes, detalhe que uma busca por blocos duplicados não resolve. A **busca e o detector de duplicação** apontaram rapidamente os dois `request<T>` e as consultas de vínculo repetidas. A **LLM** ajudou a relacionar os trechos aos achados ACH-07/08/09, mas também havia sugerido imports repetidos como dívida; a conferência manual descartou esse FP-07 porque imports compartilhados não duplicam lógica. Testes antes e depois sustentam a preservação do comportamento coberto.
