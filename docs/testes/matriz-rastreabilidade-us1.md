@@ -139,4 +139,4 @@ Pontos que o README e a issue da US01 não definem. Se a resposta for diferente,
 | Critérios de aceitação (CA-01 a CA-08) | 8 |
 | Partições de equivalência | 31 |
 | Fronteiras de valor-limite | 4 (8 valores) |
-| Casos de teste esperados | Não — cenário pendente |
+| Casos de teste esperados | 37 (CT-01-01 a CT-01-37) |

@@ -116,4 +116,4 @@ Pontos que o README e a issue da US06 não definem. Se a resposta for diferente,
 | Critérios de aceitação (CA-01 a CA-06) | 6 |
 | Partições de equivalência | 24 |
 | Fronteiras de valor-limite | 4 (8 valores) |
-| Casos de teste esperados | Sim — v2 US06, CT 03 (inclui v1) |
+| Casos de teste esperados | 23 (CT-06-01 a CT-06-23) |
