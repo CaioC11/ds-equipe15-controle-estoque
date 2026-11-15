@@ -55,3 +55,14 @@ Os **14 FP** têm justificativa detalhada na seção 4 do registro original. A d
 ## Complemento para refatorações da S3B-12 (15/11/2026)
 
 Antes da alteração de código, a leitura dos dois `assertGestorDoEstoque` confirmou ACH-07 (agora DT-09); a comparação dos dois `request<T>` confirmou ACH-08 (DT-10). DT-11 é um recorte específico, ainda não resolvido, das strings de status registradas em ACH-09; DT-07 permanece com os demais problemas de tipagem e fuso. Os IDs DT-09/10/11 foram acrescentados antes dos commits de refatoração. A confirmação desta rodada é uma conferência de código e testes, sem atribuí-la retroativamente a integrantes da equipe.
+
+## Execução das refatorações (15/11/2026)
+
+- Antes: `npx vitest run tests/v2 --config vitest.llm.config.ts --silent` no backend: 481 pass, 6 `it.fails`, 6 `it.todo`, 0 falhas inesperadas.
+- DT-09 (`0c33176`): Extract Function de `assertGestorDoEstoque`; após o passo, mesmo resultado da v2 backend.
+- Preparação DT-10 (`9de31a9`): dois testes de caracterização do serviço de movimentação passaram antes de mover a função. Os 11 testes de `emprestimo.service.test.ts` também passaram.
+- DT-10 (`21a3e60`): Move Function de `request<T>` e `HttpError` para `services/api.ts`, mantendo reexport antigo. Após o passo, 13 testes direcionados passaram e `tsc -b` do frontend passou.
+- DT-11 (`3e7d8ae`): Replace Magic Literal por `StatusItem`; após o passo, backend v2 com 481 pass, 6 `it.fails`, 6 `it.todo`; `npm run build` passou.
+- Verificação final do frontend completo: 87 pass e três falhas em `Can.test.tsx` e `cinnamon-v2.test.tsx`, nos mesmos cenários apontados na revisão anterior; não há alteração desses arquivos nesta refatoração.
+
+O relatório curto e os patches numerados ficam nesta pasta. O ZIP usado como base não tinha `.git`; os commits foram feitos em histórico local e devem ser aplicados ao checkout real, sem assumir hash remoto idêntico.
