@@ -28,7 +28,7 @@ Cobertura V8 já registrada em `docs/testes/relatorios/v1/us06/coverage-summary.
 | **Defeitos reais identificados** | **0** | Não houve falha de teste investigada; as 7 execuções passaram. |
 | **Relatório HTML** | **Presente e consistente** | `relatorios/v1/us06/index.html` e `coverage-summary.json` existem; o HTML mostra 15,38% de linhas e 11,34% de branches, iguais ao summary. |
 
-Fórmulas: requisitos com teste relacionado / total de CAs = 4/6; partições completas (`Sim`) = 8/24; fronteiras completas = 1/4. Os totais (6 CAs, 24 partições, 4 fronteiras e 23 CTs) vêm da seção 7 de `matriz-rastreabilidade-us6.md`. `Sim*` indica execução com Prisma simulado; `Parcial` não entra no numerador de cobertura completa.
+Fórmulas: requisitos com teste relacionado / total de CAs = 4/6; partições completas (`Sim`) = 7/24; fronteiras completas = 1/4. Os totais (6 CAs, 24 partições, 4 fronteiras e 23 CTs) vêm da seção 7 de `matriz-rastreabilidade-us6.md`. `Sim*` indica execução com Prisma simulado; `Parcial` não entra no numerador de cobertura completa.
 
 ### Partições: classificação por linha da matriz
 
