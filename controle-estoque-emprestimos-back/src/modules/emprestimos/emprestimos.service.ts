@@ -147,12 +147,8 @@ export class EmprestimosService {
         });
 
         const ano = new Date().getFullYear();
-        const contador = await tx.contadorTermo.upsert({
-          where: { ano },
-          create: { ano, ultimoNumero: 1 },
-          update: { ultimoNumero: { increment: 1 } },
-        });
-        const numeroAno = `${String(contador.ultimoNumero).padStart(2, '0')}/${ano}`;
+        const numeroAno = await this.proximoNumeroTermo(tx, ano);
+    
         const arquivoPdf = `${ano}/${randomUUID()}.pdf`;
         const pdf = await this.termoPdf.gerar({
           numeroAno,
@@ -628,5 +624,14 @@ export class EmprestimosService {
       );
     }
     throw error;
+  }
+  private async proximoNumeroTermo(tx: Prisma.TransactionClient, ano: number): Promise<string> {
+    const contador = await tx.contadorTermo.upsert({
+      where: { ano },
+      create: { ano, ultimoNumero: 1 },
+      update: { ultimoNumero: { increment: 1 } },
+    });
+
+    return `${String(contador.ultimoNumero).padStart(2, '0')}/${ano}`;
   }
 }
