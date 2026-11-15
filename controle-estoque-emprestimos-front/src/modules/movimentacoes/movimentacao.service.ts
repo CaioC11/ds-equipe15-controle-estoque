@@ -3,7 +3,9 @@ import type {
   Movimentacao,
   RegistrarMovimentacaoDto,
   ResultadoRegistro,
+  ResultadoTransferencia,
   SaldoEstoque,
+  TransferirItemDto,
 } from './movimentacao.types';
 
 /** Comunicação HTTP da tela de movimentações e saldo (backend #31). */
@@ -31,6 +33,19 @@ export class MovimentacaoService {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(dto),
     });
+  }
+
+  /** Só quem é gestor da origem e do destino transfere (403 nos demais). */
+  async transferir(dto: TransferirItemDto): Promise<ResultadoTransferencia> {
+    return request<ResultadoTransferencia>(
+      '/movimentacoes/transferencias',
+      'Erro ao transferir item',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dto),
+      },
+    );
   }
 }
 
