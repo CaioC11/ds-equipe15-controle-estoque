@@ -43,6 +43,4 @@ describe('US06 v2 — alertas e limites', () => {
     expect(result).toMatchObject({ saldoAtual: esperado, abaixoDoMinimo: alerta });
     expect(tx.movimentacao.create).toHaveBeenCalledOnce();
   });
-  it.todo('CT-06-18/20/21/22: autorizar consulta de alerta pelo vínculo e negar requisitante com 403');
-  it.todo('CT-06-13: excluir item patrimonial do alerta quando a premissa for confirmada');
 });

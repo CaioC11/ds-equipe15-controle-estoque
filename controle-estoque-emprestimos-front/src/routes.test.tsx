@@ -8,15 +8,16 @@ vi.mock('react-oidc-context', () => ({
   useAuth: () => mockUseAuth(),
 }));
 
-// Mock todo service to avoid network calls during router tests
-vi.mock('./modules/todos/todo.service', () => ({
-  todoService: {
-    getAll: vi.fn().mockResolvedValue([]),
-    create: vi.fn().mockResolvedValue({}),
-    update: vi.fn().mockResolvedValue({}),
-    remove: vi.fn().mockResolvedValue(undefined),
-  },
-}));
+// Mock do service de estoques para evitar chamadas de rede nos testes de rota
+vi.mock('./modules/estoques/estoque.service', async (importOriginal) => {
+  const original = await importOriginal<typeof import('./modules/estoques/estoque.service')>();
+  return {
+    ...original,
+    estoqueService: {
+      getAll: vi.fn().mockResolvedValue([]),
+    },
+  };
+});
 
 /** Monta um access_token JWT falso com roles */
 function fakeToken(roles: string[]): string {
@@ -65,7 +66,7 @@ describe('<RouteMap>', () => {
     expect(mockSigninRedirect).not.toHaveBeenCalled();
   });
 
-  it('redireciona para /todos e exibe a página de tarefas quando o usuário ESTÁ autenticado', async () => {
+  it('redireciona para /estoques e exibe a página de estoques quando o usuário ESTÁ autenticado', async () => {
     mockUseAuth.mockReturnValue({
       isAuthenticated: true,
       isLoading: false,
@@ -86,7 +87,7 @@ describe('<RouteMap>', () => {
     render(<RouteMap />);
 
     expect(
-      await screen.findByText(/Módulo de Exemplo \(Tarefas\)/i),
+      await screen.findByRole('heading', { name: /^Estoques$/i }),
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^entrar$/i })).toBeNull();
     expect(mockSigninRedirect).not.toHaveBeenCalled();
@@ -155,8 +156,8 @@ describe('<RouteMap>', () => {
     ).toBeInTheDocument();
   });
 
-  it('redireciona para / e exibe tela de login quando usuário não autenticado tenta acessar /todos', () => {
-    window.history.pushState({}, 'Test', '/todos');
+  it('redireciona para / e exibe tela de login quando usuário não autenticado tenta acessar /estoques', () => {
+    window.history.pushState({}, 'Test', '/estoques');
 
     mockUseAuth.mockReturnValue({
       isAuthenticated: false,

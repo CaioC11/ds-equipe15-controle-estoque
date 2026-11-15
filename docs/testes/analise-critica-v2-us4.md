@@ -67,3 +67,19 @@ No frontend, o modal permite selecionar nome + Siape/CPF ou cadastrar no ato. A 
 - As consultas e fluxos do backend são testados com Prisma simulado (`Sim*`), não com banco real. Os testes do frontend simulam a API.
 - O único branch remanescente no recorte é o caso defensivo de prazo nulo na mensagem de bloqueio; a consulta por prazo vencido não retorna nulos.
 - CA-02 e CA-10 não estão mais pendentes da S3-21. Só o CT-04-28 continua pendente da PR-04; não foi presumida uma decisão da equipe.
+
+## Decisão posterior da PR-04
+
+Foi decidido que o dia inteiro do prazo em `America/Recife` ainda está no prazo. A v2 foi revisada a partir desta regra: os oráculos por instante foram substituídos por fronteiras de dia, CT-04-28 tornou-se executável e o filtro de bloqueio no banco usa o início do dia corrente. A execução conjunta passou com 488 aprovados, 6 falhas esperadas e 5 `todo` (sete arquivos); o build backend passou. Os percentuais estruturais das seções 1–4 continuam históricos até gerar cobertura comparável na revisão atual. A v1 gerada permanece intacta e seus oráculos antigos podem falhar no código novo.
+
+### Indicadores reexecutados no código da PR-04
+
+Mesmo Vitest 4.1.8, V8 e recorte dos três arquivos (`emprestimos.controller.ts`, `emprestimos.service.ts`, `create-emprestimo.dto.ts`), ambos em `us04-pr04-codigo-atual/`:
+
+| Indicador | v1 original no código atual | v2 revista |
+|---|---:|---:|
+| Execuções | 132 passando, 4 falhando, 2 todo (138) | 217 passando, 0 falhando, 0 todo |
+| Linhas | 185/221 (83,71%) | 221/221 (100%) |
+| Branches | 93/115 (80,86%) | 114/115 (99,13%) |
+
+A v1 falha em dois mocks antigos e em dois oráculos da comparação por instante. Falhas executam código e entram na cobertura. HTML e JSON: `relatorios/v1/us04-pr04-codigo-atual/` e `relatorios/v2/us04-pr04-codigo-atual/`. Estes indicadores substituem os percentuais anteriores apenas para a comparação da US04 após PR-04; não substituem a medição conjunta das outras stories.

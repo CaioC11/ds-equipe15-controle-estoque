@@ -114,7 +114,7 @@ export class TransferenciasService {
       }
       quantidade = dto.quantidade;
 
-      const saldoOrigem = await this.movimentacoesService.calcularSaldoItem(item.id, tx);
+      const saldoOrigem = await this.movimentacoesService.calcularSaldoItem(item.id, tx, item.tipo);
       if (quantidade > saldoOrigem) {
         throw new AppException(
           ErrorCode.VALIDATION_FAILED,

@@ -33,3 +33,7 @@ npx vitest run tests/v2/us06-alerta.spec.ts --config vitest.llm.config.ts --cove
 ```
 
 Para comparar, trocar `tests/v2/` por `tests/v1-llm/` e a saída por `../docs/testes/relatorios/v1-codigo-atual/us06`. A execução conjunta `npx vitest run tests/v2 --config vitest.llm.config.ts` passou com 481 aprovados, 6 falhas esperadas (`it.fails`) e 6 pendentes em seis arquivos.
+
+## Complementação posterior — lista de alertas
+
+A premissa PR-03 foi revista: item patrimonial também gera alerta quando seu saldo atinge o mínimo. Novas consultas `GET /movimentacoes/alertas` e `/alertas/estoque/:estoqueId` filtram só itens em alerta e verificam vínculo de gestor ou ADMIN. `tests/v2/us06-alertas-permissao.spec.ts` adiciona seis execuções para CT-06-13/17/18/19/20/21/22 (fake de Prisma); todas passaram. A consulta genérica de saldo continua disponível e não representa uma lista exclusiva de alertas. Os indicadores anteriores são históricos; não se afirma que os testes simulados comprovem banco/HTTP real.

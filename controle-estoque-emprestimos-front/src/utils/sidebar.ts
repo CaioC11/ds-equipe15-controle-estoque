@@ -1,5 +1,5 @@
 import { type SidebarData } from '@cincoders/cinnamon';
-import { ListChecks, Users, Tags, Warehouse, ClipboardList, ArrowLeftRight } from 'lucide-react';
+import { Users, Tags, Warehouse, ClipboardList, ArrowLeftRight } from 'lucide-react';
 import { Links } from './enums';
 import cincodersLogo from '../assets/icons/logo_cincoders-icon.svg';
 
@@ -15,12 +15,6 @@ export const sidebar: SidebarData = {
   // jeito que `cin-logo.svg` em pages/login.
   appLogoSrc: cincodersLogo,
   navMain: [
-    {
-      id: 'todos',
-      title: 'Tarefas de Exemplo',
-      href: Links.TODOS,
-      IconComponent: ListChecks,
-    },
     {
       id: 'estoques',
       title: 'Estoques',

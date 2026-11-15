@@ -421,9 +421,9 @@ describe('estaAtrasado', () => {
     prazoDevolucao,
   });
 
-  it('é atraso quando o prazo venceu 1 ms antes de agora', () => {
+  it('é atraso quando o prazo venceu no dia anterior em Recife', () => {
     // v1 | Técnica: valor-limite (prazo = agora - 1 ms) | Requisito: CA8 | CT-04-29
-    expect(estaAtrasado(ativo(new Date(AGORA.getTime() - 1)), AGORA)).toBe(true);
+    expect(estaAtrasado(ativo(new Date(AGORA.getTime() - UM_DIA)), AGORA)).toBe(true);
   });
 
   it('não é atraso quando o prazo é exatamente agora', () => {
@@ -453,7 +453,7 @@ describe('estaAtrasado', () => {
 
   it('usa a data atual quando "agora" não é informado', () => {
     // v1 | Técnica: partição (parâmetro padrão) | Requisito: CA8
-    expect(estaAtrasado(ativo(new Date(AGORA.getTime() - 1)))).toBe(true);
+    expect(estaAtrasado(ativo(new Date(AGORA.getTime() - UM_DIA)))).toBe(true);
     expect(estaAtrasado(ativo(new Date(AGORA.getTime() + UM_DIA)))).toBe(false);
   });
 
@@ -463,11 +463,12 @@ describe('estaAtrasado', () => {
     expect(estaAtrasado(ativo(new Date(AGORA.getTime() + 5 * UM_DIA)), AGORA)).toBe(false);
   });
 
-  // [v2] Lacuna CT-04-28 (PR-04, LM-02 lado "hoje"): a matriz espera que no dia do prazo ainda não haja atraso,
-  // mas o código compara o instante (prazoDevolucao < agora). Aguarda a equipe confirmar a premissa PR-04.
-  it.todo(
-    '[v2] CT-04-28: prazo igual a hoje (qualquer horário do dia) não é atraso — depende de confirmar PR-04',
-  );
+  it('[v2] CT-04-28: prazo igual a hoje em Recife não é atraso até o fim do dia', () => {
+    const prazo = ativo(new Date('2026-11-13T03:00:00.000Z'));
+    expect(estaAtrasado(prazo, new Date('2026-11-13T12:00:00.000Z'))).toBe(false);
+    expect(estaAtrasado(prazo, new Date('2026-11-14T02:59:59.999Z'))).toBe(false);
+    expect(estaAtrasado(prazo, new Date('2026-11-14T03:00:00.000Z'))).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -942,7 +943,7 @@ describe('EmprestimosService.create', () => {
       expect(wheres).toContainEqual({
         responsavelId: RESPONSAVEL.id,
         status: StatusEmprestimo.ATIVO,
-        prazoDevolucao: { lt: AGORA },
+        prazoDevolucao: { lt: new Date('2026-11-13T03:00:00.000Z') },
         justificativaPermanencia: null,
       });
     });
@@ -950,7 +951,7 @@ describe('EmprestimosService.create', () => {
     it('[v2] impede quando o prazo venceu 1 ms antes de agora', async () => {
       // [v2] Lacuna LM-02/LM-03 (lado recusado, valor-limite) | Requisito: CA-09
       simularEmprestimosExistentes(prisma, [
-        atrasado({ prazoDevolucao: new Date(AGORA.getTime() - 1) }),
+        atrasado({ prazoDevolucao: new Date(AGORA.getTime() - UM_DIA) }),
       ]);
 
       await expect(service.create(ESTOQUE_ID, criarDto(), USER_ID)).rejects.toBeInstanceOf(
@@ -1850,10 +1851,10 @@ describe('[v2] EmprestimosService.registrarJustificativaPermanencia', () => {
     expect(r.id).toBe('emp-1');
   });
 
-  it('[v2] aceita quando o prazo venceu 1 ms antes de agora', async () => {
+  it('[v2] aceita quando o prazo venceu no dia anterior', async () => {
     // [v2] Lacuna LM-02 (limite do atraso na justificativa) | Técnica: valor-limite (prazo = agora - 1 ms) | Requisito: CA-09
     prisma.emprestimo.findFirst.mockResolvedValue(
-      ativoVencido({ prazoDevolucao: new Date(AGORA.getTime() - 1) }),
+      ativoVencido({ prazoDevolucao: new Date(AGORA.getTime() - UM_DIA) }),
     );
 
     await expect(

@@ -739,7 +739,7 @@ describe('US05 v2 - EmprestimosController (G-03)', () => {
       expect(r).toBeInstanceOf(StreamableFile);
       const headers = (r as StreamableFile).getHeaders();
       expect(headers.type).toBe('application/pdf');
-      expect(headers.disposition?.startsWith(disposicao)).toBe(true);
+      expect(headers.disposition).toEqual(expect.stringMatching(new RegExp(`^${disposicao}`)));
       expect(headers.disposition).toContain(arquivoRetornado.nomeArquivo);
     });
 
@@ -856,8 +856,12 @@ describe('US05 v2 - TermoPdfService.gerar', () => {
     responsavel: {
       nome: 'Maria da Silva',
       siape: '1234567',
+      cpf: null,
       lotacao: 'Departamento de Computação',
       cargo: 'Professora',
+      email: null,
+      curso: null,
+      telefone: null,
     },
     unidade: 'Estoque Central',
     dataAbertura: new Date('2026-11-10T12:00:00Z'),

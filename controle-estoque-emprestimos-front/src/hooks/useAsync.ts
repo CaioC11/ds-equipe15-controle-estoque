@@ -13,7 +13,7 @@ interface AsyncState<T> {
  *
  * Existe para não repetir esse trio de estados (e o cuidado de ignorar
  * respostas de requisições já obsoletas) em cada hook de domínio — veja
- * `useTodos` para o padrão de uso: um hook por entidade, construído em
+ * `useEstoques` para o padrão de uso: um hook por entidade, construído em
  * cima deste.
  *
  * A flag `cancelled` evita dois problemas clássicos de fetch em useEffect:

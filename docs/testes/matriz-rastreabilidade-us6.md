@@ -74,7 +74,7 @@ Pontos que o README e a issue da US06 não definem. Se a resposta for diferente,
 |----|----------------------------|---------------------------|
 | PR-01 | "Atingir o nível mínimo" significa saldo menor ou igual ao mínimo: igual ao mínimo gera alerta, e abaixo dele (inclusive saldo zero) também | O RF07 diz só "atingir" |
 | PR-02 | Sem nível mínimo, nunca há alerta. Com nível mínimo 0, só o saldo 0 gera alerta | O requisito só diz que o nível mínimo é opcional |
-| PR-03 | Só item de consumo gera alerta; item patrimonial (saldo 1 por registro) não gera, mesmo com nível mínimo informado | O requisito fala em "saldo de um item" sem separar os tipos |
+| PR-03 | Qualquer item, inclusive patrimonial, gera alerta quando saldo <= nível mínimo (decisão posterior confirmada) | O requisito fala em "saldo de um item" sem separar os tipos |
 | PR-04 | O alerta acompanha o saldo atual: some quando a reposição leva o saldo acima do mínimo, permanece enquanto o saldo continua em ou abaixo do mínimo, e uma saída recusada não altera nada | A US06 só diz "providenciar reposição a tempo" |
 | PR-05 | O alerta mostra item, estoque, saldo atual e nível mínimo | O requisito não define o conteúdo do alerta |
 | PR-06 | O gestor vê só os alertas dos seus estoques; gestor de outro estoque e requisitante não veem; o ADMIN vê todos | O RF07 diz "notificar os gestores", sem tratar os outros perfis |
@@ -97,16 +97,16 @@ Pontos que o README e a issue da US06 não definem. Se a resposta for diferente,
 | CA-05 (PR-04*) | evento sobre o saldo | LM-04 (lado com alerta) | CT-06-10*: item em alerta (mínimo 5, saldo 3); entrada de 2 unidades → saldo 5 e o alerta continua exibido | Não — nenhum teste de reposição/entrada | Sim — v2 US06, CT 10 (inclui v1) |
 | CA-05 (PR-04*) | evento sobre o saldo | PEV-03 | CT-06-11*: item em alerta (mínimo 5, saldo 1); entrada de 2 unidades → saldo 3 e o alerta continua exibido com o saldo atualizado | Não — nenhum teste de reposição/entrada | Parcial — cenário relacionado; requisito integral pendente |
 | CA-02 (PR-04*) | evento sobre o saldo | PEV-04 | CT-06-12*: item sem alerta (mínimo 5, saldo 8); saída de 9 unidades recusada por saldo insuficiente → saldo continua 8 e nenhum alerta aparece | Não — nenhum teste de saída recusada | Parcial — cenário relacionado; requisito integral pendente |
-| CA-02 (PR-03*) | tipo do item | PTI-02 | CT-06-13*: item patrimonial com nível mínimo 1 e saldo 1 → nenhum alerta | Não — os fixtures não testam o tipo PATRIMONIAL | Não — cenário pendente |
+| CA-02 (PR-03*) | tipo do item | PTI-02 | CT-06-13*: item patrimonial com nível mínimo 1 e saldo 1 → alerta | Não — os fixtures não testam o tipo PATRIMONIAL | Sim* — premissa PR-03 revista: qualquer item com saldo <= mínimo alerta; `us06-alertas-permissao.spec.ts` testa patrimonial 1/1 |
 | CA-06 (PR-05*) | conteúdo do alerta | PTI-01 | CT-06-14*: item em alerta → o alerta mostra o item, o estoque, o saldo atual e o nível mínimo | Parcial — "calcula alerta para cada item do estoque" (spec:64) verifica IDs, saldo e mínimo, não todos os dados de exibição | Sim — v2 US06, CT 14 (inclui v1) |
 | CA-01 | quantidade de alertas | PAL-01, PES-02, LM-03 (0 alertas) | CT-06-15: estoque em que todos os itens estão acima do mínimo → lista de alertas vazia | Não — nenhum teste de lista de alertas vazia | Parcial — v2 classifica os saldos; a consulta ainda retorna todos os itens, sem lista filtrada de alertas |
 | CA-01 | quantidade de alertas | PAL-02, PES-01, LM-03 (1 alerta) | CT-06-16: estoque com exatamente 1 item em alerta → lista com 1 alerta | Parcial — "calcula alerta para cada item do estoque" (spec:64), marca 1 de 2 itens, mas retorna ambos em vez de filtrar a lista | Parcial — v2 classifica os saldos; a consulta ainda retorna todos os itens, sem lista filtrada de alertas |
 | CA-01 | quantidade de alertas | PAL-03 | CT-06-17: estoque com 3 itens em alerta e 2 acima do mínimo → lista com exatamente os 3 itens em alerta | Parcial — "calcula alerta para cada item do estoque" (spec:64) usa 2 itens, sendo só 1 em alerta | Parcial — v2 classifica os saldos; a consulta ainda retorna todos os itens, sem lista filtrada de alertas |
-| CA-04 (PR-06*) | perfil, estoque | PPF-01, PES-01 | CT-06-18*: gestor só do estoque A; há itens em alerta em A e em B → vê somente os alertas de A | Não — nenhum teste de autorização por vínculo em US06 | Não — requisito ainda sem implementação e teste integrado |
-| CA-04 | perfil, quantidade de alertas | PAL-04 | CT-06-19: gestor dos estoques A e B, com itens em alerta nos dois → vê os alertas dos dois estoques | Não — nenhum teste de múltiplos estoques por gestor | Não — requisito ainda sem implementação e teste integrado |
-| CA-04 (PR-06*) | perfil | PPF-02 | CT-06-20*: gestor de outro estoque consulta os alertas do estoque A → nenhum alerta do estoque A é exibido | Não — nenhum teste de gestor não autorizado | Não — requisito ainda sem implementação e teste integrado |
-| CA-04 (PR-06*) | perfil | PPF-03 | CT-06-21*: requisitante tenta ver os alertas → 403, nenhum alerta devolvido | Não — nenhum teste de requisitante | Não — requisito ainda sem implementação e teste integrado |
-| CA-04 (PR-06*) | perfil | PPF-04 | CT-06-22*: ADMIN consulta os alertas de qualquer estoque → alertas devolvidos | Não — nenhum teste de ADMIN em US06 | Não — requisito ainda sem implementação e teste integrado |
+| CA-04 (PR-06*) | perfil, estoque | PPF-01, PES-01 | CT-06-18*: gestor só do estoque A; há itens em alerta em A e em B → vê somente os alertas de A | Não — nenhum teste de autorização por vínculo em US06 | Sim* — `us06-alertas-permissao.spec.ts`: consulta do gestor filtra seus vínculos (fake de Prisma) |
+| CA-04 | perfil, quantidade de alertas | PAL-04 | CT-06-19: gestor dos estoques A e B, com itens em alerta nos dois → vê os alertas dos dois estoques | Não — nenhum teste de múltiplos estoques por gestor | Sim* — `us06-alertas-permissao.spec.ts`: dois vínculos, dois estoques (fake de Prisma) |
+| CA-04 (PR-06*) | perfil | PPF-02 | CT-06-20*: gestor de outro estoque consulta os alertas do estoque A → nenhum alerta do estoque A é exibido | Não — nenhum teste de gestor não autorizado | Sim* — `us06-alertas-permissao.spec.ts`: gestor de outro estoque recebe 403 antes de ler itens |
+| CA-04 (PR-06*) | perfil | PPF-03 | CT-06-21*: requisitante tenta ver os alertas → 403, nenhum alerta devolvido | Não — nenhum teste de requisitante | Sim* — `us06-alertas-permissao.spec.ts`: requisitante sem vínculo recebe 403 antes de ler itens |
+| CA-04 (PR-06*) | perfil | PPF-04 | CT-06-22*: ADMIN consulta os alertas de qualquer estoque → alertas devolvidos | Não — nenhum teste de ADMIN em US06 | Sim* — `us06-alertas-permissao.spec.ts`: ADMIN vê os dois estoques (fake de Prisma) |
 | CA-01 | estoque | PES-03 | CT-06-23: consultar alertas de estoque inexistente → recusado (não encontrado) | Sim* — "informa estoque inexistente" (spec:58) | Sim — v2 US06, CT 23 (inclui v1) |
 
 ## 7. Totais (contados nesta matriz)
@@ -117,3 +117,7 @@ Pontos que o README e a issue da US06 não definem. Se a resposta for diferente,
 | Partições de equivalência | 24 |
 | Fronteiras de valor-limite | 4 (8 valores) |
 | Casos de teste esperados | 23 (CT-06-01 a CT-06-23) |
+
+## Revisão da premissa PR-03 e testes posteriores
+
+Decisão confirmada: **qualquer item**, inclusive patrimonial, gera alerta quando o saldo é menor ou igual ao nível mínimo. A linha PR-03 acima incorpora a decisão posterior; CT-06-13 foi revisto para esperar alerta em saldo 1/mínimo 1. As consultas de alertas e seis testes adicionais são posteriores à medição histórica da seção anterior. As células `Sim*` dependem de fake; uma verificação HTTP com banco real ainda deve confirmar o isolamento.

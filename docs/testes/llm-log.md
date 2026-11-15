@@ -6431,3 +6431,16 @@ INSTRUÇÕES
 - **Resposta gerada:** `tests/v2/us06-alerta.spec.ts` importa a v1 e acrescenta limites, transições após entrada/saída e classificação de cinco itens.
 - **Revisão do requisito:** a consulta de estoque devolve todos os itens com flag, não uma lista filtrada; CT-06-15/16/17 são parciais. Consultas não recebem identidade nem verificam vínculo; CT-06-18/20/21/22 seguem pendentes. Premissa sobre patrimonial (CT-06-13) também permanece `it.todo`.
 - **Execução:** 17 aprovados, 0 falhando, 0 não compilam, 2 `todo`. Linhas 42/551 (7,62%); branches 23/289 (7,95%). Análise: `analise-critica-v2-us6.md`; HTML: `relatorios/v2/us06/index.html`.
+
+
+## US04 — revisão da v2 após decisão da PR-04 (15/11/2026)
+
+**Prompt/contexto da rodada de revisão nesta conversa:** “A PR-04 foi decidida: prazo igual a hoje não é atraso até o fim do dia em America/Recife. Revise somente os oráculos da v2 que assumem comparação por instante e cubra CT-04-28, preservando a v1 gerada; mantenha a mesma regra na flag e no filtro Prisma de bloqueio.” A resposta gerou a revisão de `tests/v2/us04-emprestimos.spec.ts` e de `emprestimos.service.ts`. Cinco testes da tentativa inicial falhavam porque esperavam a regra antiga; os oráculos da v2 foram então substituídos por fronteiras de dia. A v1 não foi editada.
+
+**Revisão contra o requisito:** CT-04-28 verifica ausência de atraso no próprio dia e início do atraso no dia seguinte; o filtro Prisma usa `lt` do início do dia atual em Recife. Execução: Vitest 4.1.8, sete arquivos v2, 488 aprovados, 6 `it.fails` e 5 `todo`; build backend passou. Os `it.fails` da US05 e os pendentes das outras US não foram reclassificados.
+
+**Medição comparável após a revisão:** v1 original no código atual 132 pass, 4 falhas, 2 todo, linhas 185/221 e branches 93/115; v2 revista 217 pass, 0 falhas, 0 todo, linhas 221/221 e branches 114/115. Relatórios HTML/JSON em `relatorios/{v1,v2}/us04-pr04-codigo-atual/`. Duas falhas da v1 são de mock e duas de oráculos por instante; a v1 histórica não foi alterada.
+
+## Complementação v2 — saldos, alertas e HTTP após PR-04 (15/11/2026)
+
+**Prompt nesta conversa:** “Resolva os casos funcionais restantes nas matrizes, preservando v1; teste cadastro/saldo, lista de alertas por vínculo, autorização HTTP e valores inválidos de movimentação. Decisões do usuário: patrimonial começa com saldo 1 sem entrada manual; qualquer item no mínimo gera alerta.” A revisão de v2 removeu cinco `it.todo` cujas lacunas passaram a ter specs independentes, sem editar a v1. Os testes foram revisados contra os CTs; o fake de Prisma, o pipe Zod e um app Nest local exercitam escopos distintos. Resultados e cobertura por US estão em `indicadores-codigo-atual.md`. A ausência de Docker/psql impediu teste com Postgres; células correspondentes seguem `Sim*`.

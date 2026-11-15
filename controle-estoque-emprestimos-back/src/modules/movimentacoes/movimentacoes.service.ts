@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, TipoMovimentacao } from '@prisma/client';
+import { Prisma, TipoItem, TipoMovimentacao } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { RegistrarMovimentacaoDto } from './dto/registrar-movimentacao.dto';
 
@@ -37,7 +37,7 @@ export class MovimentacoesService {
   }
 
   /** Soma no banco (groupBy) em vez de carregar todas as movimentações em memória. */
-  async calcularSaldoItem(itemId: string, db: Db = this.prisma): Promise<number> {
+  async calcularSaldoItem(itemId: string, db: Db = this.prisma, tipo?: TipoItem): Promise<number> {
     const grupos = await db.movimentacao.groupBy({
       by: ['tipo'],
       where: { itemId },
@@ -46,7 +46,7 @@ export class MovimentacoesService {
 
     return grupos.reduce(
       (saldo, g) => saldo + this.aplicarSinal(g.tipo, g._sum.quantidade ?? 0),
-      0,
+      tipo === TipoItem.PATRIMONIAL ? 1 : 0,
     );
   }
 
@@ -83,7 +83,7 @@ export class MovimentacoesService {
       throw new NotFoundException('Item não encontrado');
     }
 
-    const saldo = await this.calcularSaldoItem(itemId);
+    const saldo = await this.calcularSaldoItem(itemId, this.prisma, item.tipo);
 
     return {
       itemId: item.id,
@@ -110,7 +110,7 @@ export class MovimentacoesService {
 
     const saldos = await Promise.all(
       itens.map(async (item) => {
-        const saldo = await this.calcularSaldoItem(item.id);
+        const saldo = await this.calcularSaldoItem(item.id, this.prisma, item.tipo);
         return {
           itemId: item.id,
           nomeItem: item.nome,
@@ -125,6 +125,34 @@ export class MovimentacoesService {
       estoqueId,
       itens: saldos,
     };
+  }
+
+  async consultarSaldoEstoqueAutorizado(estoqueId: string, usuarioId: string, isAdmin: boolean) {
+    await this.garantirAcessoLeitura(estoqueId, usuarioId, isAdmin, 'Acesso negado ao saldo deste estoque');
+    return this.consultarSaldoEstoque(estoqueId);
+  }
+
+  async consultarSaldoItemAutorizado(itemId: string, usuarioId: string, isAdmin: boolean) {
+    const item = await this.prisma.item.findUnique({ where: { id: itemId } });
+    if (!item) throw new NotFoundException('Item não encontrado');
+    await this.garantirAcessoLeitura(item.estoqueId, usuarioId, isAdmin, 'Acesso negado ao saldo deste item');
+    return this.consultarSaldoItem(itemId);
+  }
+
+  /** Alertas visíveis apenas ao gestor vinculado ou ADMIN. */
+  async consultarAlertasEstoque(estoqueId: string, usuarioId: string, isAdmin: boolean) {
+    await this.garantirAcessoLeitura(estoqueId, usuarioId, isAdmin, 'Acesso negado aos alertas deste estoque');
+    const saldos = await this.consultarSaldoEstoque(estoqueId);
+    return { estoqueId, itens: saldos.itens.filter((item) => item.abaixoDoMinimo) };
+  }
+
+  async consultarMeusAlertas(usuarioId: string, isAdmin: boolean) {
+    const estoques = isAdmin
+      ? await this.prisma.estoque.findMany({ where: { ativo: true }, select: { id: true } })
+      : await this.prisma.estoqueGestor.findMany({ where: { usuarioId }, select: { estoqueId: true } });
+    return Promise.all(estoques.map((estoque) =>
+      this.consultarAlertasEstoque('estoqueId' in estoque ? estoque.estoqueId : estoque.id, usuarioId, isAdmin),
+    ));
   }
 
   async consultarHistoricoEstoque(estoqueId: string, usuarioId: string, isAdmin: boolean) {
@@ -170,7 +198,7 @@ export class MovimentacoesService {
       throw new ForbiddenException('Apenas o gestor deste estoque pode registrar movimentações');
     }
 
-    const saldoAtual = await this.calcularSaldoItem(dto.itemId, tx);
+    const saldoAtual = await this.calcularSaldoItem(dto.itemId, tx, item.tipo);
 
     if (TIPOS_QUE_SUBTRAEM.includes(dto.tipo) && dto.quantidade > saldoAtual) {
       throw new BadRequestException('Saldo insuficiente para realizar a movimentação');

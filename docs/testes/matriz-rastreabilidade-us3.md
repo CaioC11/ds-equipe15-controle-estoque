@@ -108,8 +108,8 @@ Pontos que a issue #7 não definia originalmente e o status após a S3-19 (#95):
 | CA-02 | tombamento | PTB-04 (PR-02*) | CT-03-13*: PATRIMONIAL com tombamento já usado por item de outro estoque → recusado | Não — mock não distingue estoques | Sim* — L8: conflito (409) com tombamento de outro estoque; fake em memória |
 | CA-02 | tombamento | PTB-01, LM-03 (lado válido) | CT-03-14: dois PATRIMONIAIS com tombamentos distintos → ambos criados | Não — nenhum teste com duas criações | Sim* — L6: dois patrimoniais com tombamentos distintos; fake em memória |
 | CA-03 | tombamento | PTC-01 | CT-03-15: dois itens de CONSUMO sem tombamento no mesmo estoque → ambos criados (ausência de tombamento não conta como duplicado) | Não — nenhum teste com dois consumos | Sim* — L7: dois consumos sem tombamento; fake em memória |
-| CA-03 (PR-05*) | saldo | PT-02 | CT-03-16*: item CONSUMO recebe entrada de 10 unidades → saldo 10 | Não — nenhum teste de saldo | Não — o saldo é calculado em movimentacoes.service; exige integração com banco, fora do escopo unitário de itens |
-| CA-07 | saldo | PT-01 | CT-03-17: item PATRIMONIAL recém-cadastrado → saldo 1 | Não — nenhum teste de saldo 1 | Não — idem; o cadastro de item não cria movimentação (ver observação no relatório) |
+| CA-03 (PR-05*) | saldo | PT-02 | CT-03-16*: item CONSUMO recebe entrada de 10 unidades → saldo 10 | Não — nenhum teste de saldo | Sim* — `us03-saldo-fluxo.spec.ts` (cadastro + entrada 10 + consulta; fake compartilhado, sem banco real) |
+| CA-07 | saldo | PT-01 | CT-03-17: item PATRIMONIAL recém-cadastrado → saldo 1 | Não — nenhum teste de saldo 1 | Sim* — `us03-saldo-fluxo.spec.ts` (cadastro patrimonial + consulta inicial = 1; fake compartilhado, sem banco real) |
 | CA-04 | nº de série, nível mínimo | PNS-01, PNM-01 | CT-03-18: cadastro sem nº de série e sem nível mínimo → item criado | Sim — schema e service CA5: opcionais omitidos | Sim — mantido da v1 |
 | CA-04 | nº de série | PNS-02 | CT-03-19: cadastro com nº de série "SN-123" → item criado com esse nº de série | Sim — service CA5: nº de série informado é salvo | Sim — mantido da v1 |
 | CA-04 | nível mínimo | PNM-02 | CT-03-20: cadastro de CONSUMO com nível mínimo 5 → item criado com nível mínimo 5 | Sim — schema CA5: nível mínimo 5 mantido | Sim — mantido da v1 |
@@ -161,3 +161,7 @@ A S3-19 (#95) permitiu cadastrar item patrimonial sem tombamento (ficando penden
 | CT-03-09 | PATRIMONIAL com tombamento "" é recusado | Aceito, normalizado para undefined (pendente) |
 | CT-03-10 | PATRIMONIAL com tombamento só de espaços é recusado | Aceito, normalizado para undefined (pendente) |
 | CT-03-35 | Editar removendo o tombamento é recusado, anterior mantido | Continua recusado (400 no schema e no service; tombamento preenchido não pode ser apagado) |
+
+## Complementação de saldo posterior à S3-19
+
+A base do saldo patrimonial passou a 1 por registro sem entrada manual; consumo começa em 0. CT-03-16/17 são verificados por `tests/v2/us03-saldo-fluxo.spec.ts` com fake de persistência compartilhado. Portanto 44/44 CTs têm teste na v2, mas dois dependem de fake e ainda precisam de execução com Postgres. O total histórico de 42/44 acima identifica a rodada anterior, não esta complementação.

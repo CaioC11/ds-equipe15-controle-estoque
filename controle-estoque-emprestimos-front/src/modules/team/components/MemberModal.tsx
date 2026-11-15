@@ -13,7 +13,7 @@ interface MemberModalProps {
 }
 
 /**
- * Formulário de convite/edição de membro. Mesmo padrão do `TodoModal`:
+ * Formulário de convite/edição de membro. Mesmo padrão do `EstoqueModal`:
  * react-hook-form + zod (`memberFormSchema`), `defaultValues` a partir da prop
  * e reset via `key` (ver `pages/team/index.tsx`), sem `useEffect`.
  *
