@@ -2377,7 +2377,7 @@ describe('[v2] S3-21 — consultas e permissões (CA-02 e CA-10)', () => {
     prisma.emprestimo.count.mockImplementation(async (args: any) => filtro(args).length);
     const result = await service.historicoResponsavel(ESTOQUE_ID, RESPONSAVEL.id, query, gestor);
     expect(result.items.map((e: any) => e.id)).toEqual(['permitido']);
-    expect(result.meta.total).toBe(1);
+    expect(result).toHaveProperty('total', 1);
   });
 
   it('[v2] CT-04-09/38: aplica paginação nas duas consultas', async () => {

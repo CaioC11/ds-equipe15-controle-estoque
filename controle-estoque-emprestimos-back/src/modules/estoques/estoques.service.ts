@@ -1,4 +1,5 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { StatusItem } from '@prisma/client';
 import { ResourceConflictException } from '../../common/exceptions/resource-conflict.exception';
 import { ResourceNotFoundException } from '../../common/exceptions/resource-not-found.exception';
 import { PrismaService } from '../../database/prisma.service';
@@ -142,9 +143,9 @@ export class EstoquesService {
   private formatEstoqueComSaldo(estoque: any) {
     const totalItens = estoque.itens?.length || 0;
     const itensDisponiveis =
-      estoque.itens?.filter((item: any) => item.status === 'DISPONIVEL').length || 0;
+      estoque.itens?.filter((item: any) => item.status === StatusItem.DISPONIVEL).length || 0;
     const itensEmprestados =
-      estoque.itens?.filter((item: any) => item.status === 'EMPRESTADO').length || 0;
+      estoque.itens?.filter((item: any) => item.status === StatusItem.EMPRESTADO).length || 0;
 
     return {
       ...estoque,
