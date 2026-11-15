@@ -1,6 +1,6 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { AccessDeniedException } from '../../common/exceptions/access-denied.exception';
+import { assertGestorDoEstoque } from '../../common/auth/assert-gestor-do-estoque';
 import { AppException } from '../../common/exceptions/app.exception';
 import { ErrorCode } from '../../common/exceptions/error-code.enum';
 import { ResourceConflictException } from '../../common/exceptions/resource-conflict.exception';
@@ -195,17 +195,9 @@ export class ItensService {
 
   // Papel de gestor é por estoque (docs/permissoes.md, regra 2)
   private async assertGestorDoEstoque(estoqueId: string, userId?: string) {
-    const vinculo = userId
-      ? await this.prisma.estoqueGestor.findUnique({
-          where: { estoqueId_usuarioId: { estoqueId, usuarioId: userId } },
-        })
-      : null;
-
-    if (!vinculo) {
-      throw new AccessDeniedException(
-        'Apenas gestores deste estoque podem cadastrar ou editar itens.',
-      );
-    }
+    await assertGestorDoEstoque(
+      this.prisma, estoqueId, userId, 'Apenas gestores deste estoque podem cadastrar ou editar itens.',
+    );
   }
 
   private traduzirErroDeUnicidade(error: unknown): never {

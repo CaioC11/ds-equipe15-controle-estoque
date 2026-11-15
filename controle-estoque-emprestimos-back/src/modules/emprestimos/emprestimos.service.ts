@@ -3,7 +3,7 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { Prisma, StatusEmprestimo, StatusItem, TipoItem, TipoMovimentacao } from '@prisma/client';
 import { AccessRole } from '../../common/auth/access-role.enum';
 import type { CurrentUser } from '../../common/auth/current-user.interface';
-import { AccessDeniedException } from '../../common/exceptions/access-denied.exception';
+import { assertGestorDoEstoque } from '../../common/auth/assert-gestor-do-estoque';
 import { AppException } from '../../common/exceptions/app.exception';
 import { ErrorCode } from '../../common/exceptions/error-code.enum';
 import { ResourceConflictException } from '../../common/exceptions/resource-conflict.exception';
@@ -610,17 +610,9 @@ export class EmprestimosService {
 
   // Papel de gestor é por estoque (docs/permissoes.md, regra 2)
   private async assertGestorDoEstoque(estoqueId: string, userId?: string) {
-    const vinculo = userId
-      ? await this.prisma.estoqueGestor.findUnique({
-          where: { estoqueId_usuarioId: { estoqueId, usuarioId: userId } },
-        })
-      : null;
-
-    if (!vinculo) {
-      throw new AccessDeniedException(
-        'Apenas gestores deste estoque podem registrar ou consultar empréstimos.',
-      );
-    }
+    await assertGestorDoEstoque(
+      this.prisma, estoqueId, userId, 'Apenas gestores deste estoque podem registrar ou consultar empréstimos.',
+    );
   }
 
   private traduzirErroDeUnicidade(error: unknown): never {
