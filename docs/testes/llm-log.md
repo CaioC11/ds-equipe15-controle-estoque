@@ -6419,3 +6419,26 @@ INSTRUÇÕES
 
 - **Confirmado por:** ______ em __/__
 ---
+### S3B-10 — US01, US02 e US06 (suítes v2)
+
+#### US01 — Gestão Multiestoque
+- **Prompt aplicado às lacunas:** “Com base nas lacunas dos CTs, partições e limites da `matriz-rastreabilidade-us1.md` e da `analise-critica-v1-us1.md`, complete `tests/v2/us01-estoques.spec.ts`. Identifique cada teste com o CT/partição/limite da matriz; use o requisito como oráculo; cubra CAs, entradas/saídas, permissões, saldo, histórico e os dois lados dos limites. Não altere `src/` nem a suíte v1. Preserve a expectativa de requisito quando o código divergir e registre o defeito.”
+- **Revisão dos testes contra os requisitos:** CT-01-01 a CT-01-08 conferem criação, nomes, perfis e independência; CT-01-09 a CT-01-12 conferem edição e permissões; CT-01-13 a CT-01-29 conferem eventos, entradas, saídas, quantidades, item/estoque e perfis; CT-01-30 a CT-01-37 conferem saldo, isolamento e histórico. CT-01-09 permanece `it.fails`: a matriz espera 200 para gestor autorizado, enquanto a rota responde 403. A expectativa não foi alterada e `src/` não foi editado.
+- **Execução:** Vitest 4.1.8; 45 testes: 44 passaram, 1 falha esperada, 0 falhas comuns e 0 não compilam.
+- **Cobertura:** V8, mesmos arquivos de estoques e movimentações da v1; linhas 63,63% (77/121), branches 67,16% (45/67). HTML/summary: `docs/testes/relatorios/v2/us01/`.
+
+#### US02 — Controle de Acesso
+- **Prompt aplicado às lacunas:** “Com base nas 20 combinações papel × ação e PE01/PE02 da `matriz-rastreabilidade-us2.md` e nas lacunas de `analise-critica-v1-us2.md`, crie/complete `tests/v2/us02-acesso.spec.ts` com testes identificados pelas células/CTs. Confira status 403 e ausência de mutação; cubra gestão de gestores, movimentação e operações do requisitante. Não altere `src/` nem a suíte v1. Não decida a premissa pendente se ADMIN pode editar estoque.”
+- **Revisão dos testes contra os requisitos:** testes cobrem criação, consulta e edição por perfil, gerenciamento de gestores, movimentação por ADMIN/gestor autorizado/não autorizado, estado com zero/um gestor e criação/edição de itens por requisitante. CT07 permanece `it.fails`: a matriz espera 200 para gestor autorizado e o guard retorna 403. A célula ADMIN × editar estoque foi deixada pendente, conforme decisão do usuário; não foi atribuído oráculo.
+- **Execução:** Vitest 4.1.8; 34 testes: 33 passaram, 1 falha esperada, 0 falhas comuns e 0 não compilam.
+- **Cobertura:** V8, mesmos arquivos e totais da v1; linhas 11,59% (64/552), branches 11,29% (34/301). HTML/summary: `docs/testes/relatorios/v2/us02/`.
+
+#### US06 — Alerta de Reposição
+- **Execução:** executado por Costa2208 (Mateus), a pedido de ars10cin (Artur).
+- **Prompt aplicado às lacunas:** “Com base nos CTs, partições e limites sem cobertura de `matriz-rastreabilidade-us6.md` e `analise-critica-v1-us6.md`, complete `tests/v2/us06-alerta.spec.ts`. Identifique cada teste com o ID correspondente; cubra saldo/mínimo, tipo, eventos, lista de alertas, perfil/estoque, conteúdo e os dois lados dos limites. Inclua o branch não coberto do saldo agregado. Use a matriz como oráculo; não altere `src/` nem a suíte v1 e registre as divergências do código.”
+- **Revisão dos testes contra os requisitos:** CT-06-01 a CT-06-07 verificam saldo e nível mínimo; CT-06-08 a CT-06-12 verificam eventos e reposição; CT-06-13/14 verificam tipo e conteúdo; CT-06-15 a CT-06-17 verificam listas vazia, unitária e múltipla; CT-06-18 a CT-06-22 verificam perfis/estoques; CT-06-23 verifica estoque inexistente. Os casos de tipo patrimonial, filtragem da lista e autorização foram mantidos como `it.fails` após comparação com a matriz; não houve alteração de `src/`.
+- **Execução:** Vitest 4.1.8; 25 testes: 19 passaram, 6 falhas esperadas, 0 falhas comuns e 0 não compilam.
+- **Cobertura:** V8, mesmos arquivos de itens e movimentações da v1; linhas 30,76% (48/156), branches 26,80% (26/97). HTML/summary: `docs/testes/relatorios/v2/us06/`.
+
+- **Medição da suíte completa:** `npm run test:v2` reportou 503 testes passando, 14 falhas esperadas, 1 todo e 1 falha em `tests/v2/us04-emprestimos.spec.ts:2380` (`result.meta` indefinido). O spec US04 não foi alterado nesta tarefa; se a falha já existia antes da branch, fica **a confirmar**.
+---
