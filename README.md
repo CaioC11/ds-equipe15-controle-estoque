@@ -1,14 +1,15 @@
 # P02 — Controle de Estoque + Empréstimos
 
-Repositório oficial da **Equipe 15** para o projeto da disciplina de Desenvolvimento de Software (2026.2).
+Repositório oficial da **Equipe 15** para o projeto da disciplina de Desenvolvimento de Software (CIN0136 — 2026.2).
 
 ---
 
 ## 📌 Sobre o Projeto
-O sistema tem como objetivo automatizar e gerenciar o fluxo de controle de estoque e a concessão de empréstimos de materiais do CIn.
 
-* **Status Atual:** Sprint 2 — MVP Funcional.
-* **Data da Entrega:** 06/10/2026.
+O sistema tem como objetivo automatizar e centralizar o controle de estoque multi-setorial, a rastreabilidade de movimentações e a concessão de empréstimos de materiais e equipamentos do CIn, substituindo controles manuais em planilhas soltas.
+
+* **Status Atual:** Sprint 3 Finalizada | **Sprint 4 em Progresso** (Deploy e Pitch).
+* **Repositório:** `ds-equipe15-controle-estoque`
 
 ---
 
@@ -16,125 +17,141 @@ O sistema tem como objetivo automatizar e gerenciar o fluxo de controle de estoq
 
 | Integrante | Função / Papéis | Responsabilidades Principais |
 | :--- | :--- | :--- |
-| **Randell Lima** | Product Owner (PO) | Levantar requisitos, estruturar o Product Backlog e User Stories. |
-| **Artur Regis** |Facilitador Ágil & Dev Lead | Facilitar o fluxo do quadro Kanban, gerenciar repositório e garantir o fluxo dev. |
-| **Mateus Costa** | Desenvolvedor(a) / Architect | Modelagem do sistema, arquitetura e desenvolvimento da aplicação. |
-| **Caio França** | Desenvolvedor(a) / Requisitos | Mapeamento de causa-raiz, análise de stakeholders e documentação. |
-| **Theo Bessa** | Desenvolvedor(a) / QA | Apoio na especificação de testes, validação de regras de negócio e dev. |
+| **Randell Lima** | Product Owner (PO) | Levantamento de requisitos, estruturação do Product Backlog e User Stories. |
+| **Artur Regis** | Facilitador Ágil & Dev Lead | Facilitação do fluxo Kanban, gestão do repositório, CI/CD e liderança técnica. |
+| **Mateus Costa** | Desenvolvedor / Architect | Modelagem de dados, arquitetura do sistema e desenvolvimento full-stack. |
+| **Caio França** | Desenvolvedor / Requisitos | Mapeamento de causa-raiz, análise de stakeholders, refatoração e documentação. |
+| **Theo Bessa** | Desenvolvedor / QA | Especificação e execução de suítes de testes (V1/V2), qualidade e desenvolvimento. |
+
+> **Nota sobre a organização da equipe:** Embora a equipe tenha definido inicialmente papéis inspirados no Scrum para estruturar a condução do projeto, percebeu-se ao longo das entregas que a distribuição rígida por cargos geraria desequilíbrio na carga de trabalho. Dessa forma, o grupo adaptou sua dinâmica para uma **divisão funcional orientada aos requisitos e histórias de usuário (US01 a US06)**, permitindo que todos os integrantes atuassem de forma colaborativa e equilibrada tanto no desenvolvimento (back-end e front-end) quanto na documentação e nos testes de cada funcionalidade.
 
 ---
 
-## 🔄 Processo Ágil & Ritos
+## 🔄 Processo Ágil & Dinâmica da Equipe
 
-A equipe adota o **Scrumban**, combinando as entregas fixas das Sprints da disciplina com a flexibilidade e gestão visual do fluxo contínuo (Kanban).
+A equipe adota uma abordagem híbrida baseada no **Scrumban**, combinando entregas incrementais em **4 Sprints** com a gestão visual e fluxo contínuo do **Kanban**:
 
-* **Dailies Assíncronas:** Alinhamento diário no Discord/WhatsApp sobre o andamento das demandas e remoção de impedimentos.
-* **Planejamento por Sprint:** Seleção e priorização de tarefas do *Backlog* para o ciclo vigente com base nas metas da entrega.
-* **Quadro Visual & Limite de WIP:** Monitoramento no **GitHub Projects**, aplicando limite de trabalho em andamento (*Work in Progress - WIP*) na coluna *In Progress* para evitar gargalos.
-* **Melhoria Contínua:** Reunião de alinhamento ao final de cada Sprint para ajustar o fluxo de trabalho e validar os incrementos.
-
----
-
-## 🎯 MVP Conceitual
-
-> Em contato com o CinCoders (cliente) para retirar dúvidas sobre o tema, antes de concretizar esses 3 tópicos.
-
-### 1. Análise do Problema
-
-* **Problema Principal:** Descontrole e ausência de rastreabilidade na gestão de materiais e equipamentos dos setores e laboratórios, atualmente controlados por planilhas soltas.
-* **Sintomas:** Perda de rastreabilidade sobre quem retirou um item e quando, ausência de controle formal na retirada de equipamentos de maior valor (notebooks, projetores, equipamentos de laboratório).
-* **Causa-Raiz:** Inexistência de um sistema centralizado que unifique a gestão multiestoque, o controle de acesso por setor e a formalização das retiradas através de termo de responsabilidade.
-* **Stakeholders Afetados:**
-  * **Gestores de Estoque (Almoxarifes, Responsáveis por Laboratórios, Secretarias):** responsáveis por gerenciar o próprio estoque, com controle de acesso e alertas de reposição.
-  * **Requisitantes/Tomadores de Empréstimo:** necessitam solicitar itens emprestados e assinar o termo correspondente.
-  * **Administração Central:** ponto de referência geral sobre os estoques dos diferentes setores.
+* **Gestão de Backlog:** Os requisitos foram consolidados em um *Product Backlog* único; no início de cada ciclo (*Sprint Planning*), as tarefas prioritárias são selecionadas para o *Sprint Backlog*.
+* **Quadro Visual & Limite de WIP:** Acompanhamento por meio de quadros **Kanban** individuais por sprint no **GitHub Projects**, aplicando limite de trabalho em andamento (*Work in Progress — WIP*) para evitar gargalos.
+* **Alinhamento Contínuo:** *Dailies* assíncronas realizadas continuamente via aplicativos de mensagens instantâneas para acompanhamento de progresso e remoção rápida de bloqueios.
+* **Evolução por Sprints:**
+  * **Sprint 1 (Concluída):** Concepção, levantamento de requisitos, prototipação e arquitetura inicial.
+  * **Sprint 2 (Concluída):** Entrega do MVP funcional (estoques, controle de acesso, itens, empréstimos, termo PDF e alertas).
+  * **Sprint 3 (Concluída):** Evoluções funcionais (transferência entre estoques, campos completos do responsável no termo, upload de termo assinado, bloqueio por atraso, tombamento pendente), suítes de testes V1/V2 e pagamento de dívida técnica via refatoração.
+  * **Sprint 4 (Em Progresso):** Deploy em ambiente de produção e preparação do Pitch final.
 
 ---
 
-### 2. Levantamento de Requisitos
+## 🎯 Escopo Funcional e Requisitos
 
-#### Requisitos Funcionais (RF)
-* **RF01 — Múltiplos Estoques:** Cadastrar e gerenciar estoques independentes por setor (ex.: almoxarifado central, laboratório X, secretaria).
-* **RF02 — Controle de Acesso por Grupo:** Restringir a gestão de cada estoque a um grupo de pessoas autorizado.
-* **RF03 — Categorização e Tombamento:** Cadastrar tipos/categorias de produto e vincular número de tombamento (patrimônio) aos itens aplicáveis.
-* **RF04 — Movimentação e Saldo:** Registrar entradas e saídas, permitindo consulta de saldo por estoque.
-* **RF05 — Módulo de Empréstimos:** Registrar empréstimos associando item, responsável, data de retirada e prazo de devolução.
-* **RF06 — Termo de Responsabilidade:** Gerar o Termo de Responsabilidade (termo de responsabilidade de guarda e uso) vinculado a cada empréstimo, para assinatura do responsável no ato da retirada.
-* **RF07 — Alerta de Estoque Baixo:** Notificar os gestores quando o saldo de um item atingir o nível mínimo.
+### Requisitos Funcionais (RF) & User Stories
+* **RF01 / US01 — Gestão Multiestoque:** Cadastro e gerenciamento de estoques independentes por setor/laboratório.
+* **RF02 / US02 — Controle de Acesso por Grupo:** Restrição de gestão e movimentação por estoque aos gestores autorizados (RBAC).
+* **RF03 / US03 — Categorização, Tombamento e Transferência:** Cadastro de categorias, controle de tombamento patrimonial (incluindo pendências de tombamento) e transferência de itens entre estoques.
+* **RF04 — Movimentação e Saldo:** Registro de entradas, saídas, transferências e consulta de saldo atualizado por estoque.
+* **RF05 / US04 — Módulo de Empréstimos:** Registro de empréstimos e devoluções com vínculo ao responsável (nome, CPF, e-mail, curso, telefone), prazo de devolução e bloqueio automático para empréstimos em atraso.
+* **RF06 / US05 — Termo de Responsabilidade:** Geração automática do Termo de Responsabilidade em PDF no ato do empréstimo e fluxo de upload/validação do termo assinado.
+* **RF07 / US06 — Alerta de Estoque Baixo:** Identificação e alerta visual para itens abaixo do estoque mínimo configurado.
 
-#### Requisitos Não Funcionais (RNF)
-* **RNF01 — Segurança & Isolamento:** Garantir que gestores de um estoque não movimentem ou alterem dados de outros estoques sem permissão explícita.
-* **RNF02 — Rastreabilidade:** Manter registro das movimentações de entrada, saída e empréstimos por estoque.
+### Requisitos Não Funcionais (RNF)
+* **RNF01 — Segurança & Isolamento:** Autenticação federada via Keycloak e isolamento de acesso por estoque.
+* **RNF02 — Rastreabilidade:** Histórico auditável de movimentações, empréstimos, termos e decisões arquiteturais (ADRs).
 
 ---
 
-### 3. Histórias de Usuário Priorizadas (User Stories)
+## 🏗️ Arquitetura e Stack Tecnológica
 
-* **US01 (Gestão Multiestoque):** Como gestor de estoque, quero cadastrar e gerenciar meu próprio estoque para controlar os itens sob minha responsabilidade. *(Prioridade: Alta)*
-* **US02 (Controle de Acesso):** Como gestor de estoque, quero definir quais grupos têm acesso ao meu estoque para evitar movimentações não autorizadas. *(Prioridade: Alta)*
-* **US03 (Tombamento Patrimonial):** Como gestor de estoque, quero cadastrar o número de tombamento dos equipamentos para manter o controle patrimonial dos itens. *(Prioridade: Alta)*
-* **US04 (Registro de Empréstimo):** Como gestor de estoque, quero registrar a saída de um item associado a um responsável e prazo de devolução para acompanhar as pendências. *(Prioridade: Alta)*
-* **US05 (Termo de Responsabilidade):** Como requisitante, quero receber o Termo de Responsabilidade ao retirar um item emprestado para formalizar a posse temporária do equipamento. *(Prioridade: Alta)*
-* **US06 (Alerta de Reposição):** Como gestor de estoque, quero visualizar alertas de estoque baixo para providenciar reposição a tempo. *(Prioridade: Média)*
+O sistema segue uma arquitetura **Cliente-Servidor em Camadas (N-Tier)** com API RESTful modularizada por domínio:
+
+* **Back-end (`controle-estoque-emprestimos-back`):**
+  * **Framework:** NestJS (Node.js + TypeScript)
+  * **Persistência:** PostgreSQL + Prisma ORM (com migrações versionadas)
+  * **Autenticação / RBAC:** Keycloak (`realm.json` pré-configurado)
+  * **Qualidade & Testes:** Vitest (unitários, integração e E2E), Biome, Husky e Commitlint
+* **Front-end (`controle-estoque-emprestimos-front`):**
+  * **Framework:** React + TypeScript + Vite
+  * **Estilização & UI:** Tailwind CSS + componentes modulares
+  * **Testes:** Vitest + Testing Library
+* **Infraestrutura & Documentação:**
+  * Docker e Docker Compose para orquestração local de banco e identidade
+  * Sites de documentação técnica (`docs-site`) e pasta `docs/` (ADRs, matrizes de rastreabilidade, relatórios de qualidade, dívida técnica e análise crítica de testes)
+
+---
+
+## 📂 Estrutura do Repositório
+
+```text
+├── controle-estoque-emprestimos-back/   # API REST NestJS, Prisma, Keycloak e testes
+├── controle-estoque-emprestimos-front/  # Aplicação SPA React/Vite e testes
+├── docs/                                # Documentação do projeto
+│   ├── adr/                             # Registros de Decisões Arquiteturais (ADRs)
+│   ├── qualidade/                       # Mapeamento de dívida técnica e relatórios de refatoração
+│   └── testes/                          # Matrizes de rastreabilidade, relatórios e cobertura (V1/V2)
+└── README.md                            # Documentação principal do projeto
+```
+
+---
 
 ## 🛠️ Versionamento & Fluxo de Desenvolvimento
 
-Para garantir a organização e qualidade do código, a equipe segue as diretrizes abaixo:
-
 ### Estratégia de Branches (*GitHub Flow*)
 * `main`: Branch protegida contendo apenas código estável e revisado.
-* `feature/nome-da-feature`: Para desenvolvimento de novos requisitos (ex: `feature/cadastro-item`).
-* `fix/nome-do-bug`: Para correções de falhas (ex: `fix/erro-autenticacao`).
-* `docs/nome-da-doc`: Para inclusão de documentações e arquivos de texto (ex: `docs/mvp-conceitual`).
+* `feature/...`: Desenvolvimento de novas funcionalidades (ex.: `feature/s3-18-transferencia-estoques`).
+* `fix/...`: Correções de falhas (ex.: `fix/bloqueio-emprestimo-atraso`).
+* `refactor/...`: Pagamento de dívida técnica e melhoria estrutural (ex.: `refactor/s3b-14-dt12`).
+* `test/...` e `docs/...`: Suítes de testes e atualizações documentais.
 
-### Convenção de Commits (*Conventional Commits*)
-A mensagem de commit deve sempre seguir a estrutura `tipo: descrição sucinta`:
-* `feat:` Adição de nova funcionalidade.
-* `fix:` Correção de erros ou problemas de lógica.
-* `docs:` Alterações na documentação do projeto.
-* `style:` Ajustes de formatação sem alteração na lógica de código.
-* `refactor:` Reformulação de código existente sem alterar seu comportamento final.
-
-### Fluxo de Code Review & Pull Request (PR)
-1. Commits diretos na branch `main` são bloqueados.
-2. Todo trabalho deve ser feito em uma branch secundária derivada da `main`.
-3. Para integrar o código à `main`, abra um **Pull Request (PR)** descrevendo as alterações realizadas.
-4. É obrigatória a revisão e **aprovação de pelo menos 1 integrante** para permitir o merge do PR.
+### Convenção de Commits & Code Review
+* Padrão **Conventional Commits** (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`) validado automaticamente via **Husky** + **Commitlint**.
+* Todo merge na `main` exige abertura de **Pull Request** com template padronizado e aprovação obrigatória de **pelo menos 1 revisor**.
 
 ---
 
-## 🔗 Link do protótipo
-
-https://www.figma.com/make/iyrfGuPAa2LeLPKsqoCPxD/Inventory-Management-System?fullscreen=1&t=ItGKDJwkApNyGiXR-1&code-node-id=0-6
-
-## 📦 Escopo da Sprint 2
-
-**Dentro da sprint (Essencial/MVP do cliente):**
-- Múltiplos estoques (RF01) e controle de acesso por grupo (RF02)
-- Categorias de produto e tombamento patrimonial (RF03)
-- Entrada, saída e saldo por estoque (RF04)
-- Empréstimo e devolução (RF05)
-- Termo de Responsabilidade (RF06), com aceite eletrônico do responsável
-- Alerta de estoque baixo (RF07)
-
-**Fora da sprint (Extras, planejados para a Sprint 3 se sobrar tempo):**
-- Leitura de código de barras/QR para tombamento e movimentação
-- Relatório de itens emprestados em atraso
-- Assinatura eletrônica integrada do termo (gov.br); no MVP o termo é gerado em PDF e aceito eletronicamente com o login institucional
-- Previsão de reposição
-- Histórico completo de um item (de qual estoque veio, quem já pegou emprestado)
-- Perfis de usuário avançados
-
-**Fluxo da demo:** login → criar estoque → cadastrar item com tombamento → emprestar → gerar termo → devolver.
-
-**Decisão de stack:** backend NestJS + Prisma + PostgreSQL (confirmado pelo CInCoders em 29/09/2026; ver ADR-001).
-```
-
 ## 🚀 Como Executar o Projeto Localmente
 
+### 1. Clonar o repositório
 ```bash
-# Clonar o repositório
 git clone [https://github.com/CaioC11/ds-equipe15-controle-estoque.git](https://github.com/CaioC11/ds-equipe15-controle-estoque.git)
-
-# Acessar a pasta do repositório
 cd ds-equipe15-controle-estoque
+```
+
+### 2. Subir a infraestrutura e o Back-end
+```bash
+cd controle-estoque-emprestimos-back
+cp .env.example .env
+
+# Subir PostgreSQL e Keycloak via Docker
+docker compose up -d
+
+# Instalar dependências, aplicar migrações e popular dados iniciais
+npm install
+npx prisma migrate dev
+npx prisma db seed
+
+# Iniciar a API em modo desenvolvimento
+npm run start:dev
+```
+
+### 3. Iniciar o Front-end
+```bash
+cd ../controle-estoque-emprestimos-front
+cp .env.example .env
+
+npm install
+npm run dev
+```
+
+### 4. Executar as Suítes de Testes
+```bash
+# No diretório do back-end
+npm test
+
+# No diretório do front-end
+npm test
+```
+
+---
+
+## 🔗 Protótipo
+
+* [Protótipo Interativo no Figma](https://www.figma.com/make/iyrfGuPAa2LeLPKsqoCPxD/Inventory-Management-System?fullscreen=1&t=ItGKDJwkApNyGiXR-1&code-node-id=0-6)
